@@ -220,7 +220,7 @@ app.post('/api/config/preferences', (req, res) => {
   }
 });
 
-// Reset all stored credentials, profiles, and logs (Danger Zone)
+// Reset all stored credentials, profiles, uploads, and logs (Danger Zone)
 app.post('/api/config/reset', (req, res) => {
   try {
     const publicConfig = storage.getPublicConfig();
@@ -236,6 +236,27 @@ app.post('/api/config/reset', (req, res) => {
     storage.updatePreferences({ delaySeconds: 3, attachResume: true });
     // Clear outreach audit logs
     storage.clearCampaignLogs();
+
+    // Purge uploaded candidate resumes from disk to protect PII
+    if (fs.existsSync(UPLOADS_DIR)) {
+      const files = fs.readdirSync(UPLOADS_DIR);
+      for (const file of files) {
+        if (file !== '.gitkeep' && file !== '.DS_Store') {
+          try {
+            fs.unlinkSync(path.join(UPLOADS_DIR, file));
+          } catch (e) {
+            console.error(`Error deleting upload file ${file}:`, e);
+          }
+        }
+      }
+    }
+
+    // Clear in-memory token cache for Copilot
+    try {
+      const copilotService = require('./services/copilotService');
+      copilotService.clearSessionCache();
+    } catch (e) {}
+
     res.json(storage.getPublicConfig());
   } catch (err) {
     res.status(500).json({ error: err.message });
