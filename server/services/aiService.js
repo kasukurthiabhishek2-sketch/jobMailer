@@ -49,9 +49,10 @@ Guidelines for cold emails:
 3. Value Proposition: Draw 2-3 compelling, quantifiable achievements, skills, or projects from the Candidate Resume that directly match the Job Description (if provided) or demonstrate strong impact in the domain.
 4. If a Job Description is provided, explicitly align the candidate's core strengths to the JD's requirements.
 5. If NO Job Description is provided, highlight the candidate's strongest career pillars and how they can create immediate value for ${company}.
-6. Call to Action (CTA): Low friction, polite, asking for a brief 10-15 minute introductory conversation.
-7. Brevity: Keep the email body between 110 and 175 words. Busy executives don't read long essays.
-8. Output Format: You MUST reply strictly in valid JSON format with two keys:
+6. Strict Fact Grounding: Never fabricate numbers, metrics, percentages, revenue figures, or credentials not explicitly present in the CANDIDATE RESUME SUMMARY.
+7. Call to Action (CTA): Low friction, polite, asking for a brief 10-15 minute introductory conversation.
+8. Brevity: Keep the email body between 110 and 175 words. Busy executives don't read long essays.
+9. Output Format: You MUST reply strictly in valid JSON format with two keys:
 {
   "subject": "The email subject line here",
   "body": "The email body text here with line breaks (\\n\\n) between paragraphs, ending with a warm professional sign-off and [Your Name / Sender Name]."
@@ -186,6 +187,78 @@ async function callOpenAiCompatible({ apiKey, baseURL, model, systemPrompt, user
 }
 
 /**
+ * Verifiable post-generation claim checker.
+ * Extracts metrics, numbers, and stats from the email draft and verifies their presence in resumeText.
+ */
+function auditDraftClaims({ draftText, resumeText }) {
+  if (!draftText || typeof draftText !== 'string') {
+    return { isGroundingAudited: true, groundingScore: 100, flaggedClaims: [], hasUngroundedClaims: false };
+  }
+
+  const cleanResume = (resumeText || '').toLowerCase();
+  const flaggedClaims = [];
+
+  // 1. Look for percentages (e.g. 40%, 150%)
+  const percentageMatches = draftText.match(/\b\d+%(?!\w)/g) || [];
+  for (const match of percentageMatches) {
+    if (!cleanResume.includes(match.toLowerCase())) {
+      flaggedClaims.push({
+        claim: match,
+        type: 'percentage',
+        reason: `Percentage '${match}' is not found in your uploaded resume.`
+      });
+    }
+  }
+
+  // 2. Look for financial / dollar metrics (e.g. $10M, $500k, $2.5M)
+  const financialMatches = draftText.match(/\$[0-9]+(?:\.[0-9]+)?(?:[kKmMbB]|(?:\s*(?:million|billion|thousand)))?\b/g) || [];
+  for (const match of financialMatches) {
+    const norm = match.toLowerCase().replace(/\s+/g, '');
+    const cleanResumeNoSpace = cleanResume.replace(/\s+/g, '');
+    if (!cleanResume.includes(norm) && !cleanResumeNoSpace.includes(norm)) {
+      flaggedClaims.push({
+        claim: match,
+        type: 'financial_metric',
+        reason: `Revenue or financial metric '${match}' does not appear in your resume.`
+      });
+    }
+  }
+
+  // 3. Look for scale claims (e.g. 2.5M+ users, 50+ engineers)
+  const scaleMatches = draftText.match(/\b\d+(?:\.\d+)?(?:[kKmMbB]|\+)?\s*(?:users|clients|customers|engineers|developers|direct reports)\b/gi) || [];
+  for (const match of scaleMatches) {
+    const numPart = match.match(/\b\d+(?:\.\d+)?/)?.[0];
+    if (numPart && !cleanResume.includes(numPart)) {
+      flaggedClaims.push({
+        claim: match,
+        type: 'scale_claim',
+        reason: `Scale assertion '${match}' does not appear to be grounded in your resume.`
+      });
+    }
+  }
+
+  // Deduplicate flagged claims
+  const uniqueFlagged = [];
+  const seenClaims = new Set();
+  for (const f of flaggedClaims) {
+    if (!seenClaims.has(f.claim.toLowerCase())) {
+      seenClaims.add(f.claim.toLowerCase());
+      uniqueFlagged.push(f);
+    }
+  }
+
+  const hasUngroundedClaims = uniqueFlagged.length > 0;
+  const groundingScore = Math.max(0, 100 - (uniqueFlagged.length * 25));
+
+  return {
+    isGroundingAudited: true,
+    groundingScore,
+    flaggedClaims: uniqueFlagged,
+    hasUngroundedClaims
+  };
+}
+
+/**
  * Main generate function dispatching to active provider
  */
 async function generateColdEmail({ providerKey, providerConfig, resumeText, jobDescription, recipient, customTone, senderName }) {
@@ -199,82 +272,107 @@ async function generateColdEmail({ providerKey, providerConfig, resumeText, jobD
 
   const apiKey = providerConfig.apiKey;
   if (!apiKey || apiKey.trim() === '') {
-    // If no key is set yet, provide an intelligent candidate-tailored demo email
-    // so user can test the workflow immediately before adding their key
+    // Demo mode email with grounding audit
     const recipientFirst = recipient?.name ? recipient.name.split(' ')[0] : 'Hiring Team';
     const comp = recipient?.company || 'your team';
     const role = recipient?.role || (jobDescription ? 'the open position' : 'relevant engineering opportunities');
     const sender = senderName || 'Candidate';
 
-    return {
+    const demoBody = `Hi ${recipientFirst},\n\nI’ve been following ${comp}’s progress and love your focus on building modern, high-impact products.\n\nI’m reaching out because with 6+ years of experience engineering scalable web applications and distributed cloud systems, I recently architected platform improvements that reduced latency by 42% and supported 2.5M+ active users. Given ${jobDescription ? 'your requirements for this role' : 'your team’s growth'}, I believe my background in full-stack architecture, performance optimization, and AI workflows would allow me to contribute immediately.\n\nI've attached my resume for your review. Would you be open to a brief 10-minute introductory conversation this week to see if my experience aligns with your current goals?\n\nWarm regards,\n${sender}`;
+
+    const demoResult = {
       subject: `Inquiry: ${role} at ${comp} — ${sender}`,
-      body: `Hi ${recipientFirst},\n\nI’ve been following ${comp}’s progress and love your focus on building modern, high-impact products.\n\nI’m reaching out because with 6+ years of experience engineering scalable web applications and distributed cloud systems, I recently architected platform improvements that reduced latency by 42% and supported 2.5M+ active users. Given ${jobDescription ? 'your requirements for this role' : 'your team’s growth'}, I believe my background in full-stack architecture, performance optimization, and AI workflows would allow me to contribute immediately.\n\nI've attached my resume for your review. Would you be open to a brief 10-minute introductory conversation this week to see if my experience aligns with your current goals?\n\nWarm regards,\n${sender}`,
+      body: demoBody,
       isDemoNotice: 'Generated via Demo Mode. Add your API key in Settings to enable live LLM synthesis.'
+    };
+
+    return {
+      ...demoResult,
+      groundingAudit: auditDraftClaims({ draftText: demoResult.body, resumeText })
     };
   }
 
   const model = providerConfig.model;
+  let draftResult;
 
   switch (providerKey) {
     case 'gemini':
-      return await callGemini({ apiKey, model, systemPrompt, userPrompt });
+      draftResult = await callGemini({ apiKey, model, systemPrompt, userPrompt });
+      break;
 
     case 'groq':
-      return await callOpenAiCompatible({
+      draftResult = await callOpenAiCompatible({
         apiKey,
         baseURL: 'https://api.groq.com/openai/v1',
         model: model || 'qwen/qwen3.8-27b',
         systemPrompt,
         userPrompt
       });
+      break;
 
     case 'openai':
-      return await callOpenAiCompatible({
+      draftResult = await callOpenAiCompatible({
         apiKey,
         baseURL: 'https://api.openai.com/v1',
         model: model || 'gpt-4o-mini',
         systemPrompt,
         userPrompt
       });
+      break;
 
     case 'grok':
-      return await callOpenAiCompatible({
+      draftResult = await callOpenAiCompatible({
         apiKey,
         baseURL: 'https://api.x.ai/v1',
         model: model || 'grok-2-1212',
         systemPrompt,
         userPrompt
       });
+      break;
 
     case 'nvidia':
-      return await callOpenAiCompatible({
+      draftResult = await callOpenAiCompatible({
         apiKey,
         baseURL: 'https://integrate.api.nvidia.com/v1',
         model: model || 'meta/llama-3.1-70b-instruct',
         systemPrompt,
         userPrompt
       });
+      break;
 
     case 'copilot':
-      return await copilotService.callCopilotChat({
+      draftResult = await copilotService.callCopilotChat({
         githubAccessToken: apiKey,
         model: model || 'gpt-4o',
         systemPrompt,
         userPrompt
       });
+      break;
 
     case 'custom':
-      return await callOpenAiCompatible({
+      draftResult = await callOpenAiCompatible({
         apiKey,
         baseURL: providerConfig.baseURL || 'https://api.openai.com/v1',
         model: model || 'gpt-4o',
         systemPrompt,
         userPrompt
       });
+      break;
 
     default:
       throw new Error(`Unsupported AI provider: ${providerKey}`);
   }
+
+  // Verifiable claim grounding audit
+  const groundingAudit = auditDraftClaims({
+    draftText: draftResult?.body,
+    resumeText
+  });
+
+  return {
+    ...draftResult,
+    groundingAudit
+  };
 }
 
 /**
@@ -379,5 +477,8 @@ async function testAiConnection(providerKey, config) {
 
 module.exports = {
   generateColdEmail,
-  testAiConnection
+  testAiConnection,
+  cleanJsonOutput,
+  buildPrompts,
+  auditDraftClaims
 };
