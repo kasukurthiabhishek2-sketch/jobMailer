@@ -221,10 +221,26 @@ async function callCopilotChat({ githubAccessToken, model = 'gpt-4o', systemProm
   }
 }
 
+/**
+ * Clear in-memory token cache (used by Danger Zone data purge)
+ */
+function clearSessionCache() {
+  tokenCache = {
+    copilotToken: null,
+    expiresAt: 0
+  };
+}
+
+function getSessionCache() {
+  return tokenCache;
+}
+
 module.exports = {
   startDeviceFlow,
   checkDeviceStatus,
   getCopilotSessionToken,
   testCopilotConnection,
-  callCopilotChat
+  callCopilotChat,
+  clearSessionCache,
+  getSessionCache
 };
