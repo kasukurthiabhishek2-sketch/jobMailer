@@ -405,7 +405,8 @@ function analyzeHeaders(rawHeaders) {
  * 4. Normalizes headers case-insensitively.
  * 5. Uses prioritized name detection from the SAME row.
  */
-function parseRecipientSheet(filePath, originalFilename) {
+function parseRecipientSheet(filePath, originalFilename, options = {}) {
+  const contactedMap = options.contactedMap || new Map();
   const ext = path.extname(originalFilename || filePath).toLowerCase();
   if (!['.xlsx', '.xls', '.csv'].includes(ext)) {
     throw new Error('Unsupported recipient list format. Please upload an Excel (.xlsx, .xls) or CSV file.');
@@ -572,6 +573,24 @@ function parseRecipientSheet(filePath, originalFilename) {
     const isDuplicate = cleanEmail ? seenEmails.has(cleanEmail) : false;
     if (cleanEmail) seenEmails.add(cleanEmail);
 
+    // Cross-session duplicate check against audit history (logs.json)
+    const previousContact = cleanEmail ? contactedMap.get(cleanEmail) : null;
+    const isPreviouslyContacted = Boolean(previousContact);
+    const lastContactedDate = previousContact ? previousContact.dateStr : null;
+
+    const isValidEmail = emailValidation.valid && !isDuplicate;
+    // Don't auto-select duplicates, invalid emails, OR previously contacted recruiters
+    const shouldSelect = isValidEmail && !isPreviouslyContacted;
+
+    let errorReason = null;
+    if (isDuplicate) {
+      errorReason = 'Duplicate email address in sheet';
+    } else if (!emailValidation.valid) {
+      errorReason = emailValidation.reason;
+    } else if (isPreviouslyContacted) {
+      errorReason = `Previously contacted on ${new Date(lastContactedDate).toLocaleDateString()}`;
+    }
+
     rows.push({
       id: `rec_${index + 1}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       rowIndex: index + 1,
@@ -583,10 +602,12 @@ function parseRecipientSheet(filePath, originalFilename) {
       nameDetectionMethod,
       company: rawCompany,
       role: rawRole,
-      isValidEmail: emailValidation.valid && !isDuplicate,
+      isValidEmail,
       isDuplicate,
-      errorReason: isDuplicate ? 'Duplicate email address in sheet' : (emailValidation.valid ? null : emailValidation.reason),
-      isSelected: emailValidation.valid && !isDuplicate,
+      isPreviouslyContacted,
+      lastContactedDate,
+      errorReason,
+      isSelected: shouldSelect,
       isApproved: false, // Requires explicit user approval
       source: 'excel',
       rawRowData: rowObj
@@ -595,6 +616,7 @@ function parseRecipientSheet(filePath, originalFilename) {
 
   const validCount = rows.filter(r => r.isValidEmail).length;
   const invalidCount = rows.length - validCount;
+  const previouslyContactedCount = rows.filter(r => r.isPreviouslyContacted).length;
 
   return {
     filename: originalFilename || path.basename(filePath),
@@ -611,6 +633,7 @@ function parseRecipientSheet(filePath, originalFilename) {
     totalCount: rows.length,
     validCount,
     invalidCount,
+    previouslyContactedCount,
     rows
   };
 }
