@@ -1248,3 +1248,100 @@ body {
   margin: 0 auto 12px auto;
   opacity: 0.4;
 }
+
+/* Split-Pane Email Preview Workspace */
+.email-split-container {
+  display: flex;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  overflow: hidden;
+  min-height: 520px;
+}
+
+@media (max-width: 860px) {
+  .email-split-container {
+    flex-direction: column;
+  }
+}
+
+.email-split-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border-subtle);
+  background: var(--bg-surface-elevated);
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 860px) {
+  .email-split-sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+    max-height: 240px;
+  }
+}
+
+.email-split-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.recipient-queue-item {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.recipient-queue-item:hover {
+  background: var(--bg-surface-hover);
+}
+
+.recipient-queue-item.active {
+  background: var(--bg-surface-active);
+  border-left: 3px solid var(--accent-primary);
+}
+
+.spam-indicator-pill {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 500;
+}
+
+.spam-indicator-pill.clean {
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
+  color: var(--accent-success);
+}
+
+.spam-indicator-pill.warning {
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  color: var(--accent-warning);
+}
+
+.subject-meter-bar {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border-subtle);
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.subject-meter-fill {
+  height: 100%;
+  transition: width 0.2s ease, background-color 0.2s ease;
+}
+
