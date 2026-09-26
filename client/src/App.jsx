@@ -28,6 +28,20 @@ export default function App() {
   const [campaignSendLogs, setCampaignSendLogs] = useState([]);
   const [campaignSummary, setCampaignSummary] = useState(null);
 
+  // Theme state
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('jdmail-theme') || 'dark';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('jdmail-theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
   // Toast notifications
   const [toasts, setToasts] = useState([]);
 
@@ -191,6 +205,8 @@ export default function App() {
         config={config}
         onOpenSettings={handleOpenSettings}
         onOpenLogs={handleOpenLogs}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
       <main className="app-container">

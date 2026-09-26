@@ -1,7 +1,7 @@
 import React from 'react';
-import { Send, Settings, Sparkles, Mail, FileText, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Send, Settings, Sparkles, Mail, FileText, Sun, Moon } from 'lucide-react';
 
-export default function Header({ config, onOpenSettings, onOpenLogs }) {
+export default function Header({ config, onOpenSettings, onOpenLogs, theme, onToggleTheme }) {
   const activeAiKey = config?.activeProvider || 'gemini';
   const activeAi = config?.aiProviders?.[activeAiKey];
   const activeAiConfigured = activeAi?.isConfigured;
@@ -62,6 +62,16 @@ export default function Header({ config, onOpenSettings, onOpenLogs }) {
             title="View Delivery History & Status Logs"
           >
             <FileText size={18} />
+          </button>
+
+          {/* Theme Toggle Button */}
+          <button
+            className="btn-icon"
+            onClick={onToggleTheme}
+            title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+            aria-label="Toggle theme"
+          >
+            {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
           </button>
 
           {/* Settings Button */}
