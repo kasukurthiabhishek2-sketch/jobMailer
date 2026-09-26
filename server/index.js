@@ -309,7 +309,8 @@ app.post('/api/upload/recipients', upload.single('file'), (req, res) => {
       return res.status(400).json({ error: 'No spreadsheet file uploaded' });
     }
 
-    const parsed = parseRecipientSheet(req.file.path, req.file.originalname);
+    const contactedMap = storage.getRecentlyContactedMap ? storage.getRecentlyContactedMap(30) : new Map();
+    const parsed = parseRecipientSheet(req.file.path, req.file.originalname, { contactedMap });
     
     // Clean up temporary spreadsheet file after parsing
     try {

@@ -726,6 +726,24 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
                                 </button>
                               )}
                             </div>
+                          ) : row.isPreviouslyContacted ? (
+                            <span
+                              className="info-pill"
+                              style={{
+                                color: 'var(--accent-warning)',
+                                background: 'rgba(251, 191, 36, 0.12)',
+                                border: '1px solid rgba(251, 191, 36, 0.3)',
+                                fontSize: 11,
+                                padding: '2px 6px',
+                                borderRadius: 4,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4
+                              }}
+                              title={`Previously contacted on ${row.lastContactedDate || 'previous campaign'}`}
+                            >
+                              Previously Contacted
+                            </span>
                           ) : (
                             <span style={{ color: 'var(--accent-success)', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                               <Check size={13} /> Verified

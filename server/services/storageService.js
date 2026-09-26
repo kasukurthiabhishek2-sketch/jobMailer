@@ -337,6 +337,33 @@ function clearCampaignLogs() {
   return [];
 }
 
+/**
+ * Returns a map of lowercased emails previously contacted within `days` days
+ */
+function getRecentlyContactedMap(days = 30) {
+  const logs = readLogsFile();
+  const map = new Map();
+  const cutoffTime = Date.now() - (days * 24 * 60 * 60 * 1000);
+
+  for (const item of logs) {
+    if (item && item.recipientEmail) {
+      const email = item.recipientEmail.trim().toLowerCase();
+      const itemTime = item.timestamp ? new Date(item.timestamp).getTime() : 0;
+      if (itemTime >= cutoffTime) {
+        if (!map.has(email) || itemTime > map.get(email).timestamp) {
+          map.set(email, {
+            timestamp: itemTime,
+            dateStr: item.timestamp,
+            status: item.status,
+            company: item.company
+          });
+        }
+      }
+    }
+  }
+  return map;
+}
+
 module.exports = {
   getDecryptedConfig,
   getPublicConfig,
@@ -348,5 +375,6 @@ module.exports = {
   updatePreferences,
   addCampaignLogs,
   getCampaignLogs,
-  clearCampaignLogs
+  clearCampaignLogs,
+  getRecentlyContactedMap
 };
