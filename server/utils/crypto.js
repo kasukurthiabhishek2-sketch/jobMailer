@@ -68,12 +68,25 @@ function decrypt(cipherText) {
   if (!cipherText || typeof cipherText !== 'string') return '';
   const parts = cipherText.split(':');
   if (parts.length !== 3) {
-    // If not encrypted format, return as-is for backward compatibility or empty
-    return cipherText;
+    // Fail closed: strict encrypted format required
+    return '';
+  }
+
+  const [ivHex, authTagHex, encryptedHex] = parts;
+  const hexRegex = /^[0-9a-fA-F]+$/;
+
+  // Validate standard GCM sizes: IV (12 bytes = 24 hex), AuthTag (16 bytes = 32 hex)
+  if (
+    ivHex.length !== 24 ||
+    authTagHex.length !== 32 ||
+    !hexRegex.test(ivHex) ||
+    !hexRegex.test(authTagHex) ||
+    (encryptedHex.length > 0 && !hexRegex.test(encryptedHex))
+  ) {
+    return '';
   }
 
   try {
-    const [ivHex, authTagHex, encryptedHex] = parts;
     const iv = Buffer.from(ivHex, 'hex');
     const authTag = Buffer.from(authTagHex, 'hex');
     const decipher = crypto.createDecipheriv(ALGORITHM, MASTER_KEY, iv);
@@ -83,7 +96,7 @@ function decrypt(cipherText) {
     decrypted += decipher.final('utf8');
     return decrypted;
   } catch (err) {
-    console.error('Decryption failed:', err.message);
+    // Auth tag mismatch or corrupted ciphertext
     return '';
   }
 }
@@ -94,7 +107,7 @@ function decrypt(cipherText) {
 function maskApiKey(key) {
   if (!key || typeof key !== 'string') return '';
   const len = key.length;
-  if (len <= 8) return '••••••••';
+  if (len <= 16) return '••••••••••••';
   const prefix = key.slice(0, Math.min(6, Math.floor(len / 4)));
   const suffix = key.slice(-4);
   return `${prefix}...${suffix}`;
