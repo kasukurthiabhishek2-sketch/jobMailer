@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Sparkles,
   Mail,
   Sliders,
   FileText,
-  Key,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   HelpCircle,
   Trash2,
   Check,
@@ -30,7 +30,8 @@ import {
   fetchOutreachLogs,
   clearOutreachLogs,
   startCopilotAuth,
-  checkCopilotStatus
+  checkCopilotStatus,
+  resetAllData
 } from '../services/api';
 import SmtpGuideModal from './SmtpGuideModal';
 
@@ -42,15 +43,34 @@ export default function SettingsModal({
   onRefreshConfig,
   onShowToast
 }) {
-  const [activeTab, setActiveTab] = useState(initialTab); // 'ai' | 'smtp' | 'preferences' | 'logs'
+  const [activeTab, setActiveTab] = useState(initialTab); // 'ai' | 'smtp' | 'preferences' | 'logs' | 'danger'
   const [isGuideOpen, setIsGuideOpen] = useState(false);
 
+  // Danger Zone state
+  const [dangerConfirmText, setDangerConfirmText] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
+
   // AI settings edit states
-  const [selectedAiProvider, setSelectedAiProvider] = useState(config?.activeProvider || 'gemini');
   const [editingKeys, setEditingKeys] = useState({}); // { [providerKey]: inputApiKey }
   const [editingModels, setEditingModels] = useState({});
   const [editingBaseUrls, setEditingBaseUrls] = useState({});
   const [aiTestStatus, setAiTestStatus] = useState({}); // { [providerKey]: { loading, success, message, error } }
+
+  // Logs state
+  const [logs, setLogs] = useState([]);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+
+  // Sync activeTab when initialTab changes
+  useEffect(() => {
+    setActiveTab(initialTab);
+    if (initialTab === 'logs') {
+      setIsLoadingLogs(true);
+      fetchOutreachLogs()
+        .then(setLogs)
+        .catch(console.error)
+        .finally(() => setIsLoadingLogs(false));
+    }
+  }, [initialTab]);
 
   // Copilot Device Code Auth State
   const [copilotFlow, setCopilotFlow] = useState({
@@ -63,9 +83,9 @@ export default function SettingsModal({
     copied: false,
     error: null
   });
-  const pollIntervalRef = React.useRef(null);
+  const pollIntervalRef = useRef(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     return () => {
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
@@ -149,9 +169,7 @@ export default function SettingsModal({
   });
   const [smtpTestStatus, setSmtpTestStatus] = useState({}); // { [id]: { loading, success, message, error } }
 
-  // Logs state
-  const [logs, setLogs] = useState([]);
-  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+
 
   if (!isOpen) return null;
 
@@ -337,6 +355,31 @@ export default function SettingsModal({
     }
   };
 
+  // Reset all stored credentials and logs
+  const handleResetAllData = async () => {
+    if (dangerConfirmText.trim() !== 'DELETE') return;
+    setIsResetting(true);
+    try {
+      const resetConfig = await resetAllData();
+      onRefreshConfig(resetConfig);
+      setDangerConfirmText('');
+      onShowToast({
+        type: 'warning',
+        title: 'Platform Reset',
+        message: 'All stored API keys, SMTP profiles, and logs have been wiped.'
+      });
+      onClose();
+    } catch (err) {
+      onShowToast({
+        type: 'error',
+        title: 'Reset Failed',
+        message: err.message
+      });
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   // Autofill preset from guide
   const handleApplyPreset = (preset) => {
     setShowAddSmtpForm(true);
@@ -352,54 +395,65 @@ export default function SettingsModal({
   const aiProvidersList = config?.aiProviders ? Object.entries(config.aiProviders) : [];
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 900 }}>
+    <div className="slideover-overlay" onClick={onClose}>
+      <aside className="slideover-panel" onClick={e => e.stopPropagation()}>
         {/* Header */}
-        <div className="modal-header">
+        <div className="slideover-header">
           <div className="modal-title">
-            <span>Platform Settings & Accounts</span>
+            <Sliders size={18} style={{ color: 'var(--accent-primary)' }} />
+            <span>Settings & Preferences</span>
           </div>
-          <button className="btn-icon" onClick={onClose}>
+          <button className="btn-icon" onClick={onClose} aria-label="Close settings">
             <X size={18} />
           </button>
         </div>
 
         {/* Tab navigation */}
-        <div style={{ padding: '0 24px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-subtle)' }}>
-          <div className="tab-pill-group" style={{ margin: '12px 0' }}>
-            <button
-              className={`tab-pill ${activeTab === 'ai' ? 'active' : ''}`}
-              onClick={() => handleTabChange('ai')}
-            >
-              <Sparkles size={15} />
-              AI Providers & Keys
-            </button>
-            <button
-              className={`tab-pill ${activeTab === 'smtp' ? 'active' : ''}`}
-              onClick={() => handleTabChange('smtp')}
-            >
-              <Mail size={15} />
-              SMTP Accounts
-            </button>
-            <button
-              className={`tab-pill ${activeTab === 'preferences' ? 'active' : ''}`}
-              onClick={() => handleTabChange('preferences')}
-            >
-              <Sliders size={15} />
-              Sending Safety & Delay
-            </button>
-            <button
-              className={`tab-pill ${activeTab === 'logs' ? 'active' : ''}`}
-              onClick={() => handleTabChange('logs')}
-            >
-              <FileText size={15} />
-              Delivery History
-            </button>
-          </div>
+        <div className="slideover-tabs">
+          <button
+            type="button"
+            className={`slideover-tab-btn ${activeTab === 'ai' ? 'active' : ''}`}
+            onClick={() => handleTabChange('ai')}
+          >
+            <Sparkles size={14} />
+            AI Providers
+          </button>
+          <button
+            type="button"
+            className={`slideover-tab-btn ${activeTab === 'smtp' ? 'active' : ''}`}
+            onClick={() => handleTabChange('smtp')}
+          >
+            <Mail size={14} />
+            SMTP
+          </button>
+          <button
+            type="button"
+            className={`slideover-tab-btn ${activeTab === 'preferences' ? 'active' : ''}`}
+            onClick={() => handleTabChange('preferences')}
+          >
+            <Sliders size={14} />
+            Preferences
+          </button>
+          <button
+            type="button"
+            className={`slideover-tab-btn ${activeTab === 'logs' ? 'active' : ''}`}
+            onClick={() => handleTabChange('logs')}
+          >
+            <FileText size={14} />
+            Logs
+          </button>
+          <button
+            type="button"
+            className={`slideover-tab-btn danger-tab ${activeTab === 'danger' ? 'active' : ''}`}
+            onClick={() => handleTabChange('danger')}
+          >
+            <AlertTriangle size={14} />
+            Danger Zone
+          </button>
         </div>
 
         {/* Body */}
-        <div className="modal-body">
+        <div className="slideover-body">
           {/* TAB 1: AI PROVIDERS */}
           {activeTab === 'ai' && (
             <div>
@@ -1107,15 +1161,83 @@ export default function SettingsModal({
               )}
             </div>
           )}
+
+          {/* TAB 5: DANGER ZONE */}
+          {activeTab === 'danger' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)' }}>
+              <div
+                style={{
+                  padding: 'var(--sp-4)',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'rgba(248, 113, 113, 0.08)',
+                  border: '1px solid var(--accent-danger)',
+                  display: 'flex',
+                  gap: 'var(--sp-3)',
+                  alignItems: 'flex-start'
+                }}
+              >
+                <AlertCircle size={20} style={{ color: 'var(--accent-danger)', flexShrink: 0, marginTop: 2 }} />
+                <div>
+                  <strong style={{ color: 'var(--accent-danger)', display: 'block', marginBottom: 'var(--sp-1)' }}>
+                    Destructive Action Notice
+                  </strong>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                    Resetting will permanently erase all encrypted API keys, delete all saved SMTP accounts, reset rate-limiting preferences to defaults, and clear outreach log history. This action cannot be undone.
+                  </p>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  padding: 'var(--sp-4)',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border-subtle)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 'var(--sp-3)'
+                }}
+              >
+                <label style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>
+                  To confirm, type <span style={{ color: 'var(--accent-danger)', fontFamily: 'var(--font-mono)' }}>DELETE</span> below:
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Type DELETE to confirm"
+                  value={dangerConfirmText}
+                  onChange={e => setDangerConfirmText(e.target.value)}
+                  style={{ fontFamily: 'var(--font-mono)', letterSpacing: '1px' }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  disabled={dangerConfirmText.trim() !== 'DELETE' || isResetting}
+                  onClick={handleResetAllData}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 'var(--sp-2)',
+                    marginTop: 'var(--sp-2)',
+                    opacity: dangerConfirmText.trim() === 'DELETE' ? 1 : 0.4
+                  }}
+                >
+                  <Trash2 size={16} />
+                  {isResetting ? 'Resetting All Data...' : 'Permanently Delete Credentials & Reset App'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
-        <div className="modal-footer">
+        <div className="slideover-footer">
           <button className="btn btn-primary" onClick={onClose}>
             Done
           </button>
         </div>
-      </div>
+      </aside>
 
       {/* Embedded Smtp Guide Modal */}
       <SmtpGuideModal

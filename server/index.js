@@ -220,6 +220,28 @@ app.post('/api/config/preferences', (req, res) => {
   }
 });
 
+// Reset all stored credentials, profiles, and logs (Danger Zone)
+app.post('/api/config/reset', (req, res) => {
+  try {
+    const publicConfig = storage.getPublicConfig();
+    // Clear all AI provider credentials
+    for (const key of Object.keys(publicConfig.aiProviders || {})) {
+      storage.updateAiProvider(key, { apiKey: '', enabled: true });
+    }
+    // Delete all SMTP profiles
+    for (const profile of (publicConfig.smtpProfiles || [])) {
+      storage.deleteSmtpProfile(profile.id);
+    }
+    // Reset preferences to default
+    storage.updatePreferences({ delaySeconds: 3, attachResume: true });
+    // Clear outreach audit logs
+    storage.clearCampaignLogs();
+    res.json(storage.getPublicConfig());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ---------------------- UPLOADS & PARSING ----------------------
 
 // Resume Upload & Parse (PDF / DOCX)

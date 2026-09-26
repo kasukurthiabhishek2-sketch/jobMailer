@@ -272,3 +272,13 @@ export async function checkCopilotStatus(deviceCode) {
   }
   return res.json();
 }
+
+export async function resetAllData() {
+  const res = await fetch('/api/config/reset', { method: 'POST' });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || 'Failed to reset all data');
+  }
+  return res.json();
+}
+

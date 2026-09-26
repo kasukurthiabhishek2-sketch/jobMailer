@@ -73,16 +73,20 @@ export default function App() {
       });
   }, []);
 
-  // Update current step based on progression
-  useEffect(() => {
-    if (!resumeData) {
-      setCurrentStep(1);
-    } else if (recipients.length === 0) {
-      setCurrentStep(2);
-    } else if (Object.keys(generatedEmails).length === 0) {
-      setCurrentStep(4);
+  const handleSelectStep = (stepId) => {
+    if (stepId === 6) {
+      handleOpenSettings('logs');
+      return;
     }
-  }, [resumeData, recipients.length, Object.keys(generatedEmails).length]);
+    setCurrentStep(stepId);
+  };
+
+  const handleResumeUploaded = (data) => {
+    setResumeData(data);
+    if (currentStep === 1) {
+      setCurrentStep(2);
+    }
+  };
 
   const handleOpenSettings = (tab = 'ai') => {
     setSettingsTab(tab);
@@ -213,8 +217,9 @@ export default function App() {
         {/* Step Progression Bar */}
         <StepIndicator
           currentStep={currentStep}
-          onSelectStep={setCurrentStep}
+          onSelectStep={handleSelectStep}
           resumeReady={Boolean(resumeData)}
+          aiReady={Boolean(config?.aiProviders?.[config?.activeProvider || 'gemini']?.isConfigured)}
           recipientsCount={recipients.length}
           jdReady={Boolean(jobDescription && jobDescription.trim())}
           emailReady={Boolean(Object.keys(generatedEmails).length > 0)}
@@ -227,7 +232,7 @@ export default function App() {
             {/* Step 1: Resume Upload */}
             <ResumeUpload
               resumeData={resumeData}
-              onResumeUploaded={setResumeData}
+              onResumeUploaded={handleResumeUploaded}
               onShowToast={addToast}
             />
 

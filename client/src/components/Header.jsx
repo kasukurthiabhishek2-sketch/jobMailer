@@ -1,10 +1,12 @@
-import React from 'react';
-import { Send, Settings, Sparkles, Mail, FileText, Sun, Moon } from 'lucide-react';
+import React, { useState } from 'react';
+import { Send, Settings, Sparkles, Mail, FileText, Sun, Moon, HelpCircle, X } from 'lucide-react';
 
 export default function Header({ config, onOpenSettings, onOpenLogs, theme, onToggleTheme }) {
+  const [showQuickStart, setShowQuickStart] = useState(false);
+
   const activeAiKey = config?.activeProvider || 'gemini';
   const activeAi = config?.aiProviders?.[activeAiKey];
-  const activeAiConfigured = activeAi?.isConfigured;
+  const activeAiConfigured = Boolean(activeAi?.isConfigured);
 
   const defaultSmtp = (config?.smtpProfiles || []).find(p => p.isDefault) || config?.smtpProfiles?.[0];
   const smtpConfigured = Boolean(defaultSmtp && defaultSmtp.isConfigured);
@@ -74,16 +76,105 @@ export default function Header({ config, onOpenSettings, onOpenLogs, theme, onTo
             {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
           </button>
 
-          {/* Settings Button */}
+          {/* Quick-Start Help Button */}
+          <button
+            className="btn-icon"
+            onClick={() => setShowQuickStart(true)}
+            title="Quick-Start Guide & Help"
+            aria-label="Quick-start help guide"
+          >
+            <HelpCircle size={18} />
+          </button>
+
+          {/* Settings Slide-over Button */}
           <button
             className="btn-icon"
             onClick={() => onOpenSettings('ai')}
-            title="Settings (AI Keys, SMTP Profiles, Guides)"
+            title="Settings (AI Keys, SMTP, Preferences, Danger Zone)"
+            aria-label="Open settings panel"
           >
             <Settings size={18} />
           </button>
         </div>
       </div>
+
+      {/* In-App Quick Start Guide Modal */}
+      {showQuickStart && (
+        <div className="modal-overlay" onClick={() => setShowQuickStart(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 540 }}>
+            <div className="modal-header">
+              <div className="modal-title">
+                <Sparkles size={20} style={{ color: 'var(--accent-primary)' }} />
+                <span>JDMail Quick-Start Guide</span>
+              </div>
+              <button
+                className="btn-icon"
+                onClick={() => setShowQuickStart(false)}
+                aria-label="Close help guide"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="quickstart-card">
+                <div className="quickstart-number">1</div>
+                <div>
+                  <strong style={{ display: 'block', color: 'var(--text-primary)', marginBottom: 2 }}>
+                    Resume & AI Setup
+                  </strong>
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                    Upload your resume (.pdf or .docx). Configure and test at least one AI provider (Gemini, Groq, OpenAI, or Copilot) to generate personalized outreach.
+                  </span>
+                </div>
+              </div>
+
+              <div className="quickstart-card">
+                <div className="quickstart-number">2</div>
+                <div>
+                  <strong style={{ display: 'block', color: 'var(--text-primary)', marginBottom: 2 }}>
+                    Recipient Management
+                  </strong>
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                    Import recruiters and hiring managers from Excel/CSV or add them manually. RFC-standard validation highlights formatting errors automatically.
+                  </span>
+                </div>
+              </div>
+
+              <div className="quickstart-card">
+                <div className="quickstart-number">3</div>
+                <div>
+                  <strong style={{ display: 'block', color: 'var(--text-primary)', marginBottom: 2 }}>
+                    Tailored Job Description (Optional)
+                  </strong>
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                    Paste a specific job description to spotlight relevant skills and metrics, or skip to generate a high-impact intro pitch.
+                  </span>
+                </div>
+              </div>
+
+              <div className="quickstart-card">
+                <div className="quickstart-number">4</div>
+                <div>
+                  <strong style={{ display: 'block', color: 'var(--text-primary)', marginBottom: 2 }}>
+                    Review, Polish & Safe Send
+                  </strong>
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                    Scan and refine drafts in the split-pane editor, then dispatch safely with anti-spam rate limiting and real-time delivery logs.
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn btn-primary"
+                onClick={() => setShowQuickStart(false)}
+              >
+                Got It
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }
