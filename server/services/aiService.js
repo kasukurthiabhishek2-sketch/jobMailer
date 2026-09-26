@@ -3,6 +3,7 @@
  */
 
 const copilotService = require('./copilotService');
+const { callCopilotChat, testCopilotConnection } = copilotService;
 
 /**
  * Clean and parse JSON from model output (handles markdown code blocks like ```json ... ```)
@@ -255,7 +256,7 @@ async function generateColdEmail({ providerKey, providerConfig, resumeText, jobD
       });
 
     case 'copilot':
-      return await callCopilotChat({
+      return await copilotService.callCopilotChat({
         githubAccessToken: apiKey,
         model: model || 'gpt-4o',
         systemPrompt,
