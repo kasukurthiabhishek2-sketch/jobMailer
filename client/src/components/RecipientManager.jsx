@@ -1,4 +1,5 @@
 import React, { useRef, useState, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Users,
   UserPlus,
@@ -15,7 +16,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
-  X
+  X,
+  Check,
+  CheckCircle,
+  ShieldCheck
 } from 'lucide-react';
 import { uploadRecipientsSheet } from '../services/api';
 import RecipientModal from './RecipientModal';
@@ -29,6 +33,7 @@ const SAMPLE_RECIPIENTS = [
     role: 'Senior Engineering Recruiter',
     isValidEmail: true,
     isSelected: true,
+    isApproved: true,
     status: 'pending'
   },
   {
@@ -39,6 +44,7 @@ const SAMPLE_RECIPIENTS = [
     role: 'VP of Engineering',
     isValidEmail: true,
     isSelected: true,
+    isApproved: true,
     status: 'pending'
   },
   {
@@ -49,6 +55,7 @@ const SAMPLE_RECIPIENTS = [
     role: 'Head of Technical Recruiting',
     isValidEmail: true,
     isSelected: true,
+    isApproved: true,
     status: 'pending'
   }
 ];
@@ -82,6 +89,9 @@ export default function RecipientManager({
 
   // Confirmation modal state for destructive actions
   const [destructiveModal, setDestructiveModal] = useState(null); // { type: 'bulk' | 'all', count: number }
+
+  const approvedCount = useMemo(() => recipients.filter(r => r.isApproved).length, [recipients]);
+  const unapprovedCount = recipients.length - approvedCount;
 
   const handleAddSingle = (e) => {
     e.preventDefault();
@@ -121,6 +131,7 @@ export default function RecipientManager({
       role: singleRole.trim(),
       isValidEmail: true,
       isSelected: true,
+      isApproved: true, // Manually added recipients are approved by the user
       status: 'pending'
     };
 
@@ -132,8 +143,8 @@ export default function RecipientManager({
 
     onShowToast({
       type: 'success',
-      title: 'Recipient Added',
-      message: `Added ${newRecipient.email} to queue.`
+      title: 'Recipient Added & Approved',
+      message: `Added and approved ${newRecipient.email} for outreach.`
     });
   };
 
@@ -148,8 +159,8 @@ export default function RecipientManager({
       setIsModalOpen(true);
       onShowToast({
         type: 'info',
-        title: 'Spreadsheet Parsed',
-        message: `Found ${data.totalCount} contacts in ${file.name}. Review and confirm.`
+        title: 'Spreadsheet Parsed Row-by-Row',
+        message: `Extracted ${data.totalCount} rows from ${file.name}. Review and explicitly approve.`
       });
     } catch (err) {
       onShowToast({
@@ -169,14 +180,33 @@ export default function RecipientManager({
       .filter(r => !existingEmails.has(r.email.toLowerCase()))
       .map(r => ({
         ...r,
+        isApproved: true, // Marked as explicitly approved by user in modal
         status: r.status || 'pending'
       }));
 
     onUpdateRecipients([...recipients, ...newItems]);
     onShowToast({
       type: 'success',
-      title: 'Recipients Added',
-      message: `Added ${newItems.length} contacts from sheet to outreach queue.`
+      title: 'Recipients Approved & Queued',
+      message: `Added ${newItems.length} explicitly approved contact(s) to outreach queue.`
+    });
+  };
+
+  const handleToggleApproval = (id) => {
+    onUpdateRecipients(
+      recipients.map(r => (r.id === id ? { ...r, isApproved: !r.isApproved } : r))
+    );
+  };
+
+  const handleBulkApprove = () => {
+    const targetIds = selectedIds.size > 0 ? selectedIds : new Set(recipients.map(r => r.id));
+    onUpdateRecipients(
+      recipients.map(r => (targetIds.has(r.id) ? { ...r, isApproved: true } : r))
+    );
+    onShowToast({
+      type: 'success',
+      title: 'Contacts Approved',
+      message: `Explicitly approved ${targetIds.size} recipient(s).`
     });
   };
 
@@ -338,8 +368,14 @@ export default function RecipientManager({
           <span>Step 2: HR & Hiring Recipients</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
-          <span className="badge-counter">
-            {recipients.length} {recipients.length === 1 ? 'Contact' : 'Contacts'}
+          <span
+            className="badge-counter"
+            style={{
+              color: unapprovedCount === 0 && recipients.length > 0 ? 'var(--accent-success)' : undefined,
+              borderColor: unapprovedCount === 0 && recipients.length > 0 ? 'rgba(52, 211, 153, 0.4)' : undefined
+            }}
+          >
+            {recipients.length} {recipients.length === 1 ? 'Contact' : 'Contacts'} ({approvedCount} Approved)
           </span>
           {recipients.length > 0 && (
             <button
@@ -564,6 +600,14 @@ export default function RecipientManager({
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
+                  onClick={handleBulkApprove}
+                  style={{ fontSize: 11, height: 28, color: 'var(--accent-success)', borderColor: 'rgba(52, 211, 153, 0.4)' }}
+                >
+                  <CheckCircle size={11} /> Approve Selected
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
                   onClick={handleBulkRevalidate}
                   style={{ fontSize: 11, height: 28 }}
                 >
@@ -645,13 +689,14 @@ export default function RecipientManager({
                       )}
                     </div>
                   </th>
+                  <th style={{ width: 100, textAlign: 'center' }}>Approval</th>
                   <th style={{ width: 44, textAlign: 'center' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {paginatedRecipients.length === 0 ? (
                   <tr>
-                    <td colSpan="7" style={{ textAlign: 'center', padding: 28, color: 'var(--text-muted)' }}>
+                    <td colSpan="8" style={{ textAlign: 'center', padding: 28, color: 'var(--text-muted)' }}>
                       No recipients match the current filter.
                     </td>
                   </tr>
@@ -698,6 +743,42 @@ export default function RecipientManager({
                             {status === 'failed' && '✕ '}
                             {status}
                           </span>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          {r.isApproved ? (
+                            <span
+                              className="info-pill"
+                              style={{
+                                fontSize: 11,
+                                padding: '2px 8px',
+                                background: 'rgba(52, 211, 153, 0.1)',
+                                borderColor: 'rgba(52, 211, 153, 0.3)',
+                                color: 'var(--accent-success)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4
+                              }}
+                              title="Contact explicitly approved for outreach"
+                            >
+                              <Check size={11} /> Approved
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              style={{
+                                padding: '2px 8px',
+                                fontSize: 10,
+                                height: 22,
+                                color: 'var(--accent-warning)',
+                                borderColor: 'rgba(251, 191, 36, 0.4)'
+                              }}
+                              onClick={() => handleToggleApproval(r.id)}
+                              title="Click to explicitly approve this recipient"
+                            >
+                              Approve
+                            </button>
+                          )}
                         </td>
                         <td style={{ textAlign: 'center' }}>
                           <button
@@ -759,7 +840,7 @@ export default function RecipientManager({
       )}
 
       {/* Destructive Action Confirmation Modal */}
-      {destructiveModal && (
+      {destructiveModal && createPortal(
         <div className="modal-overlay" onClick={() => setDestructiveModal(null)}>
           <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
             <div className="modal-header">
@@ -795,7 +876,8 @@ export default function RecipientManager({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Recipient Table Selection Modal */}

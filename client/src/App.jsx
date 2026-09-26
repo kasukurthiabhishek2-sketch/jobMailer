@@ -142,6 +142,21 @@ export default function App() {
       return;
     }
 
+    // Defensive check: Ensure all recipients have explicit approval
+    const unapproved = readyRecipients.filter(r => {
+      const rec = recipients.find(orig => orig.id === r.id);
+      return !rec || !rec.isApproved;
+    });
+
+    if (unapproved.length > 0) {
+      addToast({
+        type: 'error',
+        title: 'Approval Required',
+        message: `${unapproved.length} recipient(s) lack explicit approval. Please approve them before sending.`
+      });
+      return;
+    }
+
     // Reset and open send progress modal
     setProgressData({ current: 0, total: readyRecipients.length, recipientEmail: '', status: 'starting' });
     setThrottlingData(null);
@@ -260,6 +275,7 @@ export default function App() {
               resumeData={resumeData}
               jobDescription={jobDescription}
               recipients={recipients}
+              onUpdateRecipients={setRecipients}
               generatedEmails={generatedEmails}
               onUpdateGeneratedEmails={setGeneratedEmails}
               onOpenSettings={handleOpenSettings}

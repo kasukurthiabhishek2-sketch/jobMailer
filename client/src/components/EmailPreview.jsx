@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Sparkles,
   Paperclip,
@@ -14,7 +15,8 @@ import {
   Search,
   CheckCircle,
   Clock,
-  AlertCircle
+  AlertCircle,
+  X
 } from 'lucide-react';
 import { generateColdEmail } from '../services/api';
 
@@ -39,7 +41,8 @@ export default function EmailPreview({
   config,
   resumeData,
   jobDescription,
-  recipients,
+  recipients = [],
+  onUpdateRecipients,
   generatedEmails,
   onUpdateGeneratedEmails,
   onOpenSettings,
@@ -56,6 +59,10 @@ export default function EmailPreview({
   const [searchRecipient, setSearchRecipient] = useState('');
   const [filterTab, setFilterTab] = useState('all'); // 'all' | 'ready' | 'pending'
 
+  // Pre-send review & explicit approval modal state
+  const [isPreSendModalOpen, setIsPreSendModalOpen] = useState(false);
+  const [preSendApprovalChecked, setPreSendApprovalChecked] = useState(false);
+
   const activeAiKey = config?.activeProvider || 'gemini';
   const activeAi = config?.aiProviders?.[activeAiKey];
   const isAiConfigured = Boolean(activeAi?.isConfigured);
@@ -63,6 +70,41 @@ export default function EmailPreview({
   const defaultSmtp = (config?.smtpProfiles || []).find(p => p.isDefault) || config?.smtpProfiles?.[0];
   const totalRecipients = recipients.length;
   const emailsReadyCount = recipients.filter(r => generatedEmails[r.id]?.body).length;
+
+  // Verification & Explicit Approval Checks
+  const unapprovedRecipients = useMemo(() => recipients.filter(r => !r.isApproved), [recipients]);
+  const allApproved = recipients.length > 0 && unapprovedRecipients.length === 0;
+  const readyRecipients = useMemo(() => recipients.filter(r => generatedEmails[r.id]?.body), [recipients, generatedEmails]);
+
+  const handleApproveAllRemaining = () => {
+    if (onUpdateRecipients) {
+      onUpdateRecipients(recipients.map(r => ({ ...r, isApproved: true })));
+      onShowToast({
+        type: 'success',
+        title: 'Recipients Approved',
+        message: `Explicitly approved ${unapprovedRecipients.length} remaining contact(s).`
+      });
+    }
+  };
+
+  const handleSendButtonClick = () => {
+    if (!allApproved) {
+      onShowToast({
+        type: 'error',
+        title: 'Approval Required',
+        message: 'All recipients must be explicitly reviewed and approved before sending.'
+      });
+      return;
+    }
+    setPreSendApprovalChecked(false);
+    setIsPreSendModalOpen(true);
+  };
+
+  const handleConfirmAndDispatch = () => {
+    if (!preSendApprovalChecked) return;
+    setIsPreSendModalOpen(false);
+    onTriggerSend();
+  };
 
   // Filtered recipient list for left sidebar
   const filteredRecipients = useMemo(() => {
@@ -785,32 +827,198 @@ export default function EmailPreview({
           border: '1px solid rgba(99, 102, 241, 0.3)',
           borderRadius: 'var(--radius-md)',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 16
+          flexDirection: 'column',
+          gap: 14
         }}
       >
-        <div>
-          <div style={{ fontWeight: 700, color: '#fff', fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>Ready to Dispatch Cold Outreach</span>
+        {/* Unapproved Warning Banner */}
+        {!allApproved && totalRecipients > 0 && (
+          <div
+            style={{
+              padding: '12px 16px',
+              background: 'rgba(251, 191, 36, 0.1)',
+              border: '1px solid rgba(251, 191, 36, 0.35)',
+              borderRadius: 'var(--radius-md)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: 'var(--accent-warning)' }}>
+              <AlertTriangle size={18} style={{ flexShrink: 0 }} />
+              <span>
+                <strong>Explicit Approval Required:</strong> {unapprovedRecipients.length} contact(s) have not been explicitly approved. You must approve all recipients before dispatching emails.
+              </span>
+            </div>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleApproveAllRemaining}
+              style={{ fontSize: 11, height: 28, color: 'var(--accent-warning)', borderColor: 'rgba(251, 191, 36, 0.4)', flexShrink: 0 }}
+            >
+              Approve All ({unapprovedRecipients.length})
+            </button>
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-            Via: {defaultSmtp ? `${defaultSmtp.name} (${defaultSmtp.fromEmail || defaultSmtp.username})` : 'No SMTP account configured'}
-            {' '}• Attached: {resumeData ? resumeData.originalFilename : 'No resume'}
-          </div>
-        </div>
+        )}
 
-        <button
-          type="button"
-          className="btn btn-primary btn-lg"
-          onClick={onTriggerSend}
-          disabled={!defaultSmtp || totalRecipients === 0 || emailsReadyCount === 0}
-        >
-          <Send size={18} />
-          Send {totalRecipients} Cold {totalRecipients === 1 ? 'Email' : 'Emails'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+          <div>
+            <div style={{ fontWeight: 700, color: '#fff', fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span>Ready to Dispatch Cold Outreach</span>
+              {allApproved && (
+                <span
+                  className="info-pill"
+                  style={{
+                    fontSize: 11,
+                    background: 'rgba(52, 211, 153, 0.12)',
+                    borderColor: 'rgba(52, 211, 153, 0.3)',
+                    color: 'var(--accent-success)'
+                  }}
+                >
+                  <ShieldCheck size={12} /> Contacts Approved
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+              Via: {defaultSmtp ? `${defaultSmtp.name} (${defaultSmtp.fromEmail || defaultSmtp.username})` : 'No SMTP account configured'}
+              {' '}• Attached: {resumeData ? resumeData.originalFilename : 'No resume'}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-primary btn-lg"
+            onClick={handleSendButtonClick}
+            disabled={!defaultSmtp || totalRecipients === 0 || emailsReadyCount === 0 || !allApproved}
+            title={!allApproved ? 'Explicit approval is required for all recipients before sending' : 'Review & Send'}
+          >
+            <Send size={18} />
+            Send {totalRecipients} Cold {totalRecipients === 1 ? 'Email' : 'Emails'}
+          </button>
+        </div>
       </div>
+
+      {/* Pre-Send Review & Explicit Authorization Modal */}
+      {isPreSendModalOpen && createPortal(
+        <div className="modal-overlay" onClick={() => setIsPreSendModalOpen(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 780 }}>
+            {/* Modal Header */}
+            <div className="modal-header">
+              <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <ShieldCheck size={20} style={{ color: 'var(--accent-success)' }} />
+                <span>Final Verification: Explicit Outreach Authorization</span>
+              </div>
+              <button className="btn-icon" onClick={() => setIsPreSendModalOpen(false)} aria-label="Close modal">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="modal-body" style={{ maxHeight: '65vh', overflowY: 'auto' }}>
+              <div
+                style={{
+                  padding: '12px 16px',
+                  background: 'var(--bg-tertiary)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-md)',
+                  marginBottom: 16,
+                  fontSize: 12,
+                  color: 'var(--text-secondary)'
+                }}
+              >
+                <div><strong>Dispatching SMTP:</strong> {defaultSmtp?.name} ({defaultSmtp?.fromEmail || defaultSmtp?.username})</div>
+                <div><strong>Attachment:</strong> {resumeData ? resumeData.originalFilename : 'No resume attached'}</div>
+                <div style={{ marginTop: 4, color: 'var(--accent-success)' }}>
+                  ✓ All {readyRecipients.length} recipients verified row-by-row with valid syntax and explicit approval.
+                </div>
+              </div>
+
+              {/* Recipients Review Table */}
+              <div className="data-table-wrapper" style={{ maxHeight: 260 }}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: 36 }}>#</th>
+                      <th>HR Contact Name</th>
+                      <th>Verified Email</th>
+                      <th>Company</th>
+                      <th>Subject Line Preview</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {readyRecipients.map((rec, index) => (
+                      <tr key={rec.id}>
+                        <td style={{ color: 'var(--text-muted)', fontSize: 11 }}>{index + 1}</td>
+                        <td style={{ fontWeight: 600 }}>{rec.name || 'Hiring Lead'}</td>
+                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{rec.email}</td>
+                        <td>{rec.company || '—'}</td>
+                        <td style={{ fontSize: 12, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {generatedEmails[rec.id]?.subject || 'Exploring Opportunities'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Explicit Authorization Checkbox */}
+              <div
+                style={{
+                  marginTop: 16,
+                  padding: '14px 18px',
+                  background: preSendApprovalChecked ? 'rgba(52, 211, 153, 0.08)' : 'rgba(251, 191, 36, 0.08)',
+                  border: '1px solid',
+                  borderColor: preSendApprovalChecked ? 'rgba(52, 211, 153, 0.4)' : 'rgba(251, 191, 36, 0.35)',
+                  borderRadius: 'var(--radius-md)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12
+                }}
+              >
+                <input
+                  type="checkbox"
+                  id="finalPreSendApproval"
+                  checked={preSendApprovalChecked}
+                  onChange={e => setPreSendApprovalChecked(e.target.checked)}
+                  style={{ width: 18, height: 18, cursor: 'pointer', accentColor: 'var(--accent-success)' }}
+                />
+                <label
+                  htmlFor="finalPreSendApproval"
+                  style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer', userSelect: 'none' }}
+                >
+                  I have verified each recipient's email, name, and draft above, and I <strong>explicitly authorize</strong> sending these {readyRecipients.length} cold emails.
+                </label>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button className="btn btn-secondary" onClick={() => setIsPreSendModalOpen(false)}>
+                Cancel & Review
+              </button>
+
+              <button
+                className="btn btn-primary"
+                onClick={handleConfirmAndDispatch}
+                disabled={!preSendApprovalChecked}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  background: preSendApprovalChecked ? 'var(--primary-gradient)' : 'var(--bg-tertiary)',
+                  color: preSendApprovalChecked ? '#fff' : 'var(--text-muted)'
+                }}
+              >
+                <Send size={16} />
+                Authorize & Dispatch {readyRecipients.length} Emails
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
