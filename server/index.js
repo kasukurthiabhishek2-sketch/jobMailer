@@ -370,33 +370,49 @@ app.post('/api/ai/batch-generate', async (req, res) => {
       return res.status(400).json({ error: `Provider ${providerKey} is not configured.` });
     }
 
-    const results = [];
-    for (const recipient of recipients) {
-      try {
-        const emailContent = await generateColdEmail({
-          providerKey,
-          providerConfig,
-          resumeText,
-          jobDescription,
-          recipient,
-          customTone,
-          senderName
-        });
-        results.push({
-          recipientId: recipient.id,
-          recipientEmail: recipient.email,
-          success: true,
-          email: emailContent
-        });
-      } catch (genErr) {
-        results.push({
-          recipientId: recipient.id,
-          recipientEmail: recipient.email,
-          success: false,
-          error: genErr.message
-        });
+    // Process batch generations with controlled concurrency (4 parallel workers)
+    // to slash latency by ~75% without hitting provider rate limits
+    const CONCURRENCY_LIMIT = 4;
+    const results = new Array(recipients.length);
+    let nextIndex = 0;
+
+    async function worker() {
+      while (nextIndex < recipients.length) {
+        const i = nextIndex++;
+        const recipient = recipients[i];
+        try {
+          const emailContent = await generateColdEmail({
+            providerKey,
+            providerConfig,
+            resumeText,
+            jobDescription,
+            recipient,
+            customTone,
+            senderName
+          });
+          results[i] = {
+            recipientId: recipient.id,
+            recipientEmail: recipient.email,
+            success: true,
+            email: emailContent
+          };
+        } catch (genErr) {
+          results[i] = {
+            recipientId: recipient.id,
+            recipientEmail: recipient.email,
+            success: false,
+            error: genErr.message
+          };
+        }
       }
     }
+
+    const workers = [];
+    const numWorkers = Math.min(CONCURRENCY_LIMIT, recipients.length);
+    for (let w = 0; w < numWorkers; w++) {
+      workers.push(worker());
+    }
+    await Promise.all(workers);
 
     res.json({ success: true, results });
   } catch (err) {
