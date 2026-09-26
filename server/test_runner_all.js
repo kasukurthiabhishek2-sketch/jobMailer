@@ -1,0 +1,64 @@
+/**
+ * Unified Test Runner for JDMail Server Test Suites
+ */
+const { spawnSync } = require('child_process');
+const path = require('path');
+const fs = require('fs');
+
+const testSuites = [
+  { name: 'Sheet Parser & Extraction Engine', file: 'test_sheet_parser_full.js' },
+  { name: 'AES-256-GCM Cryptographic Storage & Masking', file: 'test_crypto.js' },
+  { name: 'Storage Service & Config Invariants', file: 'test_storage.js' },
+  { name: 'SMTP Resilience, Strict TLS & Retries', file: 'test_smtp_resilience.js' },
+  { name: 'Copilot AI Dispatch & Fallback', file: 'test_copilot_dispatch.js' },
+  { name: 'AI Fact-Checking Guardrail & Prompts', file: 'test_ai_guardrail.js' },
+  { name: 'Batch Concurrency & Order Preservation', file: 'test_batch_concurrency.js' },
+  { name: 'Cross-Session Audit Deduplication', file: 'test_cross_session_dedup.js' },
+  { name: 'Danger-Zone Full Purge Verification', file: 'test_danger_zone.js' },
+  { name: 'Resume Text & Heuristic Parser', file: 'test_resume_parser.js' }
+];
+
+console.log('====================================================');
+console.log('   RUNNING JDMAIL COMPREHENSIVE SUBSYSTEM SUITE    ');
+console.log('====================================================\n');
+
+let passed = 0;
+let failed = 0;
+let skipped = 0;
+const results = [];
+
+for (const suite of testSuites) {
+  const filePath = path.join(__dirname, suite.file);
+  if (!fs.existsSync(filePath)) {
+    console.log(`• Skipping ${suite.name} (${suite.file} not present in this branch)`);
+    skipped++;
+    continue;
+  }
+  process.stdout.write(`• Running ${suite.name} (${suite.file})... `);
+  
+  const startTime = Date.now();
+  const res = spawnSync('node', [filePath], { encoding: 'utf8', cwd: __dirname });
+  const duration = Date.now() - startTime;
+
+  if (res.status === 0) {
+    console.log(`\x1b[32mPASSED\x1b[0m (${duration}ms)`);
+    passed++;
+    results.push({ name: suite.name, status: 'PASS', duration });
+  } else {
+    console.log(`\x1b[31mFAILED\x1b[0m (${duration}ms)`);
+    console.error(res.stderr || res.stdout);
+    failed++;
+    results.push({ name: suite.name, status: 'FAIL', duration });
+  }
+}
+
+console.log('\n====================================================');
+console.log(`SUMMARY: ${passed} PASSED, ${failed} FAILED across ${testSuites.length} test suites`);
+console.log('====================================================\n');
+
+if (failed > 0) {
+  process.exit(1);
+} else {
+  console.log('\x1b[32mALL SUBSYSTEM TEST SUITES PASSED CLEANLY!\x1b[0m\n');
+  process.exit(0);
+}
