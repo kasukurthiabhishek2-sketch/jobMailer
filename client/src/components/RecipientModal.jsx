@@ -4,16 +4,13 @@ import {
   X,
   AlertCircle,
   Search,
-  Users,
   Check,
   ShieldCheck,
   CheckCircle,
   FileSpreadsheet,
-  AlertTriangle,
   Edit2,
-  Filter,
-  CheckSquare,
-  Square
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 const EMAIL_REGEX = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/i;
@@ -68,6 +65,10 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
   // Explicit Approval Checkbox State
   const [isExplicitlyApproved, setIsExplicitlyApproved] = useState(false);
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50); // 50 | 100 | 250 | 'all'
+
   useEffect(() => {
     if (sheetData?.rows) {
       setRows(sheetData.rows);
@@ -75,8 +76,14 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
       setFilterTab('all');
       setSearchTerm('');
       setEditingRowId(null);
+      setCurrentPage(1);
     }
   }, [sheetData]);
+
+  // Reset to first page when filtering or searching
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterTab, searchTerm]);
 
   const totalCount = rows.length;
   const validCount = useMemo(() => rows.filter(r => r.isValidEmail).length, [rows]);
@@ -103,6 +110,18 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
       );
     });
   }, [rows, filterTab, searchTerm]);
+
+  // Derived pagination calculations
+  const totalPages = useMemo(() => {
+    if (pageSize === 'all') return 1;
+    return Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  }, [filteredRows.length, pageSize]);
+
+  const paginatedRows = useMemo(() => {
+    if (pageSize === 'all') return filteredRows;
+    const start = (currentPage - 1) * pageSize;
+    return filteredRows.slice(start, start + pageSize);
+  }, [filteredRows, currentPage, pageSize]);
 
   if (!isOpen || !sheetData) return null;
 
@@ -532,7 +551,8 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
                     </td>
                   </tr>
                 ) : (
-                  filteredRows.map((row, idx) => {
+                  paginatedRows.map((row, idxInPage) => {
+                    const realFilteredIdx = pageSize === 'all' ? idxInPage : (currentPage - 1) * pageSize + idxInPage;
                     const isInvalid = !row.isValidEmail;
                     const isEditing = editingRowId === row.id;
 
@@ -541,7 +561,7 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
                         key={row.id}
                         className={`${isInvalid ? 'row-invalid' : ''} ${row.isSelected ? 'row-selected' : ''}`}
                         onClick={e => {
-                          if (!isInvalid && !isEditing) handleToggleRow(idx, e);
+                          if (!isInvalid && !isEditing) handleToggleRow(realFilteredIdx, e);
                         }}
                         style={{
                           cursor: isInvalid || isEditing ? 'default' : 'pointer',
@@ -719,6 +739,85 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          {filteredRows.length > 0 && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px 12px',
+                marginTop: 8,
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: 12,
+                color: 'var(--text-secondary)',
+                flexWrap: 'wrap',
+                gap: 8
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>
+                  Showing{' '}
+                  <strong style={{ color: 'var(--text-primary)' }}>
+                    {pageSize === 'all'
+                      ? `1 - ${filteredRows.length}`
+                      : `${(currentPage - 1) * pageSize + 1} - ${Math.min(currentPage * pageSize, filteredRows.length)}`}
+                  </strong>{' '}
+                  of <strong style={{ color: 'var(--text-primary)' }}>{filteredRows.length}</strong> contacts
+                </span>
+                <span style={{ color: 'var(--border-strong)' }}>|</span>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span>Per page:</span>
+                  <select
+                    value={pageSize}
+                    onChange={e => {
+                      const val = e.target.value === 'all' ? 'all' : Number(e.target.value);
+                      setPageSize(val);
+                      setCurrentPage(1);
+                    }}
+                    className="form-select"
+                    style={{ padding: '2px 6px', fontSize: 11, height: 24, width: 'auto' }}
+                  >
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={250}>250</option>
+                    <option value="all">All</option>
+                  </select>
+                </label>
+              </div>
+
+              {pageSize !== 'all' && totalPages > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={currentPage <= 1}
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    style={{ padding: '2px 6px', height: 26, fontSize: 11 }}
+                    aria-label="Previous Page"
+                  >
+                    <ChevronLeft size={13} />
+                  </button>
+                  <span style={{ fontSize: 11, fontWeight: 500, minWidth: 70, textAlign: 'center' }}>
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    style={{ padding: '2px 6px', height: 26, fontSize: 11 }}
+                    aria-label="Next Page"
+                  >
+                    <ChevronRight size={13} />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Tip row */}
           <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between' }}>
