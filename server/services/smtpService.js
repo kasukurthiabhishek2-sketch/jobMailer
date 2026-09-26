@@ -25,11 +25,71 @@ function createTransporter(profile) {
   if (profile.encryption === 'STARTTLS' || profile.encryption === 'TLS') {
     transportOptions.requireTLS = true;
     transportOptions.tls = {
-      rejectUnauthorized: false // Helps avoid local certificate issues
+      // Default to strict certificate verification; only allow self-signed if explicitly configured
+      rejectUnauthorized: profile.allowSelfSignedCerts === true ? false : true
     };
   }
 
   return nodemailer.createTransport(transportOptions);
+}
+
+/**
+ * Classify SMTP error to distinguish transient vs permanent vs auth failures
+ */
+function classifySmtpError(err) {
+  if (!err) {
+    return { isTransient: false, isAuthFailure: false, isRateLimit: false, code: null, userMessage: 'Unknown error' };
+  }
+
+  const code = err.code || (err.responseCode ? String(err.responseCode) : null);
+  const response = (err.response || '').toLowerCase();
+  const message = (err.message || '').toLowerCase();
+
+  // Authentication failure
+  if (code === 'EAUTH' || response.includes('535') || message.includes('authentication failed')) {
+    return {
+      isTransient: false,
+      isAuthFailure: true,
+      isRateLimit: false,
+      code: 'EAUTH',
+      userMessage: 'Authentication failed. Please verify username and App Password.'
+    };
+  }
+
+  // Rate limit / quota exceeded
+  if (
+    code === '452' ||
+    response.includes('4.5.3') ||
+    response.includes('rate limit') ||
+    response.includes('too many recipients') ||
+    response.includes('quota exceeded') ||
+    message.includes('quota')
+  ) {
+    return {
+      isTransient: true,
+      isAuthFailure: false,
+      isRateLimit: true,
+      code: 'RATE_LIMIT',
+      userMessage: 'Provider rate limit or daily quota reached. Temporarily paused.'
+    };
+  }
+
+  // Transient network / temporary SMTP server failures
+  const transientCodes = ['ETIMEDOUT', 'ECONNRESET', 'ESOCKET', 'ECONNREFUSED', 'EHOSTUNREACH', '421', '450', '451'];
+  const isTransient =
+    transientCodes.includes(code) ||
+    response.startsWith('421') ||
+    response.startsWith('451') ||
+    message.includes('timeout') ||
+    message.includes('connection reset');
+
+  return {
+    isTransient,
+    isAuthFailure: false,
+    isRateLimit: false,
+    code: code || 'UNKNOWN',
+    userMessage: err.message || 'SMTP delivery failure'
+  };
 }
 
 /**
@@ -52,18 +112,11 @@ async function testSmtpConnection(profile) {
     };
   } catch (err) {
     console.error('SMTP test error:', err);
-    let errorMsg = err.message || 'SMTP Authentication failed';
-    if (err.response) {
-      errorMsg += ` (${err.response})`;
-    }
-    if (err.code === 'EAUTH') {
-      errorMsg = 'Authentication failed. Please verify username and ensure you are using an App Password instead of your regular password.';
-    } else if (err.code === 'ESOCKET' || err.code === 'ETIMEDOUT') {
-      errorMsg = `Connection timed out or failed to reach host ${profile.host}:${profile.port}. Please check port and encryption settings.`;
-    }
+    const classification = classifySmtpError(err);
     return {
       success: false,
-      error: errorMsg
+      error: classification.userMessage,
+      code: classification.code
     };
   }
 }
@@ -121,8 +174,31 @@ async function sendEmailMessage({
   };
 }
 
+/**
+ * Send email with automatic single retry for transient failures
+ */
+async function sendEmailMessageWithRetry(args, maxRetries = 1, backoffMs = 2000) {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await sendEmailMessage(args);
+    } catch (err) {
+      attempt++;
+      const classification = classifySmtpError(err);
+      if (attempt <= maxRetries && classification.isTransient && !classification.isRateLimit) {
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+        continue;
+      }
+      err.classification = classification;
+      throw err;
+    }
+  }
+}
+
 module.exports = {
   createTransporter,
   testSmtpConnection,
-  sendEmailMessage
+  sendEmailMessage,
+  sendEmailMessageWithRetry,
+  classifySmtpError
 };

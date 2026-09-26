@@ -8,7 +8,7 @@ const storage = require('./services/storageService');
 const { generateColdEmail, testAiConnection } = require('./services/aiService');
 const { parseResumeFile } = require('./services/resumeParser');
 const { parseRecipientSheet } = require('./services/sheetParser');
-const { testSmtpConnection, sendEmailMessage } = require('./services/smtpService');
+const { testSmtpConnection, sendEmailMessage, sendEmailMessageWithRetry, classifySmtpError } = require('./services/smtpService');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -477,7 +477,7 @@ app.post('/api/send/stream', async (req, res) => {
     });
 
     try {
-      const sendResult = await sendEmailMessage({
+      const sendResult = await sendEmailMessageWithRetry({
         profile,
         to: item.email,
         recipientName: item.name,
@@ -509,6 +509,7 @@ app.post('/api/send/stream', async (req, res) => {
       });
     } catch (err) {
       console.error(`Failed sending to ${item.email}:`, err);
+      const classification = err.classification || classifySmtpError(err);
       const logItem = {
         id: 'log_' + Date.now() + '_' + i,
         timestamp: new Date().toISOString(),
@@ -517,7 +518,7 @@ app.post('/api/send/stream', async (req, res) => {
         company: item.company,
         subject: item.subject,
         status: 'failed',
-        error: err.message || 'SMTP delivery failure',
+        error: classification.userMessage || err.message || 'SMTP delivery failure',
         smtpAccount: profile.name
       };
       campaignLogs.push(logItem);
@@ -527,18 +528,31 @@ app.post('/api/send/stream', async (req, res) => {
         total: recipients.length,
         recipientEmail: item.email,
         status: 'failed',
-        error: err.message,
+        error: classification.userMessage,
+        isAuthFailure: classification.isAuthFailure,
         logItem
       });
+
+      // If authentication failed or account is locked, abort queue immediately to prevent lockout
+      if (classification.isAuthFailure) {
+        sendEvent('auth_error', {
+          error: 'SMTP Authentication failed. Aborting remaining queue to protect account.',
+          smtpProfile: profile.name
+        });
+        break;
+      }
     }
 
-    // Rate limiting delay between sends (if not the last one)
+    // Rate limiting delay between sends with natural anti-spam human jitter (±20%)
     if (i < recipients.length - 1 && delaySeconds > 0) {
+      const jitterFactor = 0.85 + Math.random() * 0.35; // 0.85x - 1.20x
+      const actualWaitSeconds = Math.max(1, Math.round(delaySeconds * jitterFactor * 10) / 10);
+
       sendEvent('throttling', {
-        waitingSeconds: delaySeconds,
+        waitingSeconds: actualWaitSeconds,
         nextIndex: currentIndex + 1
       });
-      await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
+      await new Promise(resolve => setTimeout(resolve, actualWaitSeconds * 1000));
     }
   }
 
