@@ -1,16 +1,88 @@
 # JDMail Product & Engineering Backlog
 
-**Current Cycle:** Cycle 1  
-**Status:** Awaiting Human Checkpoint Approval (Phase 2 -> Phase 3 Gate)  
+**Current Cycle:** Cycle 2  
+**Cycle 1 Status:** Complete (10 tickets shipped, overall rating: 9.10/10)  
+**Cycle 2 Status:** Awaiting Human Checkpoint Approval (Phase 2 -> Phase 3 Gate)  
 **Synthesized from:**
-- `docs/agent-reports/phase1-pain-points-cycle1.md`
-- `docs/agent-reports/security-audit-cycle1.md`
-- `docs/agent-reports/deliverability-cycle1.md`
-- `docs/agent-reports/perf-audit-cycle1.md`
+- `docs/agent-reports/phase1-research-cycle2.md`
+- `docs/RATING_HISTORY.md` (Cycle 1 Audit Findings)
 
 ---
 
-## Prioritized Ticket Inventory
+## Cycle 2 Prioritized Ticket Inventory
+
+| Ticket ID | Title | Priority | Owning Agent | Risk Level |
+|---|---|---|---|---|
+| **TICK-CYC2-01** | Daily Provider Quota Budget Tracker & Warning System | **High** | `deliverability-lead` | Medium |
+| **TICK-CYC2-02** | AI Provider HTTP 429 Exponential Backoff Retries | **High** | `ai-integration-engineer` | Low |
+| **TICK-CYC2-03** | User-Configurable Batch Concurrency Slider in Preferences | **Medium** | `performance-engineer` | Low |
+| **TICK-CYC2-04** | Active Resume File Deletion Endpoint & UI Action | **Medium** | `backend-engineer` | Low |
+| **TICK-CYC2-05** | React Compiler Warning Elimination & Zero-Lint-Warning Cleanup | **Low** | `frontend-engineer` | Low |
+
+---
+
+## Cycle 2 Detailed Ticket Specifications
+
+### TICK-CYC2-01: Daily Provider Quota Budget Tracker & Warning System
+- **Priority:** High
+- **Problem:** Email service providers impose strict daily limits (e.g. Gmail: 500 emails/day; Outlook: 300 emails/day). Exceeding these limits leads to 24-hour mailbox lockouts or domain reputation degradation. Currently, `logs.json` records individual dispatches, but does not aggregate rolling 24-hour totals or alert the user when approving more recipients than available quota.
+- **Proposed Direction:**
+  1. Add `getDailySendingStats(smtpAccountId)` in `server/services/storageService.js` counting successful dispatches in the past 24 hours.
+  2. Expose `GET /api/logs/stats` returning daily count, estimated provider limit, and remaining quota.
+  3. In `client/src/components/RecipientManager.jsx` and `client/src/components/SendProgressModal.jsx`, display a quota progress pill (e.g., "Sent 45 / 500 today on Gmail (455 remaining)") with an alert if approved recipients exceed remaining quota.
+- **Affected Files:** `server/services/storageService.js`, `server/index.js`, `client/src/components/RecipientManager.jsx`, `client/src/services/api.js`
+- **Test Plan:** Add unit test in `server/test_quota_tracker.js` verifying 24-hour rolling window calculations across multiple timestamps.
+
+---
+
+### TICK-CYC2-02: AI Provider HTTP 429 Exponential Backoff Retries
+- **Priority:** High
+- **Problem:** During concurrent batch generation (4 workers), users on free-tier or Tier-1 API accounts (e.g., OpenAI RPM limits, Groq free tier) occasionally hit HTTP 429 "rate limit exceeded", causing that recipient's email draft to fail immediately.
+- **Proposed Direction:**
+  1. Wrap `callOpenAiCompatible()` and `callGemini()` in `server/services/aiService.js` with an automated retry handler for HTTP 429 status codes.
+  2. Implement exponential backoff with jitter (initial delay 2s, doubling up to 8s, maximum 3 retries).
+  3. Include descriptive logging when a retry is triggered.
+- **Affected Files:** `server/services/aiService.js`
+- **Test Plan:** Add unit test in `server/test_ai_retry.js` simulating 429 responses and asserting successful retry on subsequent attempt.
+
+---
+
+### TICK-CYC2-03: User-Configurable Batch Concurrency Slider in Preferences
+- **Priority:** Medium
+- **Problem:** Worker concurrency for batch email generation is hardcoded to 4 in `server/index.js`. Users on Tier 1 API keys need lower concurrency (1-2) to avoid rate limits, while users on high-tier enterprise keys desire faster generation (6-8).
+- **Proposed Direction:**
+  1. Add `batchConcurrency: 4` to default `sendingPreferences` in `server/services/storageService.js`.
+  2. Update `server/index.js` `POST /api/ai/batch-generate` to read `config.sendingPreferences.batchConcurrency || 4`.
+  3. Add a concurrency slider (range 1–8) with helpful guidance in `client/src/components/SettingsModal.jsx` (Preferences tab).
+- **Affected Files:** `server/services/storageService.js`, `server/index.js`, `client/src/components/SettingsModal.jsx`
+- **Test Plan:** Add unit test asserting `batch-generate` respects the custom `batchConcurrency` value.
+
+---
+
+### TICK-CYC2-04: Active Resume File Deletion Endpoint & UI Action
+- **Priority:** Medium
+- **Problem:** Resumes uploaded to `server/uploads/` remain on disk until a complete factory reset (`POST /api/config/reset`). If a candidate wants to remove their resume or upload an updated one, orphaned files linger.
+- **Proposed Direction:**
+  1. Add `DELETE /api/upload/resume` endpoint in `server/index.js` that deletes the active resume file from `server/uploads/`.
+  2. Add a "Remove Resume" button in `client/src/components/ResumeUpload.jsx` allowing the user to clear their resume and state cleanly.
+- **Affected Files:** `server/index.js`, `client/src/components/ResumeUpload.jsx`, `client/src/services/api.js`
+- **Test Plan:** Add test asserting `DELETE /api/upload/resume` deletes the physical file from disk.
+
+---
+
+### TICK-CYC2-05: React Compiler Warning Elimination & Zero-Lint-Warning Cleanup
+- **Priority:** Low
+- **Problem:** Oxlint reports 12 warnings across `RecipientModal.jsx`, `SettingsModal.jsx`, `SendProgressModal.jsx`, `SmtpGuideModal.jsx`, and `RecipientManager.jsx` due to unused imports and calling `setState` inside `useEffect`.
+- **Proposed Direction:**
+  1. Refactor state synchronization in `RecipientModal.jsx` and `SettingsModal.jsx` to eliminate React Compiler cascading render warnings.
+  2. Remove all unused Lucide icon imports across components.
+  3. Ensure `cd client && npm run lint` outputs 0 errors and 0 warnings.
+- **Affected Files:** `client/src/components/RecipientModal.jsx`, `client/src/components/SettingsModal.jsx`, `client/src/components/SendProgressModal.jsx`, `client/src/components/SmtpGuideModal.jsx`, `client/src/components/RecipientManager.jsx`, `client/src/services/api.js`
+- **Test Plan:** Run `cd client && npm run lint` to verify 0 warnings and 0 errors.
+
+---
+
+## Cycle 1 Shipped Ticket Archive (Reference)
 
 | Ticket ID | Title | Priority | Owning Agent | Risk Level |
 |---|---|---|---|---|
