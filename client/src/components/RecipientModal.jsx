@@ -1,16 +1,47 @@
 import React, { useState, useEffect } from 'react';
-import { X, CheckSquare, Square, AlertCircle, Search, Users, Check } from 'lucide-react';
+import { X, AlertCircle, Search, Users, Check } from 'lucide-react';
+
+const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+
+function validateEmail(email) {
+  if (!email || typeof email !== 'string') {
+    return { valid: false, reason: 'Empty or missing email' };
+  }
+  const trimmed = email.trim();
+  if (trimmed.length === 0) {
+    return { valid: false, reason: 'Empty email' };
+  }
+  if (!trimmed.includes('@')) {
+    return { valid: false, reason: "Missing '@' symbol" };
+  }
+  const parts = trimmed.split('@');
+  if (parts.length > 2) {
+    return { valid: false, reason: "Multiple '@' symbols" };
+  }
+  if (!parts[1] || !parts[1].includes('.')) {
+    return { valid: false, reason: 'Missing domain extension' };
+  }
+  if (!EMAIL_REGEX.test(trimmed)) {
+    return { valid: false, reason: 'Malformed email syntax' };
+  }
+  return { valid: true };
+}
 
 export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSelection }) {
-  if (!isOpen || !sheetData) return null;
-
-  const [rows, setRows] = useState(sheetData.rows || []);
+  const [rows, setRows] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [lastClickedIndex, setLastClickedIndex] = useState(null);
+  const [editingRowId, setEditingRowId] = useState(null);
+  const [editingEmail, setEditingEmail] = useState('');
+  const [editError, setEditError] = useState('');
 
   useEffect(() => {
-    setRows(sheetData.rows || []);
+    if (sheetData?.rows) {
+      setRows(sheetData.rows);
+    }
   }, [sheetData]);
+
+  if (!isOpen || !sheetData) return null;
 
   // Filter rows by search term
   const filteredRows = rows.filter(r => {
@@ -68,6 +99,29 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
     );
   };
 
+  // Inline email fix and re-check
+  const handleSaveFix = (rowId) => {
+    const val = validateEmail(editingEmail);
+    setRows(prev =>
+      prev.map(r => {
+        if (r.id !== rowId) return r;
+        return {
+          ...r,
+          email: editingEmail.trim(),
+          isValidEmail: val.valid,
+          errorReason: val.valid ? null : val.reason,
+          isSelected: val.valid ? true : false
+        };
+      })
+    );
+    if (val.valid) {
+      setEditingRowId(null);
+      setEditError('');
+    } else {
+      setEditError(val.reason);
+    }
+  };
+
   // Are all filtered valid rows selected?
   const allFilteredValidSelected =
     filteredRows.filter(r => r.isValidEmail).length > 0 &&
@@ -88,7 +142,7 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
             <Users size={20} style={{ color: 'var(--primary-light)' }} />
             <span>Review & Select Recipients from Spreadsheet</span>
           </div>
-          <button className="btn-icon" onClick={onClose}>
+          <button className="btn-icon" onClick={onClose} aria-label="Close modal">
             <X size={18} />
           </button>
         </div>
@@ -160,6 +214,7 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
                       onChange={e => handleSelectAll(e.target.checked)}
                       style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
                       title="Select / Deselect all valid rows"
+                      aria-label="Select all valid rows"
                     />
                   </th>
                   <th>#</th>
@@ -180,15 +235,16 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
                 ) : (
                   filteredRows.map((row, idx) => {
                     const isInvalid = !row.isValidEmail;
+                    const isEditing = editingRowId === row.id;
+
                     return (
                       <tr
                         key={row.id}
                         className={isInvalid ? 'row-invalid' : ''}
                         onClick={e => {
-                          // Allow clicking anywhere on row to toggle if valid
-                          if (!isInvalid) handleToggleRow(idx, e);
+                          if (!isInvalid && !isEditing) handleToggleRow(idx, e);
                         }}
-                        style={{ cursor: isInvalid ? 'default' : 'pointer' }}
+                        style={{ cursor: isInvalid || isEditing ? 'default' : 'pointer' }}
                       >
                         <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                           <input
@@ -197,22 +253,96 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
                             disabled={isInvalid}
                             onChange={e => handleToggleRow(idx, e)}
                             style={{ cursor: isInvalid ? 'not-allowed' : 'pointer', transform: 'scale(1.15)' }}
+                            aria-label={`Select row ${row.rowIndex}`}
                           />
                         </td>
                         <td style={{ color: 'var(--text-muted)', fontSize: 11 }}>{row.rowIndex}</td>
                         <td style={{ fontWeight: 600 }}>{row.name || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
                         <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
-                          {row.email || <span style={{ color: 'var(--text-muted)' }}>[Empty]</span>}
+                          {isEditing ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }} onClick={e => e.stopPropagation()}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <input
+                                  type="email"
+                                  value={editingEmail}
+                                  onChange={e => {
+                                    setEditingEmail(e.target.value);
+                                    setEditError('');
+                                  }}
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter') handleSaveFix(row.id);
+                                    if (e.key === 'Escape') {
+                                      setEditingRowId(null);
+                                      setEditError('');
+                                    }
+                                  }}
+                                  autoFocus
+                                  className="form-input"
+                                  placeholder="user@example.com"
+                                  style={{ fontSize: 12, padding: '3px 8px', height: 28, width: 190, fontFamily: 'var(--font-mono)' }}
+                                />
+                                <button
+                                  type="button"
+                                  className="btn btn-primary"
+                                  style={{ padding: '2px 8px', fontSize: 11, height: 28 }}
+                                  onClick={() => handleSaveFix(row.id)}
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{ padding: '2px 8px', fontSize: 11, height: 28 }}
+                                  onClick={() => {
+                                    setEditingRowId(null);
+                                    setEditError('');
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                              {editError && (
+                                <span style={{ fontSize: 11, color: 'var(--accent-danger)' }}>
+                                  {editError}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span>{row.email || <span style={{ color: 'var(--text-muted)' }}>[Empty]</span>}</span>
+                          )}
                         </td>
                         <td>{row.company || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
                         <td>{row.role || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
                         <td>
                           {isInvalid ? (
-                            <span className="email-invalid-tag" title={row.errorReason}>
-                              <AlertCircle size={11} /> {row.errorReason}
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <span className="email-invalid-tag" title={row.errorReason || 'Invalid email format'}>
+                                <AlertCircle size={11} /> {row.errorReason || 'Invalid email'}
+                              </span>
+                              {!isEditing && (
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{
+                                    padding: '2px 8px',
+                                    fontSize: 11,
+                                    height: 24,
+                                    borderColor: 'var(--border-subtle)',
+                                    color: 'var(--text-primary)'
+                                  }}
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    setEditingRowId(row.id);
+                                    setEditingEmail(row.email || '');
+                                    setEditError('');
+                                  }}
+                                >
+                                  Fix &amp; re-check
+                                </button>
+                              )}
+                            </div>
                           ) : (
-                            <span style={{ color: 'var(--success)', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ color: 'var(--accent-success)', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                               <Check size={13} /> Valid
                             </span>
                           )}

@@ -251,6 +251,17 @@ app.post('/api/upload/resume', upload.single('resume'), async (req, res) => {
       return res.status(400).json({ error: 'No resume file uploaded' });
     }
 
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    if (!['.pdf', '.docx', '.txt'].includes(ext)) {
+      try { fs.unlinkSync(req.file.path); } catch (e) {}
+      return res.status(400).json({ error: 'Unsupported file type. Please upload a PDF or DOCX file.' });
+    }
+
+    if (req.file.size > 5 * 1024 * 1024) {
+      try { fs.unlinkSync(req.file.path); } catch (e) {}
+      return res.status(400).json({ error: 'Resume file size exceeds the 5MB limit.' });
+    }
+
     const parsed = await parseResumeFile(req.file.path, req.file.originalname);
     res.json({
       fileId: req.file.filename,

@@ -234,6 +234,8 @@ export default function App() {
               resumeData={resumeData}
               onResumeUploaded={handleResumeUploaded}
               onShowToast={addToast}
+              config={config}
+              onOpenSettings={handleOpenSettings}
             />
 
             {/* Step 2: Recipients Manager */}

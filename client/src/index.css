@@ -1081,14 +1081,65 @@ body {
 
 .email-invalid-tag {
   font-size: 11px;
-  color: #f87171;
+  color: var(--accent-danger);
   background: var(--danger-bg);
   border: 1px solid var(--danger-border);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+.data-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--transition-fast);
+}
+.data-table th.sortable:hover {
+  color: var(--text-primary);
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.status-chip.pending {
+  background: rgba(251, 191, 36, 0.12);
+  color: var(--accent-warning);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+.status-chip.generated {
+  background: rgba(96, 165, 250, 0.12);
+  color: var(--accent-info);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+}
+.status-chip.sent {
+  background: rgba(52, 211, 153, 0.12);
+  color: var(--accent-success);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+.status-chip.failed {
+  background: rgba(248, 113, 113, 0.12);
+  color: var(--accent-danger);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
+.table-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-2) var(--sp-3);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 /* Progress & Live Send Modal */
