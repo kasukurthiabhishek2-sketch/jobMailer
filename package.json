@@ -1,0 +1,11 @@
+{
+  "name": "jdmail",
+  "version": "1.0.0",
+  "description": "AI-Powered Cold Email Outreach Tool for Job Applications",
+  "scripts": {
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm run dev",
+    "install:all": "npm install --prefix server && npm install --prefix client",
+    "dev": "node -e \"const { spawn } = require('child_process'); const s = spawn('npm', ['run', 'dev'], { cwd: 'server', stdio: 'inherit', shell: true }); const c = spawn('npm', ['run', 'dev'], { cwd: 'client', stdio: 'inherit', shell: true }); process.on('SIGINT', () => { s.kill(); c.kill(); process.exit(); });\""
+  }
+}

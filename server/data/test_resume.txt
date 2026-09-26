@@ -1,0 +1,6 @@
+Alex Mercer
+alex.mercer@gmail.com
++1 (555) 234-5678
+
+Senior Software Engineer with 7 years of experience in distributed cloud architectures, React, Node.js, and high-performance microservices. Led infrastructure teams handling 2M+ daily active requests at FinScale.
+Education: BS in Computer Science, UC Berkeley.

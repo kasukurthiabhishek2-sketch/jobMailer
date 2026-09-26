@@ -1,0 +1,5 @@
+Name,Email,Company,Role
+Satya Nadella,satya@microsoft.com,Microsoft,CEO
+Sundar Pichai,sundar@google.com,Google,CEO
+Invalid Contact,not-an-email,FakeCorp,Manager
+Sam Altman,sam@openai.com,OpenAI,CEO
