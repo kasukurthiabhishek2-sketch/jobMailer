@@ -5,10 +5,11 @@ const path = require('path');
 const fs = require('fs');
 
 const storage = require('./services/storageService');
+const copilotService = require('./services/copilotService');
 const { generateColdEmail, testAiConnection } = require('./services/aiService');
 const { parseResumeFile } = require('./services/resumeParser');
 const { parseRecipientSheet } = require('./services/sheetParser');
-const { testSmtpConnection, sendEmailMessage, sendEmailMessageWithRetry, classifySmtpError } = require('./services/smtpService');
+const { testSmtpConnection, sendEmailMessage, sendEmailMessageWithRetry, classifySmtpError, dispatchCampaign } = require('./services/smtpService');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -18,6 +19,25 @@ const UPLOADS_DIR = path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
+
+// Safely unlink an ephemeral file if it exists without throwing
+function safeUnlink(filePath) {
+  if (filePath) {
+    try {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    } catch {}
+  }
+}
+
+// Clean up any stale ephemeral uploads on server boot (Zero File Retention Policy)
+try {
+  const existingUploads = fs.readdirSync(UPLOADS_DIR);
+  for (const f of existingUploads) {
+    if (f !== '.gitkeep') {
+      safeUnlink(path.join(UPLOADS_DIR, f));
+    }
+  }
+} catch {}
 
 // Setup multer storage
 const multerStorage = multer.diskStorage({
@@ -35,16 +55,113 @@ const upload = multer({
   limits: { fileSize: 25 * 1024 * 1024 } // 25MB max
 });
 
-app.use(cors());
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const { requireAuth } = require('./services/firebaseAdmin');
+
+// Security Headers
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' }
+}));
+
+// Strictly Scoped CORS (disallow wildcard origin, permit local dev environments)
+const STANDARD_ALLOWED_ORIGINS = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5174',
+  'http://localhost:5175',
+  'http://127.0.0.1:5175',
+  'http://localhost:4173',
+  'http://127.0.0.1:4173',
+  'http://localhost:5001',
+  'http://127.0.0.1:5001'
+];
+
+function isOriginAllowed(origin) {
+  if (!origin) return true;
+
+  if (process.env.ALLOWED_ORIGINS) {
+    const customAllowed = process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim());
+    return customAllowed.includes(origin);
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
+    try {
+      const parsed = new URL(origin);
+      if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+        return true;
+      }
+    } catch {
+      return false;
+    }
+  }
+
+  return STANDARD_ALLOWED_ORIGINS.includes(origin);
+}
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (isOriginAllowed(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('CORS policy: Origin not permitted'));
+  },
+  credentials: true
+}));
+
+// Rate Limiting to prevent quota exhaustion and spam
+const aiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many AI requests. Please slow down.' }
+});
+
+const sendLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many send requests. Please wait before starting another session.' }
+});
+
+app.use('/api/ai/', aiLimiter);
+app.use('/api/send/', sendLimiter);
+
+// Centralized authentication on mutation routes (TICK-CYC3-06)
+app.use('/api/ai', requireAuth);
+app.use('/api/upload', requireAuth);
+app.use('/api/send', requireAuth);
+app.use('/api/config', (req, res, next) => {
+  // Allow public GET /api/config for initial app config loading
+  if (req.method === 'GET' && (req.path === '/' || req.path === '')) {
+    return next();
+  }
+  return requireAuth(req, res, next);
+});
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Health Check
+// Health Check (public)
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // ---------------------- CONFIG & SETTINGS ----------------------
+
+// One-time migration endpoint to export non-sensitive settings to Firestore (Option 1)
+app.get('/api/config/migration-export', (req, res) => {
+  try {
+    const publicConfig = storage.getPublicConfig();
+    res.json(publicConfig);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Get public masked configuration
 app.get('/api/config', (req, res) => {
@@ -86,37 +203,95 @@ app.post('/api/config/ai/active', (req, res) => {
 
 // Test AI Provider Connection
 app.post('/api/config/ai/test', async (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
   try {
-    const { providerKey, apiKey, model, baseURL } = req.body;
+    const { providerKey, apiKey, model, baseURL } = req.body || {};
     if (!providerKey) {
-      return res.status(400).json({ error: 'providerKey is required' });
+      return res.status(400).json({ success: false, error: 'providerKey is required' });
     }
 
-    let configToTest = { apiKey, model, baseURL };
+    // Default provider base URLs
+    const DEFAULT_BASE_URLS = {
+      gemini: 'https://generativelanguage.googleapis.com',
+      openai: 'https://api.openai.com/v1',
+      groq: 'https://api.groq.com/openai/v1',
+      grok: 'https://api.x.ai/v1',
+      nvidia: 'https://integrate.api.nvidia.com/v1',
+      custom: 'https://api.openai.com/v1'
+    };
+
+    const DEFAULT_MODELS = {
+      gemini: 'gemini-1.5-flash',
+      openai: 'gpt-4o-mini',
+      groq: 'qwen/qwen3.8-27b',
+      grok: 'grok-2-1212',
+      nvidia: 'meta/llama-3.1-70b-instruct',
+      copilot: 'gpt-4o',
+      custom: 'gpt-4o'
+    };
+
+    // Server-side baseURL resolution: use client-supplied string if non-empty, otherwise fallback to provider default
+    let effectiveBaseUrl = (baseURL && typeof baseURL === 'string' && baseURL.trim())
+      ? baseURL.trim()
+      : (DEFAULT_BASE_URLS[providerKey] || '');
+
+    let effectiveModel = (model && typeof model === 'string' && model.trim())
+      ? model.trim()
+      : (DEFAULT_MODELS[providerKey] || '');
+
+    let effectiveApiKey = (apiKey && typeof apiKey === 'string') ? apiKey.trim() : '';
+
     // If apiKey not sent (user testing existing saved key), get from decrypted storage
-    if (!apiKey) {
-      const fullConfig = storage.getDecryptedConfig();
-      const savedProvider = fullConfig.aiProviders[providerKey];
-      if (savedProvider && savedProvider.apiKey) {
-        configToTest.apiKey = savedProvider.apiKey;
-        configToTest.model = model || savedProvider.model;
-        configToTest.baseURL = baseURL || savedProvider.baseURL;
+    if (!effectiveApiKey) {
+      try {
+        const fullConfig = storage.getDecryptedConfig();
+        const savedProvider = fullConfig?.aiProviders?.[providerKey];
+        if (savedProvider && savedProvider.apiKey) {
+          effectiveApiKey = savedProvider.apiKey;
+          if (!model && savedProvider.model) effectiveModel = savedProvider.model;
+          if (!baseURL && savedProvider.baseURL) effectiveBaseUrl = savedProvider.baseURL;
+        }
+      } catch (storageErr) {
+        console.error(`[AI Test] Warning reading decrypted storage for ${providerKey}:`, storageErr.message);
       }
     }
 
+    if (!effectiveApiKey) {
+      return res.status(400).json({ success: false, error: 'API key is required to test connection.' });
+    }
+
+    const configToTest = {
+      apiKey: effectiveApiKey,
+      model: effectiveModel,
+      baseURL: effectiveBaseUrl
+    };
+
     const result = await testAiConnection(providerKey, configToTest);
-    res.json(result);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.status(200).json(result);
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error(`[AI Test] Underlying error testing ${req.body?.providerKey || 'unknown'}:`, err);
+    return res.status(500).json({ success: false, error: err.message || 'Internal server error while testing AI connection' });
   }
 });
 
 // Start GitHub Copilot Device Code Authorization Flow
 app.post('/api/copilot/device-code', async (req, res) => {
   try {
-    const copilotService = require('./services/copilotService');
     const flowData = await copilotService.startDeviceFlow();
     res.json(flowData);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get Current Active GitHub Copilot Device Flow (if pending)
+app.get('/api/copilot/current-flow', (req, res) => {
+  try {
+    const flow = copilotService.getPendingDeviceFlow();
+    res.json({ active: Boolean(flow), flow });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -125,24 +300,27 @@ app.post('/api/copilot/device-code', async (req, res) => {
 // Check GitHub Copilot Device Code Authorization Status
 app.post('/api/copilot/check-status', async (req, res) => {
   try {
-    const { deviceCode } = req.body;
-    if (!deviceCode) {
-      return res.status(400).json({ error: 'deviceCode is required' });
-    }
-
-    const copilotService = require('./services/copilotService');
+    const { deviceCode, autoActivate } = req.body || {};
     const result = await copilotService.checkDeviceStatus(deviceCode);
 
     if (result.status === 'authorized' && result.accessToken) {
       // Automatically save and encrypt token under 'copilot' provider
-      const updated = storage.updateAiProvider('copilot', {
+      storage.updateAiProvider('copilot', {
         apiKey: result.accessToken,
         enabled: true
       });
+
+      let updatedConfig;
+      if (autoActivate) {
+        updatedConfig = storage.setActiveAiProvider('copilot');
+      } else {
+        updatedConfig = storage.getPublicConfig();
+      }
+
       return res.json({
         status: 'authorized',
         message: 'Successfully authenticated with GitHub Copilot!',
-        config: updated
+        config: updatedConfig
       });
     }
 
@@ -253,9 +431,8 @@ app.post('/api/config/reset', (req, res) => {
 
     // Clear in-memory token cache for Copilot
     try {
-      const copilotService = require('./services/copilotService');
       copilotService.clearSessionCache();
-    } catch (e) {}
+    } catch {}
 
     res.json(storage.getPublicConfig());
   } catch (err) {
@@ -263,9 +440,9 @@ app.post('/api/config/reset', (req, res) => {
   }
 });
 
-// ---------------------- UPLOADS & PARSING ----------------------
+// ---------------------- UPLOADS & PARSING (EPHEMERAL ONLY) ----------------------
 
-// Resume Upload & Parse (PDF / DOCX)
+// Resume Upload & Parse (PDF / DOCX) - Ephemeral session storage only
 app.post('/api/upload/resume', upload.single('resume'), async (req, res) => {
   try {
     if (!req.file) {
@@ -274,19 +451,28 @@ app.post('/api/upload/resume', upload.single('resume'), async (req, res) => {
 
     const ext = path.extname(req.file.originalname).toLowerCase();
     if (!['.pdf', '.docx', '.txt'].includes(ext)) {
-      try { fs.unlinkSync(req.file.path); } catch (e) {}
+      safeUnlink(req.file.path);
       return res.status(400).json({ error: 'Unsupported file type. Please upload a PDF or DOCX file.' });
     }
 
     if (req.file.size > 5 * 1024 * 1024) {
-      try { fs.unlinkSync(req.file.path); } catch (e) {}
+      safeUnlink(req.file.path);
       return res.status(400).json({ error: 'Resume file size exceeds the 5MB limit.' });
     }
+
+    // Prune any stale ephemeral resume files in UPLOADS_DIR (Zero File Retention)
+    try {
+      const files = fs.readdirSync(UPLOADS_DIR);
+      for (const file of files) {
+        if (file !== req.file.filename && file !== '.gitkeep') {
+          safeUnlink(path.join(UPLOADS_DIR, file));
+        }
+      }
+    } catch {}
 
     const parsed = await parseResumeFile(req.file.path, req.file.originalname);
     res.json({
       fileId: req.file.filename,
-      filePath: req.file.path,
       originalFilename: req.file.originalname,
       sizeBytes: req.file.size,
       text: parsed.rawText,
@@ -297,40 +483,89 @@ app.post('/api/upload/resume', upload.single('resume'), async (req, res) => {
       detectedPhone: parsed.detectedPhone
     });
   } catch (err) {
+    safeUnlink(req.file?.path);
     console.error('Resume upload/parse error:', err);
     res.status(400).json({ error: err.message });
   }
 });
 
-// Recipient Spreadsheet Upload & Parse (.xlsx, .xls, .csv)
+// Recipient Spreadsheet Upload & Parse (.xlsx, .xls, .csv) - Immediately deleted after parsing
 app.post('/api/upload/recipients', upload.single('file'), (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No spreadsheet file uploaded' });
-    }
+  if (!req.file) {
+    return res.status(400).json({ error: 'No spreadsheet file uploaded' });
+  }
 
+  try {
     const contactedMap = storage.getRecentlyContactedMap ? storage.getRecentlyContactedMap(30) : new Map();
     const parsed = parseRecipientSheet(req.file.path, req.file.originalname, { contactedMap });
-    
-    // Clean up temporary spreadsheet file after parsing
-    try {
-      fs.unlinkSync(req.file.path);
-    } catch (e) {}
-
     res.json(parsed);
   } catch (err) {
     console.error('Spreadsheet upload/parse error:', err);
     res.status(400).json({ error: err.message });
+  } finally {
+    // Guarantees uploaded spreadsheet is strictly ephemeral and deleted immediately after parsing
+    safeUnlink(req.file?.path);
   }
 });
 
+// Explicit session cleanup for uploaded temporary files
+app.post('/api/upload/cleanup', (req, res) => {
+  try {
+    const files = fs.readdirSync(UPLOADS_DIR);
+    let cleaned = 0;
+    for (const file of files) {
+      if (file !== '.gitkeep') {
+        safeUnlink(path.join(UPLOADS_DIR, file));
+        cleaned++;
+      }
+    }
+    res.json({ success: true, cleaned });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Explicit deletion of specific ephemeral resume file (TICK-CYC3-13 / C4)
+app.delete('/api/upload/resume', (req, res) => {
+  const fileId = req.body?.fileId || req.query?.fileId;
+  if (!fileId) {
+    return res.status(400).json({ error: 'fileId is required to delete resume' });
+  }
+  const { attachmentPath } = resolveResumeAttachment(fileId);
+  if (attachmentPath && fs.existsSync(attachmentPath)) {
+    safeUnlink(attachmentPath);
+    console.log(`[Zero File Retention] Explicitly deleted ephemeral resume: ${fileId}`);
+    return res.json({ success: true, message: 'Resume deleted successfully' });
+  }
+  return res.json({ success: true, message: 'Resume file already cleared or not found' });
+});
+
 // ---------------------- AI EMAIL GENERATION ----------------------
+
+// Helper to resolve AI provider configuration from saved storage & client overrides
+function resolveAiProviderConfig({ providerKey: requestedProvider, providerConfig: clientProviderConfig }) {
+  const fullConfig = storage.getDecryptedConfig();
+  const providerKey = requestedProvider || clientProviderConfig?.providerKey || fullConfig.activeProvider;
+  const savedProvider = fullConfig.aiProviders?.[providerKey] || {};
+
+  const apiKey = (clientProviderConfig?.apiKey && !clientProviderConfig.apiKey.includes('...'))
+    ? clientProviderConfig.apiKey
+    : (savedProvider.apiKey || clientProviderConfig?.apiKey || '');
+
+  return {
+    providerKey,
+    providerConfig: {
+      ...savedProvider,
+      ...clientProviderConfig,
+      apiKey
+    }
+  };
+}
 
 // Generate single cold email
 app.post('/api/ai/generate', async (req, res) => {
   try {
     const {
-      providerKey: requestedProvider,
       resumeText,
       jobDescription,
       recipient,
@@ -338,12 +573,10 @@ app.post('/api/ai/generate', async (req, res) => {
       senderName
     } = req.body;
 
-    const fullConfig = storage.getDecryptedConfig();
-    const providerKey = requestedProvider || fullConfig.activeProvider;
-    const providerConfig = fullConfig.aiProviders[providerKey];
+    const { providerKey, providerConfig } = resolveAiProviderConfig(req.body);
 
-    if (!providerConfig) {
-      return res.status(400).json({ error: `Provider ${providerKey} is not configured.` });
+    if (!providerConfig || !providerConfig.apiKey) {
+      return res.status(400).json({ error: `Provider ${providerKey} is not configured with an API key.` });
     }
 
     const emailContent = await generateColdEmail({
@@ -368,11 +601,82 @@ app.post('/api/ai/generate', async (req, res) => {
   }
 });
 
-// Batch generate cold emails for multiple recipients
+/**
+ * Adapt a single generic email draft for a specific recipient:
+ * - Customizes greeting with recipient name and company if present, or preserves generated greeting
+ * - Adapts subject line if it references placeholder company/team
+ * - Preserves grounding audit and original formatting
+ */
+function adaptGenericEmailForRecipient(genericEmail, recipient, senderName) {
+  if (!genericEmail || typeof genericEmail !== 'object') {
+    return genericEmail;
+  }
+
+  const rawName = (recipient?.name && typeof recipient.name === 'string') ? recipient.name.trim() : '';
+  const rawCompany = (recipient?.company && typeof recipient.company === 'string') ? recipient.company.trim() : '';
+  const rawRole = (recipient?.role && typeof recipient.role === 'string') ? recipient.role.trim() : '';
+  const isGenericName = /^(hiring\s*manager|hiring\s*team|team|recruiter)$/i.test(rawName);
+  const firstName = (rawName && !isGenericName) ? rawName.split(/\s+/)[0] : '';
+
+  let subject = genericEmail.subject || `Inquiry: Opportunities at ${rawCompany || 'your team'}`;
+  let body = genericEmail.body || '';
+
+  // 1. Personalize Subject Line
+  if (rawCompany) {
+    subject = subject.replace(/\[(?:Company\s*Name|Company|Organization)\]/gi, rawCompany);
+    subject = subject.replace(/\bat\s+your\s+team\b/gi, `at ${rawCompany}`);
+    subject = subject.replace(/\bat\s+\[?Company\]?\b/gi, `at ${rawCompany}`);
+  }
+  if (rawRole) {
+    subject = subject.replace(/\[(?:Role|Target\s*Role|Position|Job\s*Title)\]/gi, rawRole);
+  }
+
+  // 2. Personalize Greeting & Body
+  let greeting = '';
+  if (firstName) {
+    greeting = `Hi ${firstName},`;
+  } else if (rawCompany) {
+    greeting = `Hi ${rawCompany} Team,`;
+  }
+
+  if (greeting && body) {
+    const greetingMatch = body.match(/^(?:Hi|Hello|Dear|Hey)\s+[^,\n]+,|\b(?:To the\s+)?Hiring\s+(?:Manager|Team)\b,?/i);
+    if (greetingMatch) {
+      body = body.replace(greetingMatch[0], greeting);
+    } else {
+      const firstLineEnd = body.indexOf('\n');
+      if (firstLineEnd > 0 && firstLineEnd < 50 && /^(?:Hi|Hello|Dear|Hey)\b/i.test(body.slice(0, firstLineEnd))) {
+        body = greeting + body.slice(firstLineEnd);
+      }
+    }
+  }
+
+  if (firstName) {
+    body = body.replace(/\[(?:Recipient\s*Name|Name|Hiring\s*Manager)\]/gi, firstName);
+  }
+  if (rawCompany) {
+    body = body.replace(/\[(?:Company\s*Name|Company|Organization)\]/gi, rawCompany);
+    body = body.replace(/\b(?:at\s+)?your\s+team(['’]s)?\b/gi, (match) => {
+      if (/team['’]s/i.test(match)) return `${rawCompany}'s`;
+      if (/^at\s+/i.test(match)) return `at ${rawCompany}`;
+      return match;
+    });
+  }
+
+  return {
+    ...genericEmail,
+    subject,
+    body,
+    groundingAudit: genericEmail.groundingAudit || null
+  };
+}
+
+// Batch generate cold emails for multiple recipients:
+// - Generates tailored emails individually (4-worker pool) for recipients with specific JDs
+// - Generates ONE generic cold email for recipients without JDs and adapts greeting/company
 app.post('/api/ai/batch-generate', async (req, res) => {
   try {
     const {
-      providerKey: requestedProvider,
       resumeText,
       jobDescription,
       recipients,
@@ -384,42 +688,118 @@ app.post('/api/ai/batch-generate', async (req, res) => {
       return res.status(400).json({ error: 'No recipients provided' });
     }
 
-    const fullConfig = storage.getDecryptedConfig();
-    const providerKey = requestedProvider || fullConfig.activeProvider;
-    const providerConfig = fullConfig.aiProviders[providerKey];
+    const { providerKey, providerConfig } = resolveAiProviderConfig(req.body);
 
-    if (!providerConfig) {
-      return res.status(400).json({ error: `Provider ${providerKey} is not configured.` });
+    if (!providerConfig || !providerConfig.apiKey) {
+      return res.status(400).json({ error: `Provider ${providerKey} is not configured with an API key.` });
     }
 
-    // Process batch generations with controlled concurrency (4 parallel workers)
-    // to slash latency by ~75% without hitting provider rate limits
-    const CONCURRENCY_LIMIT = 4;
-    const results = new Array(recipients.length);
-    let nextIndex = 0;
+    // Inspect incoming recipients and partition them into:
+    // a) Those with a specific Job Description
+    // b) Those without a specific Job Description
+    const withJd = [];
+    const withoutJd = [];
 
-    async function worker() {
-      while (nextIndex < recipients.length) {
-        const i = nextIndex++;
-        const recipient = recipients[i];
-        try {
-          const emailContent = await generateColdEmail({
-            providerKey,
-            providerConfig,
-            resumeText,
-            jobDescription,
-            recipient,
-            customTone,
-            senderName
-          });
-          results[i] = {
+    recipients.forEach((recipient, idx) => {
+      const hasSpecificJd = Boolean(
+        recipient &&
+        recipient.jobDescription &&
+        typeof recipient.jobDescription === 'string' &&
+        recipient.jobDescription.trim().length > 0
+      );
+      if (hasSpecificJd) {
+        withJd.push({ recipient, index: idx });
+      } else {
+        withoutJd.push({ recipient, index: idx });
+      }
+    });
+
+    const results = Array.from({ length: recipients.length });
+
+    // 1. Process recipients WITH specific Job Descriptions using a 4-worker concurrency pool
+    const jdTask = (async () => {
+      if (withJd.length === 0) return;
+
+      const CONCURRENCY_LIMIT = 4;
+      let nextIndex = 0;
+
+      async function worker() {
+        while (nextIndex < withJd.length) {
+          const item = withJd[nextIndex++];
+          const { recipient, index } = item;
+          try {
+            const emailContent = await generateColdEmail({
+              providerKey,
+              providerConfig,
+              resumeText,
+              jobDescription: recipient.jobDescription.trim(),
+              recipient,
+              customTone,
+              senderName
+            });
+            results[index] = {
+              recipientId: recipient.id,
+              recipientEmail: recipient.email,
+              success: true,
+              email: emailContent
+            };
+          } catch (genErr) {
+            results[index] = {
+              recipientId: recipient.id,
+              recipientEmail: recipient.email,
+              success: false,
+              error: genErr.message
+            };
+          }
+        }
+      }
+
+      const workers = [];
+      const numWorkers = Math.min(CONCURRENCY_LIMIT, withJd.length);
+      for (let w = 0; w < numWorkers; w++) {
+        workers.push(worker());
+      }
+      await Promise.all(workers);
+    })();
+
+    // 2. For recipients WITHOUT specific Job Descriptions:
+    // Generate ONE generic cold email via generateColdEmail (focusing on candidate core strengths & achievements),
+    // then adapt that single generic email for each recipient.
+    const genericTask = (async () => {
+      if (withoutJd.length === 0) return;
+
+      const genericJd = (typeof jobDescription === 'string' && jobDescription.trim()) ? jobDescription.trim() : '';
+
+      try {
+        const genericEmail = await generateColdEmail({
+          providerKey,
+          providerConfig,
+          resumeText,
+          jobDescription: genericJd,
+          recipient: {
+            name: 'Hiring Manager',
+            company: 'your team',
+            role: genericJd ? 'the open position' : 'relevant opportunities'
+          },
+          customTone,
+          senderName
+        });
+
+        // Adapt the single generic email for each recipient without a specific JD
+        for (const item of withoutJd) {
+          const { recipient, index } = item;
+          const adaptedEmail = adaptGenericEmailForRecipient(genericEmail, recipient, senderName);
+          results[index] = {
             recipientId: recipient.id,
             recipientEmail: recipient.email,
             success: true,
-            email: emailContent
+            email: adaptedEmail
           };
-        } catch (genErr) {
-          results[i] = {
+        }
+      } catch (genErr) {
+        for (const item of withoutJd) {
+          const { recipient, index } = item;
+          results[index] = {
             recipientId: recipient.id,
             recipientEmail: recipient.email,
             success: false,
@@ -427,14 +807,9 @@ app.post('/api/ai/batch-generate', async (req, res) => {
           };
         }
       }
-    }
+    })();
 
-    const workers = [];
-    const numWorkers = Math.min(CONCURRENCY_LIMIT, recipients.length);
-    for (let w = 0; w < numWorkers; w++) {
-      workers.push(worker());
-    }
-    await Promise.all(workers);
+    await Promise.all([jdTask, genericTask]);
 
     res.json({ success: true, results });
   } catch (err) {
@@ -446,44 +821,84 @@ app.post('/api/ai/batch-generate', async (req, res) => {
 // ---------------------- EMAIL SENDING WITH SSE PROGRESS ----------------------
 
 // Send emails to recipients with real-time SSE progress streaming
+// Helpers to resolve SMTP profile & attachment for email sending
+function resolveSmtpProfile({ smtpProfileId, smtpProfile: clientSmtpProfile }, fullConfig) {
+  let profile = null;
+  const targetId = smtpProfileId || clientSmtpProfile?.id;
+  if (targetId) {
+    profile = (fullConfig.smtpProfiles || []).find(p => p.id === targetId);
+  }
+  if (!profile) {
+    profile = (fullConfig.smtpProfiles || []).find(p => p.isDefault) || fullConfig.smtpProfiles?.[0];
+  }
+
+  // Strictly authenticate password from server decrypted local storage (Option 1)
+  if (profile && !profile.password && profile.appPassword) {
+    profile = { ...profile, password: profile.appPassword };
+  }
+
+  return profile;
+}
+
+function resolveResumeAttachment(resumeFileId) {
+  let attachmentPath = null;
+  let attachmentName = null;
+  if (resumeFileId && typeof resumeFileId === 'string') {
+    const safeFilename = path.basename(resumeFileId);
+    const candidatePath = path.resolve(UPLOADS_DIR, safeFilename);
+    const uploadsDirResolved = path.resolve(UPLOADS_DIR);
+    if (candidatePath.startsWith(uploadsDirResolved + path.sep) && fs.existsSync(candidatePath)) {
+      attachmentPath = candidatePath;
+      attachmentName = safeFilename.replace(/^\d+-\d+-/, '');
+    }
+  }
+  return { attachmentPath, attachmentName };
+}
+
+// Get daily sending statistics and remaining quota (TICK-CYC3-12 / C3)
+app.get('/api/send/daily-stats', (req, res) => {
+  try {
+    const smtpProfileId = req.query.smtpProfileId || null;
+    const stats = storage.getDailySendingStats(smtpProfileId);
+    res.json({ success: true, ...stats });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/send/stream', async (req, res) => {
   const {
     recipients, // Array of { id, email, name, company, subject, body }
     resumeFileId,
-    smtpProfileId,
-    delaySeconds = 3
+    delaySeconds = 3,
+    concurrency = 1
   } = req.body;
 
   if (!Array.isArray(recipients) || recipients.length === 0) {
     return res.status(400).json({ error: 'No recipients provided for sending.' });
   }
 
-  // Get active or specified SMTP profile
   const fullConfig = storage.getDecryptedConfig();
-  let profile = null;
-  if (smtpProfileId) {
-    profile = (fullConfig.smtpProfiles || []).find(p => p.id === smtpProfileId);
-  }
-  if (!profile) {
-    profile = (fullConfig.smtpProfiles || []).find(p => p.isDefault) || fullConfig.smtpProfiles?.[0];
-  }
+  const profile = resolveSmtpProfile(req.body, fullConfig);
 
-  if (!profile || !profile.password) {
+  if (!profile || (!profile.password && !profile.appPassword)) {
     return res.status(400).json({
       error: 'No active SMTP account configured. Please configure an SMTP account in Settings first.'
     });
   }
 
-  // Find resume file path if attach is enabled
-  let attachmentPath = null;
-  let attachmentName = null;
-  if (resumeFileId) {
-    const candidatePath = path.join(UPLOADS_DIR, resumeFileId);
-    if (fs.existsSync(candidatePath)) {
-      attachmentPath = candidatePath;
-      attachmentName = resumeFileId.replace(/^\d+-\d+-/, '');
+  const { attachmentPath, attachmentName } = resolveResumeAttachment(resumeFileId);
+
+  // Ephemeral cleanup: remove temporary resume once stream finishes
+  const cleanupEphemeralResume = () => {
+    if (attachmentPath) {
+      safeUnlink(attachmentPath);
+      console.log(`[Zero File Retention] Cleaned up ephemeral resume: ${attachmentName}`);
     }
-  }
+  };
+
+  res.on('finish', cleanupEphemeralResume);
+  res.on('close', cleanupEphemeralResume);
 
   // Set SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
@@ -494,115 +909,18 @@ app.post('/api/send/stream', async (req, res) => {
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
-  sendEvent('start', {
-    total: recipients.length,
-    fromEmail: profile.fromEmail || profile.username,
-    smtpProfileName: profile.name
+  const { campaignLogs } = await dispatchCampaign({
+    recipients,
+    profile,
+    attachmentPath,
+    attachmentName,
+    delaySeconds: Number(delaySeconds) || 3,
+    concurrency: Number(concurrency) || 1,
+    sendEvent
   });
-
-  const campaignLogs = [];
-
-  for (let i = 0; i < recipients.length; i++) {
-    const item = recipients[i];
-    const currentIndex = i + 1;
-
-    sendEvent('progress', {
-      current: currentIndex,
-      total: recipients.length,
-      recipientEmail: item.email,
-      recipientName: item.name,
-      status: 'sending'
-    });
-
-    try {
-      const sendResult = await sendEmailMessageWithRetry({
-        profile,
-        to: item.email,
-        recipientName: item.name,
-        subject: item.subject || `Application / Discussion - ${profile.fromName || 'Candidate'}`,
-        bodyText: item.body || item.text,
-        attachmentPath,
-        attachmentName
-      });
-
-      const logItem = {
-        id: 'log_' + Date.now() + '_' + i,
-        timestamp: new Date().toISOString(),
-        recipientEmail: item.email,
-        recipientName: item.name,
-        company: item.company,
-        subject: item.subject,
-        status: 'sent',
-        messageId: sendResult.messageId,
-        smtpAccount: profile.name
-      };
-      campaignLogs.push(logItem);
-
-      sendEvent('item_complete', {
-        current: currentIndex,
-        total: recipients.length,
-        recipientEmail: item.email,
-        status: 'sent',
-        logItem
-      });
-    } catch (err) {
-      console.error(`Failed sending to ${item.email}:`, err);
-      const classification = err.classification || classifySmtpError(err);
-      const logItem = {
-        id: 'log_' + Date.now() + '_' + i,
-        timestamp: new Date().toISOString(),
-        recipientEmail: item.email,
-        recipientName: item.name,
-        company: item.company,
-        subject: item.subject,
-        status: 'failed',
-        error: classification.userMessage || err.message || 'SMTP delivery failure',
-        smtpAccount: profile.name
-      };
-      campaignLogs.push(logItem);
-
-      sendEvent('item_complete', {
-        current: currentIndex,
-        total: recipients.length,
-        recipientEmail: item.email,
-        status: 'failed',
-        error: classification.userMessage,
-        isAuthFailure: classification.isAuthFailure,
-        logItem
-      });
-
-      // If authentication failed or account is locked, abort queue immediately to prevent lockout
-      if (classification.isAuthFailure) {
-        sendEvent('auth_error', {
-          error: 'SMTP Authentication failed. Aborting remaining queue to protect account.',
-          smtpProfile: profile.name
-        });
-        break;
-      }
-    }
-
-    // Rate limiting delay between sends with natural anti-spam human jitter (±20%)
-    if (i < recipients.length - 1 && delaySeconds > 0) {
-      const jitterFactor = 0.85 + Math.random() * 0.35; // 0.85x - 1.20x
-      const actualWaitSeconds = Math.max(1, Math.round(delaySeconds * jitterFactor * 10) / 10);
-
-      sendEvent('throttling', {
-        waitingSeconds: actualWaitSeconds,
-        nextIndex: currentIndex + 1
-      });
-      await new Promise(resolve => setTimeout(resolve, actualWaitSeconds * 1000));
-    }
-  }
 
   // Save campaign logs to persistent store
   storage.addCampaignLogs(campaignLogs);
-
-  sendEvent('finished', {
-    total: recipients.length,
-    sentCount: campaignLogs.filter(l => l.status === 'sent').length,
-    failedCount: campaignLogs.filter(l => l.status === 'failed').length,
-    logs: campaignLogs
-  });
 
   res.end();
 });
@@ -612,8 +930,8 @@ app.post('/api/send', async (req, res) => {
   const {
     recipients,
     resumeFileId,
-    smtpProfileId,
-    delaySeconds = 3
+    delaySeconds = 3,
+    concurrency = 1
   } = req.body;
 
   if (!Array.isArray(recipients) || recipients.length === 0) {
@@ -621,73 +939,35 @@ app.post('/api/send', async (req, res) => {
   }
 
   const fullConfig = storage.getDecryptedConfig();
-  let profile = null;
-  if (smtpProfileId) {
-    profile = (fullConfig.smtpProfiles || []).find(p => p.id === smtpProfileId);
-  }
-  if (!profile) {
-    profile = (fullConfig.smtpProfiles || []).find(p => p.isDefault) || fullConfig.smtpProfiles?.[0];
-  }
+  const profile = resolveSmtpProfile(req.body, fullConfig);
 
-  if (!profile || !profile.password) {
+  if (!profile || (!profile.password && !profile.appPassword)) {
     return res.status(400).json({
       error: 'No active SMTP account configured. Please add an SMTP profile in Settings.'
     });
   }
 
-  let attachmentPath = null;
-  let attachmentName = null;
-  if (resumeFileId) {
-    const candidatePath = path.join(UPLOADS_DIR, resumeFileId);
-    if (fs.existsSync(candidatePath)) {
-      attachmentPath = candidatePath;
-      attachmentName = resumeFileId.replace(/^\d+-\d+-/, '');
+  const { attachmentPath, attachmentName } = resolveResumeAttachment(resumeFileId);
+
+  try {
+    const { results, campaignLogs } = await dispatchCampaign({
+      recipients,
+      profile,
+      attachmentPath,
+      attachmentName,
+      delaySeconds: Number(delaySeconds) || 3,
+      concurrency: Number(concurrency) || 1
+    });
+
+    storage.addCampaignLogs(campaignLogs);
+    res.json({ success: true, results });
+  } finally {
+    // Ephemeral cleanup: remove temporary resume once sending finishes
+    if (attachmentPath) {
+      safeUnlink(attachmentPath);
+      console.log(`[Zero File Retention] Cleaned up ephemeral resume: ${attachmentName}`);
     }
   }
-
-  const results = [];
-  for (let i = 0; i < recipients.length; i++) {
-    const item = recipients[i];
-    try {
-      const sendResult = await sendEmailMessage({
-        profile,
-        to: item.email,
-        recipientName: item.name,
-        subject: item.subject,
-        bodyText: item.body,
-        attachmentPath,
-        attachmentName
-      });
-      results.push({
-        id: 'log_' + Date.now() + '_' + i,
-        timestamp: new Date().toISOString(),
-        recipientEmail: item.email,
-        recipientName: item.name,
-        company: item.company,
-        subject: item.subject,
-        status: 'sent',
-        messageId: sendResult.messageId
-      });
-    } catch (err) {
-      results.push({
-        id: 'log_' + Date.now() + '_' + i,
-        timestamp: new Date().toISOString(),
-        recipientEmail: item.email,
-        recipientName: item.name,
-        company: item.company,
-        subject: item.subject,
-        status: 'failed',
-        error: err.message
-      });
-    }
-
-    if (i < recipients.length - 1 && delaySeconds > 0) {
-      await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
-    }
-  }
-
-  storage.addCampaignLogs(results);
-  res.json({ success: true, results });
 });
 
 // ---------------------- STATUS & AUDIT LOGS ----------------------
@@ -712,6 +992,23 @@ app.delete('/api/logs', (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`JDMail Server running on port ${PORT}`);
+// Global JSON error handler — ensures API never falls through to Express HTML error page
+app.use((err, req, res, next) => {
+  console.error('[Global Server Error]', err);
+  if (res.headersSent) {
+    return next(err);
+  }
+  res.status(err.status || 500).json({
+    success: false,
+    error: err.message || 'Internal Server Error'
+  });
 });
+
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`JDMail Server running on port ${PORT}`);
+  });
+}
+
+module.exports = { app, isOriginAllowed, adaptGenericEmailForRecipient };
+

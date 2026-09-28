@@ -24,8 +24,10 @@ function runTests() {
   console.log('✓ IV uniqueness verified.');
 
   // Test 3: Tampering Protection (GCM Authenticated Encryption)
-  // Tamper with encrypted payload
-  const tamperedPayload = parts[0] + ':' + parts[1] + ':' + parts[2].slice(0, -2) + 'ff';
+  // Tamper with encrypted payload (guarantee byte inversion)
+  const lastByte = parts[2].slice(-2);
+  const flippedByte = lastByte.toLowerCase() === 'ff' ? '00' : 'ff';
+  const tamperedPayload = parts[0] + ':' + parts[1] + ':' + parts[2].slice(0, -2) + flippedByte;
   assert.strictEqual(decrypt(tamperedPayload), '', 'Tampered payload must fail closed and return empty string');
 
   // Tamper with auth tag

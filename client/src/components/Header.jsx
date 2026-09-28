@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Send, Settings, Sparkles, Mail, FileText, Sun, Moon, HelpCircle, X } from 'lucide-react';
+import { useState } from 'react';
+import { Send, Settings, Sparkles, Mail, FileText, Sun, Moon, HelpCircle, X, LogOut } from 'lucide-react';
+import { WIZARD_STEPS } from '../constants/wizardSteps';
 
-export default function Header({ config, onOpenSettings, onOpenLogs, theme, onToggleTheme }) {
+export default function Header({ config, onOpenSettings, onOpenLogs, theme, onToggleTheme, user, onSignOut }) {
   const [showQuickStart, setShowQuickStart] = useState(false);
 
   const activeAiKey = config?.activeProvider || 'gemini';
@@ -95,6 +96,28 @@ export default function Header({ config, onOpenSettings, onOpenLogs, theme, onTo
           >
             <Settings size={18} />
           </button>
+
+          {/* User Profile & Sign Out */}
+          {user && (
+            <div className="user-profile-badge" title={`Signed in as ${user.email}`}>
+              {user.photoURL ? (
+                <img src={user.photoURL} alt={user.displayName || 'User'} className="user-avatar" />
+              ) : (
+                <div className="user-avatar-placeholder">
+                  {(user.displayName || user.email || 'U').charAt(0).toUpperCase()}
+                </div>
+              )}
+              <span className="user-name">{user.displayName || user.email?.split('@')[0]}</span>
+              <button
+                className="btn-icon btn-signout"
+                onClick={onSignOut}
+                title="Sign out of Google account"
+                aria-label="Sign out"
+              >
+                <LogOut size={14} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -116,53 +139,19 @@ export default function Header({ config, onOpenSettings, onOpenLogs, theme, onTo
               </button>
             </div>
             <div className="modal-body">
-              <div className="quickstart-card">
-                <div className="quickstart-number">1</div>
-                <div>
-                  <strong style={{ display: 'block', color: 'var(--text-primary)', marginBottom: 2 }}>
-                    Resume & AI Setup
-                  </strong>
-                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                    Upload your resume (.pdf or .docx). Configure and test at least one AI provider (Gemini, Groq, OpenAI, or Copilot) to generate personalized outreach.
-                  </span>
+              {WIZARD_STEPS.map((step) => (
+                <div key={step.id} className="quickstart-card">
+                  <div className="quickstart-number">{step.stepNumber}</div>
+                  <div>
+                    <strong style={{ display: 'block', color: 'var(--text-primary)', marginBottom: 2 }}>
+                      {step.label} {step.optional ? '(Optional)' : ''}
+                    </strong>
+                    <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                      {step.description}
+                    </span>
+                  </div>
                 </div>
-              </div>
-
-              <div className="quickstart-card">
-                <div className="quickstart-number">2</div>
-                <div>
-                  <strong style={{ display: 'block', color: 'var(--text-primary)', marginBottom: 2 }}>
-                    Recipient Management
-                  </strong>
-                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                    Import recruiters and hiring managers from Excel/CSV or add them manually. RFC-standard validation highlights formatting errors automatically.
-                  </span>
-                </div>
-              </div>
-
-              <div className="quickstart-card">
-                <div className="quickstart-number">3</div>
-                <div>
-                  <strong style={{ display: 'block', color: 'var(--text-primary)', marginBottom: 2 }}>
-                    Tailored Job Description (Optional)
-                  </strong>
-                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                    Paste a specific job description to spotlight relevant skills and metrics, or skip to generate a high-impact intro pitch.
-                  </span>
-                </div>
-              </div>
-
-              <div className="quickstart-card">
-                <div className="quickstart-number">4</div>
-                <div>
-                  <strong style={{ display: 'block', color: 'var(--text-primary)', marginBottom: 2 }}>
-                    Review, Polish & Safe Send
-                  </strong>
-                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                    Scan and refine drafts in the split-pane editor, then dispatch safely with anti-spam rate limiting and real-time delivery logs.
-                  </span>
-                </div>
-              </div>
+              ))}
             </div>
             <div className="modal-footer">
               <button

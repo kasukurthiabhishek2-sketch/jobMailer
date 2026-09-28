@@ -1,12 +1,10 @@
-import React, { useState, useMemo } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Sparkles,
   Paperclip,
   ChevronLeft,
   ChevronRight,
   RefreshCw,
-  Edit3,
   Send,
   Check,
   Copy,
@@ -16,16 +14,24 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
-  X
+  Mail,
+  Settings as SettingsIcon,
+  UserCheck
 } from 'lucide-react';
-import { generateColdEmail } from '../services/api';
+import {
+  generateColdEmail,
+  batchGenerateColdEmails,
+  setActiveAiProvider,
+  fetchDailySendingStats
+} from '../services/api';
+import { saveSettings, stripUndefined } from '../lib/settings';
 
 const TONE_OPTIONS = [
-  { id: 'impact', label: 'Direct & Impact-Focused', prompt: 'Direct, confident, highlighting quantifiable engineering impact and architectural leadership.' },
-  { id: 'warm', label: 'Warm & Conversational', prompt: 'Warm, highly approachable, expressing genuine excitement for the team culture and mission.' },
-  { id: 'founder', label: 'Startup & Founder Pitch', prompt: 'Agile mindset, wearing multiple hats, rapid execution, and high ownership.' },
-  { id: 'bullets', label: 'Executive 3-Bullet Value Pitch', prompt: 'Very brief opening, followed by 3 punchy bullet points of candidate achievements, ending with a low-friction CTA.' },
-  { id: 'custom', label: 'Custom Tone / Prompt', prompt: '' }
+  { id: 'impact', label: 'Punchy', prompt: 'Direct, confident, highlighting quantifiable engineering impact and architectural leadership.' },
+  { id: 'warm', label: 'Conversational', prompt: 'Warm, highly approachable, expressing genuine excitement for the team culture and mission.' },
+  { id: 'founder', label: 'Founder', prompt: 'Agile mindset, wearing multiple hats, rapid execution, and high ownership.' },
+  { id: 'bullets', label: '3-Bullet', prompt: 'Very brief opening, followed by 3 punchy bullet points of candidate achievements, ending with a low-friction CTA.' },
+  { id: 'custom', label: 'Custom', prompt: '' }
 ];
 
 const SPAM_TRIGGER_WORDS = [
@@ -43,11 +49,13 @@ export default function EmailPreview({
   jobDescription,
   recipients = [],
   onUpdateRecipients,
-  generatedEmails,
+  generatedEmails = {},
   onUpdateGeneratedEmails,
   onOpenSettings,
   onShowToast,
-  onTriggerSend
+  onTriggerSend,
+  onRefreshConfig,
+  user
 }) {
   const [selectedTone, setSelectedTone] = useState('impact');
   const [customToneText, setCustomToneText] = useState('');
@@ -59,51 +67,131 @@ export default function EmailPreview({
   const [searchRecipient, setSearchRecipient] = useState('');
   const [filterTab, setFilterTab] = useState('all'); // 'all' | 'ready' | 'pending'
 
-  // Pre-send review & explicit approval modal state
-  const [isPreSendModalOpen, setIsPreSendModalOpen] = useState(false);
-  const [preSendApprovalChecked, setPreSendApprovalChecked] = useState(false);
+  // Sending and human-in-the-loop dispatch state (integrated from SendStep)
+  const [explicitlyAuthorized, setExplicitlyAuthorized] = useState(false);
+  const [dailyStats, setDailyStats] = useState(null);
 
-  const activeAiKey = config?.activeProvider || 'gemini';
-  const activeAi = config?.aiProviders?.[activeAiKey];
+  // Default SMTP Profile
+  const defaultSmtp = (config?.smtpProfiles || []).find(p => p.isDefault) || config?.smtpProfiles?.[0];
+  const isSmtpConfigured = Boolean(defaultSmtp && defaultSmtp.isConfigured);
+  const delaySeconds = config?.sendingPreferences?.delaySeconds || 3;
+  const attachResume = config?.sendingPreferences?.attachResume !== false;
+
+  // Reactive live-refresh of daily sending stats on SMTP or config change
+  useEffect(() => {
+    let mounted = true;
+    fetchDailySendingStats(defaultSmtp?.id || null)
+      .then(stats => {
+        if (mounted && stats) setDailyStats(stats);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, [defaultSmtp?.id, defaultSmtp?.isConfigured, config]);
+
+  // AI Providers Configuration
+  const configuredAiProviders = useMemo(() => {
+    if (!config?.aiProviders) return [];
+    return Object.entries(config.aiProviders)
+      .filter(([, p]) => Boolean(p?.isConfigured))
+      .map(([key, p]) => ({
+        key,
+        name: p.name || key,
+        model: p.model || ''
+      }));
+  }, [config]);
+
+  const effectiveAiKey = useMemo(() => {
+    if (config?.activeProvider && config?.aiProviders?.[config.activeProvider]?.isConfigured) {
+      return config.activeProvider;
+    }
+    if (configuredAiProviders.length > 0) {
+      return configuredAiProviders[0].key;
+    }
+    return config?.activeProvider || 'gemini';
+  }, [config, configuredAiProviders]);
+
+  const activeAi = config?.aiProviders?.[effectiveAiKey];
   const isAiConfigured = Boolean(activeAi?.isConfigured);
 
-  const defaultSmtp = (config?.smtpProfiles || []).find(p => p.isDefault) || config?.smtpProfiles?.[0];
+  const handleSwitchAiProvider = async (providerKey) => {
+    if (!config || providerKey === effectiveAiKey) return;
+    try {
+      const updatedAiProviders = { ...config.aiProviders };
+      for (const k of Object.keys(updatedAiProviders)) {
+        updatedAiProviders[k] = {
+          ...updatedAiProviders[k],
+          active: k === providerKey
+        };
+      }
+      const updatedConfig = stripUndefined({
+        ...config,
+        activeProvider: providerKey,
+        aiProviders: updatedAiProviders
+      });
+
+      try {
+        await setActiveAiProvider(providerKey);
+      } catch (e) {
+        console.warn('Backend active provider update notice:', e.message);
+      }
+
+      if (user?.uid) {
+        try {
+          await saveSettings(user.uid, updatedConfig);
+        } catch (e) {
+          console.warn('Firestore settings save notice:', e.message);
+        }
+      }
+      if (onRefreshConfig) {
+        onRefreshConfig(updatedConfig);
+      }
+      onShowToast?.({
+        type: 'info',
+        title: 'AI Model Switched',
+        message: `Using ${config.aiProviders?.[providerKey]?.name || providerKey} (${config.aiProviders?.[providerKey]?.model || ''})`
+      });
+    } catch (err) {
+      onShowToast?.({ type: 'error', title: 'Error', message: err.message });
+    }
+  };
+
+  // Recipient status & approvals calculation
   const totalRecipients = recipients.length;
-  const emailsReadyCount = recipients.filter(r => generatedEmails[r.id]?.body).length;
+  const readyRecipients = useMemo(() => {
+    return recipients.filter(r => generatedEmails[r.id]?.body);
+  }, [recipients, generatedEmails]);
 
-  // Verification & Explicit Approval Checks
-  const unapprovedRecipients = useMemo(() => recipients.filter(r => !r.isApproved), [recipients]);
-  const allApproved = recipients.length > 0 && unapprovedRecipients.length === 0;
-  const readyRecipients = useMemo(() => recipients.filter(r => generatedEmails[r.id]?.body), [recipients, generatedEmails]);
+  const unapprovedRecipients = useMemo(() => {
+    return readyRecipients.filter(r => !r.isApproved);
+  }, [readyRecipients]);
 
-  const handleApproveAllRemaining = () => {
-    if (onUpdateRecipients) {
-      onUpdateRecipients(recipients.map(r => ({ ...r, isApproved: true })));
-      onShowToast({
+  const readyAndApprovedRecipients = useMemo(() => {
+    return readyRecipients.filter(r => r.isApproved);
+  }, [readyRecipients]);
+
+  const allApproved = readyRecipients.length > 0 && unapprovedRecipients.length === 0;
+  const emailsReadyCount = readyRecipients.length;
+
+  // Single contact approval toggle (no spam toasts)
+  const handleToggleApproval = (recId) => {
+    if (!onUpdateRecipients) return;
+    onUpdateRecipients(recipients.map(r => r.id === recId ? { ...r, isApproved: !r.isApproved } : r));
+  };
+
+  // Batch approve all remaining unapproved contacts
+  const handleApproveAll = () => {
+    if (!onUpdateRecipients) return;
+    const count = unapprovedRecipients.length;
+    onUpdateRecipients(recipients.map(r => ({ ...r, isApproved: true })));
+    if (count > 0) {
+      onShowToast?.({
         type: 'success',
-        title: 'Recipients Approved',
-        message: `Explicitly approved ${unapprovedRecipients.length} remaining contact(s).`
+        title: 'Contacts Approved',
+        message: `Explicitly approved ${count} remaining contact(s).`
       });
     }
-  };
-
-  const handleSendButtonClick = () => {
-    if (!allApproved) {
-      onShowToast({
-        type: 'error',
-        title: 'Approval Required',
-        message: 'All recipients must be explicitly reviewed and approved before sending.'
-      });
-      return;
-    }
-    setPreSendApprovalChecked(false);
-    setIsPreSendModalOpen(true);
-  };
-
-  const handleConfirmAndDispatch = () => {
-    if (!preSendApprovalChecked) return;
-    setIsPreSendModalOpen(false);
-    onTriggerSend();
   };
 
   // Filtered recipient list for left sidebar
@@ -124,11 +212,11 @@ export default function EmailPreview({
     });
   }, [recipients, generatedEmails, filterTab, searchRecipient]);
 
-  // Current active recipient
+  // Current active recipient & draft
   const currentRecipient = recipients[activeRecipientIndex] || recipients[0];
   const currentEmail = currentRecipient ? generatedEmails[currentRecipient.id] : null;
 
-  // Real-time deliverability / spam detector
+  // Deliverability / Spam Analysis
   const spamAnalysis = useMemo(() => {
     const textToCheck = `${currentEmail?.subject || ''} ${currentEmail?.body || ''}`.toLowerCase();
     const found = [];
@@ -147,13 +235,13 @@ export default function EmailPreview({
   // Subject line meter
   const subjectLen = (currentEmail?.subject || '').length;
   const subjectMeter = useMemo(() => {
-    if (subjectLen === 0) return { pct: 0, color: 'var(--text-muted)', label: 'Empty subject' };
-    if (subjectLen < 20) return { pct: 35, color: 'var(--accent-warning)', label: 'Short (< 20 chars)' };
-    if (subjectLen >= 20 && subjectLen <= 55) return { pct: 85, color: 'var(--accent-success)', label: 'Optimal (displays cleanly on mobile & desktop)' };
-    return { pct: 100, color: 'var(--accent-warning)', label: 'Long (> 55 chars - may truncate in inbox previews)' };
+    if (subjectLen === 0) return { pct: 0, color: 'var(--text-muted)', label: 'Empty' };
+    if (subjectLen < 20) return { pct: 35, color: 'var(--accent-warning)', label: 'Short (<20)' };
+    if (subjectLen >= 20 && subjectLen <= 55) return { pct: 85, color: 'var(--accent-success)', label: 'Optimal (20-55 chars)' };
+    return { pct: 100, color: 'var(--accent-warning)', label: 'Long (>55)' };
   }, [subjectLen]);
 
-  // Body word counter & advice
+  // Body word counter
   const bodyText = currentEmail?.body || '';
   const bodyWordCount = bodyText ? bodyText.trim().split(/\s+/).filter(Boolean).length : 0;
   const bodyCharCount = bodyText.length;
@@ -161,37 +249,37 @@ export default function EmailPreview({
   const bodyLengthAdvice = useMemo(() => {
     if (bodyWordCount === 0) return 'Empty';
     if (bodyWordCount < 50) return 'Brief intro';
-    if (bodyWordCount >= 50 && bodyWordCount <= 140) return 'Optimal brevity (~30s read time for hiring managers)';
-    return 'Detailed (consider keeping under 140 words for higher reply rates)';
+    if (bodyWordCount >= 50 && bodyWordCount <= 140) return 'Optimal (~30s read)';
+    return 'Detailed (>140 words)';
   }, [bodyWordCount]);
 
-  // Generate for all recipients
+  // Batch generation for all contacts
   const handleGenerateAll = async () => {
     if (!resumeData) {
-      onShowToast({
+      onShowToast?.({
         type: 'error',
         title: 'Resume Required',
-        message: 'Please upload or load a resume in Step 1 first.'
+        message: 'Please upload candidate resume in Step 1 first.'
       });
       return;
     }
 
     if (!recipients || recipients.length === 0) {
-      onShowToast({
+      onShowToast?.({
         type: 'error',
         title: 'Recipients Required',
-        message: 'Please add at least one recipient in Step 2.'
+        message: 'Please add at least one recipient in Step 3.'
       });
       return;
     }
 
     if (!isAiConfigured) {
-      onShowToast({
+      onShowToast?.({
         type: 'error',
-        title: 'AI Key Missing',
-        message: `Please configure an API key for ${activeAi?.name || 'your AI provider'} in Settings.`
+        title: 'AI Provider Not Configured',
+        message: `Please configure an API key or authenticate ${activeAi?.name || 'your AI provider'} in Settings.`
       });
-      onOpenSettings('ai');
+      onOpenSettings?.('ai');
       return;
     }
 
@@ -202,41 +290,42 @@ export default function EmailPreview({
     const tonePrompt = selectedTone === 'custom' ? customToneText : chosenToneObj?.prompt;
 
     try {
+      const res = await batchGenerateColdEmails({
+        providerKey: effectiveAiKey,
+        providerConfig: config?.aiProviders?.[effectiveAiKey],
+        resumeText: resumeData.text,
+        jobDescription: jobDescription,
+        recipients,
+        customTone: tonePrompt,
+        senderName: resumeData.detectedName || defaultSmtp?.fromName || 'Candidate'
+      });
+
       const newGenerated = { ...generatedEmails };
-      let processed = 0;
+      let successCount = 0;
 
-      for (const rec of recipients) {
-        try {
-          const res = await generateColdEmail({
-            providerKey: activeAiKey,
-            resumeText: resumeData.text,
-            jobDescription: jobDescription,
-            recipient: rec,
-            customTone: tonePrompt,
-            senderName: resumeData.detectedName || defaultSmtp?.fromName || 'Candidate'
-          });
-
-          newGenerated[rec.id] = {
-            subject: res.email?.subject || `Exploring Opportunities at ${rec.company || 'your team'}`,
-            body: res.email?.body || '',
+      for (const item of (res.results || [])) {
+        if (item.success && item.email) {
+          const rec = recipients.find(r => r.id === item.recipientId);
+          newGenerated[item.recipientId] = {
+            subject: item.email.subject || `Exploring Opportunities at ${rec?.company || 'your team'}`,
+            body: item.email.body || '',
+            groundingAudit: item.email.groundingAudit || null,
             generatedAt: new Date().toISOString()
           };
-        } catch (err) {
-          console.error(`Failed to generate email for ${rec.email}:`, err);
+          successCount++;
         }
-
-        processed += 1;
-        setGeneratingProgress({ current: processed, total: recipients.length });
-        onUpdateGeneratedEmails({ ...newGenerated });
       }
 
-      onShowToast({
+      setGeneratingProgress({ current: successCount, total: recipients.length });
+      onUpdateGeneratedEmails?.(newGenerated);
+
+      onShowToast?.({
         type: 'success',
-        title: 'Emails Crafted',
-        message: `Personalized cold emails generated for ${recipients.length} recipients.`
+        title: 'Drafts Created',
+        message: `Personalized cold emails synthesized for ${successCount} of ${recipients.length} recipients.`
       });
     } catch (err) {
-      onShowToast({
+      onShowToast?.({
         type: 'error',
         title: 'Generation Failed',
         message: err.message
@@ -251,7 +340,12 @@ export default function EmailPreview({
     if (!currentRecipient || !resumeData) return;
 
     if (!isAiConfigured) {
-      onOpenSettings('ai');
+      onShowToast?.({
+        type: 'error',
+        title: 'AI Provider Not Configured',
+        message: `Please configure an API key or authenticate ${activeAi?.name || 'your AI provider'} in Settings.`
+      });
+      onOpenSettings?.('ai');
       return;
     }
 
@@ -261,7 +355,8 @@ export default function EmailPreview({
 
     try {
       const res = await generateColdEmail({
-        providerKey: activeAiKey,
+        providerKey: effectiveAiKey,
+        providerConfig: config?.aiProviders?.[effectiveAiKey],
         resumeText: resumeData.text,
         jobDescription: jobDescription,
         recipient: currentRecipient,
@@ -269,22 +364,23 @@ export default function EmailPreview({
         senderName: resumeData.detectedName || defaultSmtp?.fromName || 'Candidate'
       });
 
-      onUpdateGeneratedEmails({
+      onUpdateGeneratedEmails?.({
         ...generatedEmails,
         [currentRecipient.id]: {
           subject: res.email?.subject || `Exploring Opportunities at ${currentRecipient.company || 'your team'}`,
           body: res.email?.body || '',
+          groundingAudit: res.email?.groundingAudit || null,
           generatedAt: new Date().toISOString()
         }
       });
 
-      onShowToast({
+      onShowToast?.({
         type: 'success',
         title: 'Draft Regenerated',
-        message: `Updated email for ${currentRecipient.name || currentRecipient.email}`
+        message: `Updated draft for ${currentRecipient.name || currentRecipient.email}`
       });
     } catch (err) {
-      onShowToast({
+      onShowToast?.({
         type: 'error',
         title: 'Regeneration Failed',
         message: err.message
@@ -294,7 +390,7 @@ export default function EmailPreview({
     }
   };
 
-  // Copy to clipboard
+  // Copy email to clipboard
   const handleCopyEmail = (recId) => {
     if (!currentEmail) return;
     const fullText = `Subject: ${currentEmail.subject || ''}\n\n${currentEmail.body || ''}`;
@@ -303,7 +399,7 @@ export default function EmailPreview({
     setTimeout(() => {
       setCopiedId(null);
     }, 2000);
-    onShowToast({
+    onShowToast?.({
       type: 'info',
       title: 'Copied to Clipboard',
       message: 'Email subject & body copied to clipboard.'
@@ -313,7 +409,7 @@ export default function EmailPreview({
   // Inline subject edit
   const handleSubjectChange = (newSubject) => {
     if (!currentRecipient) return;
-    onUpdateGeneratedEmails({
+    onUpdateGeneratedEmails?.({
       ...generatedEmails,
       [currentRecipient.id]: {
         ...(generatedEmails[currentRecipient.id] || {}),
@@ -325,7 +421,7 @@ export default function EmailPreview({
   // Inline body edit
   const handleBodyChange = (newBody) => {
     if (!currentRecipient) return;
-    onUpdateGeneratedEmails({
+    onUpdateGeneratedEmails?.({
       ...generatedEmails,
       [currentRecipient.id]: {
         ...(generatedEmails[currentRecipient.id] || {}),
@@ -334,310 +430,454 @@ export default function EmailPreview({
     });
   };
 
+  // Direct send outreach handler with full invariant verification
+  const handleDispatchOutreach = () => {
+    if (!isSmtpConfigured) {
+      onShowToast?.({
+        type: 'error',
+        title: 'SMTP Configuration Required',
+        message: 'Please configure your verified SMTP sender profile in Settings before dispatching.'
+      });
+      onOpenSettings?.('smtp');
+      return;
+    }
+
+    if (readyRecipients.length === 0) {
+      onShowToast?.({
+        type: 'error',
+        title: 'Drafts Required',
+        message: 'Please generate email drafts before dispatching.'
+      });
+      return;
+    }
+
+    if (!allApproved) {
+      onShowToast?.({
+        type: 'error',
+        title: 'Approval Required',
+        message: `${unapprovedRecipients.length} contact(s) lack explicit approval. Each recipient must be reviewed and approved prior to dispatch.`
+      });
+      return;
+    }
+
+    if (!explicitlyAuthorized) {
+      onShowToast?.({
+        type: 'error',
+        title: 'Authorization Required',
+        message: 'Please confirm explicit authorization by checking the box below.'
+      });
+      return;
+    }
+
+    onTriggerSend?.();
+  };
+
+  // Quota warning check
+  const isQuotaExceeded = dailyStats && ((dailyStats.sentToday || 0) + readyAndApprovedRecipients.length) > (dailyStats.dailyLimit || 500);
+
+  if (totalRecipients === 0) {
+    return (
+      <div className="glass-card email-unified-card" style={{ padding: 32, textAlign: 'center', justifyContent: 'center' }}>
+        <AlertCircle size={44} style={{ color: 'var(--accent-warning)', margin: '0 auto 12px' }} />
+        <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>No Recipients Selected</h3>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Add at least one HR contact or import from CSV/Excel in Step 3 to synthesize and dispatch drafts.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="glass-card">
-      {/* Header */}
-      <div className="card-header">
-        <div className="card-title">
-          <Sparkles className="card-title-icon" size={20} />
-          <span>Step 4: AI Personalize, Preview & Edit</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {totalRecipients > 0 && (
+    <div className="glass-card email-unified-card">
+      {/* 1. Compact Top Bar: Hero Title + Stats Pills + Tone Pills + AI Model + Generate All */}
+      <div className="email-unified-topbar">
+        {/* Row 1: Title & Status Counters */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+              AI Drafts & Safe Outreach Dispatch
+            </h2>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              • Review tailored emails, verify approvals, and safely dispatch
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span
               className="badge-counter"
               style={{
-                color: emailsReadyCount === totalRecipients ? 'var(--accent-success)' : 'var(--text-secondary)',
-                borderColor: emailsReadyCount === totalRecipients ? 'var(--accent-success)' : 'var(--border-subtle)'
+                fontSize: 11,
+                padding: '2px 8px',
+                color: emailsReadyCount === totalRecipients ? 'var(--accent-success)' : undefined,
+                borderColor: emailsReadyCount === totalRecipients ? 'rgba(52, 211, 153, 0.4)' : undefined
               }}
             >
-              {emailsReadyCount} of {totalRecipients} Drafted
+              {emailsReadyCount} / {totalRecipients} Drafted
             </span>
-          )}
+
+            <span
+              className="badge-counter"
+              style={{
+                fontSize: 11,
+                padding: '2px 8px',
+                color: allApproved ? 'var(--accent-success)' : 'var(--accent-warning)',
+                borderColor: allApproved ? 'rgba(52, 211, 153, 0.4)' : 'rgba(217, 119, 6, 0.4)'
+              }}
+            >
+              {readyAndApprovedRecipients.length} / {readyRecipients.length} Approved
+            </span>
+          </div>
         </div>
-      </div>
 
-      {/* Tone & AI Model Controls */}
-      <div
-        style={{
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 'var(--radius-md)',
-          padding: 16,
-          marginBottom: 18
-        }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* Row 2: Tone Selectors & AI Model & Batch Action */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
           {/* Tone Selector Pills */}
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <label className="form-label" style={{ margin: 0 }}>Outreach Style & Tone</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span className={`status-dot ${isAiConfigured ? 'active' : 'warning'}`} />
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
-                  {activeAi?.name || 'Gemini'} ({activeAi?.model})
-                </span>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => onOpenSettings('ai')}
-                  style={{ padding: '2px 8px', fontSize: 11 }}
-                >
-                  Change
-                </button>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {TONE_OPTIONS.map(opt => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setSelectedTone(opt.id)}
-                  style={{
-                    padding: '6px 12px',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid',
-                    borderColor: selectedTone === opt.id ? 'var(--accent-primary)' : 'var(--border-subtle)',
-                    background: selectedTone === opt.id ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
-                    color: selectedTone === opt.id ? '#fff' : 'var(--text-secondary)',
-                    cursor: 'pointer',
-                    transition: 'all var(--transition-fast)'
-                  }}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-
-            {selectedTone === 'custom' && (
-              <div style={{ marginTop: 10 }}>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g., Ultra-concise, focus on distributed systems and open-source leadership..."
-                  value={customToneText}
-                  onChange={e => setCustomToneText(e.target.value)}
-                  style={{ fontSize: 13 }}
-                />
-              </div>
-            )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginRight: 4 }}>
+              Tone:
+            </span>
+            {TONE_OPTIONS.map(opt => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setSelectedTone(opt.id)}
+                style={{
+                  padding: '3px 9px',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid',
+                  borderColor: selectedTone === opt.id ? 'var(--accent-primary)' : 'var(--border-subtle)',
+                  background: selectedTone === opt.id ? 'var(--accent-primary)' : 'var(--bg-surface-elevated)',
+                  color: selectedTone === opt.id ? '#fff' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'all var(--transition-fast)'
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
 
-          {/* Generate All Button & Progress */}
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {/* AI Model & Generate All Button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Sparkles size={13} style={{ color: isAiConfigured ? 'var(--accent-primary)' : 'var(--accent-warning)' }} />
+              {configuredAiProviders.length > 0 ? (
+                <select
+                  value={effectiveAiKey}
+                  onChange={(e) => handleSwitchAiProvider(e.target.value)}
+                  style={{
+                    fontSize: 11,
+                    padding: '3px 6px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-subtle)',
+                    background: 'var(--bg-surface-elevated)',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    fontWeight: 500
+                  }}
+                  title="Switch active AI model"
+                >
+                  {configuredAiProviders.map(p => (
+                    <option key={p.key} value={p.key}>
+                      {p.name} ({p.model})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onOpenSettings?.('ai')}
+                  style={{
+                    fontSize: 11,
+                    padding: '2px 6px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px dashed var(--accent-warning)',
+                    background: 'rgba(245, 158, 11, 0.08)',
+                    color: 'var(--accent-warning)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Configure AI
+                </button>
+              )}
+            </div>
+
             <button
               type="button"
-              className="btn btn-primary"
+              className="btn btn-primary btn-sm"
               onClick={handleGenerateAll}
               disabled={isGenerating || !resumeData || recipients.length === 0}
-              style={{ flex: 1 }}
+              style={{ height: 28, padding: '0 12px', fontSize: 12 }}
             >
               {isGenerating ? (
                 <>
-                  <RefreshCw size={16} className="spin-icon" />
-                  Generating Drafts ({generatingProgress.current} / {generatingProgress.total})...
+                  <RefreshCw size={12} className="spin-icon" />
+                  Generating ({generatingProgress.current}/{generatingProgress.total})...
                 </>
               ) : (
                 <>
-                  <Sparkles size={16} />
-                  Generate All Cold Emails ({recipients.length})
+                  <Sparkles size={12} />
+                  Generate All ({recipients.length})
                 </>
               )}
             </button>
           </div>
         </div>
+
+        {/* Custom Tone Input Row (if custom selected) */}
+        {selectedTone === 'custom' && (
+          <div style={{ paddingTop: 4 }}>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="e.g., Concise, emphasize distributed systems scale and cloud leadership..."
+              value={customToneText}
+              onChange={e => setCustomToneText(e.target.value)}
+              style={{ fontSize: 11, height: 26 }}
+            />
+          </div>
+        )}
       </div>
 
-      {/* Split-Pane Email Workspace */}
-      {totalRecipients > 0 ? (
-        <div className="email-split-container">
-          {/* Left Pane: Recipient Queue Sidebar */}
-          <div className="email-split-sidebar">
-            {/* Sidebar Search & Tab Controls */}
-            <div style={{ padding: 12, borderBottom: '1px solid var(--border-subtle)' }}>
-              <div style={{ position: 'relative', marginBottom: 8 }}>
-                <Search
-                  size={13}
-                  style={{
-                    position: 'absolute',
-                    left: 9,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: 'var(--text-muted)'
-                  }}
-                />
-                <input
-                  type="text"
-                  placeholder="Filter recipients..."
-                  value={searchRecipient}
-                  onChange={e => setSearchRecipient(e.target.value)}
-                  className="form-input"
-                  style={{ paddingLeft: 28, fontSize: 12, height: 30 }}
-                />
-              </div>
+      {/* 2. Center Split View (Left Recipient Queue + Right Active Editor) */}
+      <div className="email-unified-split">
+        {/* Left Pane: Recipient List & Search & Filters & Batch Approval */}
+        <div className="email-unified-sidebar">
+          {/* Search bar */}
+          <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-subtle)', position: 'relative' }}>
+            <Search
+              size={12}
+              style={{
+                position: 'absolute',
+                left: 14,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: 'var(--text-muted)'
+              }}
+            />
+            <input
+              type="text"
+              placeholder="Filter contacts..."
+              value={searchRecipient}
+              onChange={e => setSearchRecipient(e.target.value)}
+              className="form-input"
+              style={{ paddingLeft: 24, fontSize: 11, height: 26 }}
+            />
+          </div>
 
-              {/* Status Tabs */}
-              <div style={{ display: 'flex', gap: 4 }}>
-                <button
-                  type="button"
-                  onClick={() => setFilterTab('all')}
-                  style={{
-                    flex: 1,
-                    padding: '3px 6px',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    borderRadius: 'var(--radius-sm)',
-                    border: 'none',
-                    cursor: 'pointer',
-                    background: filterTab === 'all' ? 'var(--bg-tertiary)' : 'transparent',
-                    color: filterTab === 'all' ? 'var(--text-primary)' : 'var(--text-muted)'
-                  }}
-                >
-                  All ({recipients.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterTab('ready')}
-                  style={{
-                    flex: 1,
-                    padding: '3px 6px',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    borderRadius: 'var(--radius-sm)',
-                    border: 'none',
-                    cursor: 'pointer',
-                    background: filterTab === 'ready' ? 'var(--bg-tertiary)' : 'transparent',
-                    color: filterTab === 'ready' ? 'var(--accent-success)' : 'var(--text-muted)'
-                  }}
-                >
-                  Ready ({emailsReadyCount})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterTab('pending')}
-                  style={{
-                    flex: 1,
-                    padding: '3px 6px',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    borderRadius: 'var(--radius-sm)',
-                    border: 'none',
-                    cursor: 'pointer',
-                    background: filterTab === 'pending' ? 'var(--bg-tertiary)' : 'transparent',
-                    color: filterTab === 'pending' ? 'var(--accent-warning)' : 'var(--text-muted)'
-                  }}
-                >
-                  Pending ({totalRecipients - emailsReadyCount})
-                </button>
-              </div>
+          {/* Filter Tabs & Approve All Header */}
+          <div style={{ padding: '4px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+            <div style={{ display: 'flex', gap: 2 }}>
+              <button
+                type="button"
+                onClick={() => setFilterTab('all')}
+                style={{
+                  padding: '2px 5px',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  borderRadius: 'var(--radius-sm)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: filterTab === 'all' ? 'var(--bg-tertiary)' : 'transparent',
+                  color: filterTab === 'all' ? 'var(--text-primary)' : 'var(--text-muted)'
+                }}
+              >
+                All ({totalRecipients})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterTab('ready')}
+                style={{
+                  padding: '2px 5px',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  borderRadius: 'var(--radius-sm)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: filterTab === 'ready' ? 'var(--bg-tertiary)' : 'transparent',
+                  color: filterTab === 'ready' ? 'var(--accent-success)' : 'var(--text-muted)'
+                }}
+              >
+                Ready ({emailsReadyCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterTab('pending')}
+                style={{
+                  padding: '2px 5px',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  borderRadius: 'var(--radius-sm)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: filterTab === 'pending' ? 'var(--bg-tertiary)' : 'transparent',
+                  color: filterTab === 'pending' ? 'var(--accent-warning)' : 'var(--text-muted)'
+                }}
+              >
+                Pending ({totalRecipients - emailsReadyCount})
+              </button>
             </div>
 
-            {/* Recipient Item List */}
-            <div style={{ flex: 1, overflowY: 'auto', maxHeight: 440 }}>
-              {filteredRecipients.length === 0 ? (
-                <div style={{ padding: 20, textAlign: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
-                  No matching contacts.
-                </div>
-              ) : (
-                filteredRecipients.map(rec => {
-                  const hasEmail = Boolean(generatedEmails[rec.id]?.body);
-                  const isSelected = currentRecipient?.id === rec.id;
-                  const realIndex = recipients.findIndex(r => r.id === rec.id);
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleApproveAll}
+              disabled={unapprovedRecipients.length === 0}
+              title={unapprovedRecipients.length === 0 ? 'All ready contacts approved' : 'Explicitly approve all ready contacts'}
+              style={{ fontSize: 10, padding: '1px 5px', height: 20 }}
+            >
+              <CheckCircle size={10} style={{ color: 'var(--accent-success)' }} />
+              Approve All
+            </button>
+          </div>
 
-                  return (
-                    <div
-                      key={rec.id}
-                      className={`recipient-queue-item ${isSelected ? 'active' : ''}`}
-                      onClick={() => setActiveRecipientIndex(realIndex)}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontWeight: 600, fontSize: 13, color: isSelected ? '#fff' : 'var(--text-primary)' }}>
+          {/* Scrollable Recipient Items */}
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+            {filteredRecipients.length === 0 ? (
+              <div style={{ padding: 14, textAlign: 'center', fontSize: 11, color: 'var(--text-muted)' }}>
+                No matching contacts.
+              </div>
+            ) : (
+              filteredRecipients.map(rec => {
+                const hasEmail = Boolean(generatedEmails[rec.id]?.body);
+                const isSelected = currentRecipient?.id === rec.id;
+                const realIndex = recipients.findIndex(r => r.id === rec.id);
+
+                return (
+                  <div
+                    key={rec.id}
+                    className={`recipient-queue-item ${isSelected ? 'active' : ''}`}
+                    onClick={() => setActiveRecipientIndex(realIndex)}
+                    style={{
+                      padding: '8px 10px',
+                      display: 'flex',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={Boolean(rec.isApproved)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        handleToggleApproval(rec.id);
+                      }}
+                      title={rec.isApproved ? 'Approved for outreach' : 'Click to approve contact'}
+                      style={{ cursor: 'pointer', accentColor: 'var(--accent-success)', width: 14, height: 14, flexShrink: 0 }}
+                    />
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                        <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {rec.name || 'Hiring Lead'}
                         </span>
                         {hasEmail ? (
-                          <span style={{ color: 'var(--accent-success)', display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11 }}>
-                            <CheckCircle size={12} /> Drafted
+                          <span style={{ color: 'var(--accent-success)', display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 10, flexShrink: 0 }}>
+                            <CheckCircle size={10} /> Drafted
                           </span>
                         ) : (
-                          <span style={{ color: 'var(--accent-warning)', display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11 }}>
-                            <Clock size={12} /> Pending
+                          <span style={{ color: 'var(--accent-warning)', display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 10, flexShrink: 0 }}>
+                            <Clock size={10} /> Pending
                           </span>
                         )}
                       </div>
 
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between' }}>
-                        <span>{rec.company || '—'}</span>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>
-                          {rec.email}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          {/* Right Pane: Active Email Editor */}
-          <div className="email-split-main">
-            {currentRecipient ? (
-              <>
-                {/* Editor Header */}
-                <div
-                  style={{
-                    padding: '12px 18px',
-                    background: 'rgba(255, 255, 255, 0.02)',
-                    borderBottom: '1px solid var(--border-subtle)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: 10
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: '50%',
-                        background: 'var(--primary-gradient)',
-                        color: '#fff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: 700,
-                        fontSize: 12
-                      }}
-                    >
-                      {(currentRecipient.name || 'H').slice(0, 1).toUpperCase()}
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 14, color: '#fff' }}>
-                        {currentRecipient.name || 'Hiring Contact'}
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                        {currentRecipient.role ? `${currentRecipient.role} • ` : ''}
-                        {currentRecipient.company || 'Company'}
+                      <div className="queue-meta-row" style={{ fontSize: 11 }}>
+                        <span className="queue-company" title={rec.company || ''}>{rec.company || 'Direct'}</span>
+                        <span className="queue-dot-separator">•</span>
+                        <span className="queue-email" title={rec.email}>{rec.email}</span>
                       </div>
                     </div>
                   </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Right Pane: Active Email Editor Workspace */}
+        <div className="email-unified-main">
+          {currentRecipient ? (
+            <>
+              {/* Header: Recipient Summary + Approve Button + Navigation */}
+              <div
+                style={{
+                  padding: '8px 14px',
+                  background: 'var(--bg-tertiary)',
+                  borderBottom: '1px solid var(--border-subtle)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  flexShrink: 0
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                  <div
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: '50%',
+                      background: 'var(--primary-gradient)',
+                      color: '#fff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 700,
+                      fontSize: 11,
+                      flexShrink: 0
+                    }}
+                  >
+                    {(currentRecipient.name || 'H').slice(0, 1).toUpperCase()}
+                  </div>
+
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {currentRecipient.name || 'Hiring Contact'}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {currentRecipient.role ? `${currentRecipient.role} • ` : ''}{currentRecipient.company || 'Company'}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  {/* Approval Toggle Button */}
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${currentRecipient.isApproved ? 'btn-secondary' : 'btn-primary'}`}
+                    onClick={() => handleToggleApproval(currentRecipient.id)}
+                    style={{ fontSize: 11, padding: '2px 8px', height: 24, display: 'flex', alignItems: 'center', gap: 4 }}
+                  >
+                    {currentRecipient.isApproved ? (
+                      <>
+                        <Check size={11} style={{ color: 'var(--accent-success)' }} />
+                        Approved
+                      </>
+                    ) : (
+                      <>
+                        <UserCheck size={11} />
+                        Approve Contact
+                      </>
+                    )}
+                  </button>
 
                   {/* Navigation Arrows */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm"
                       onClick={() => setActiveRecipientIndex(Math.max(0, activeRecipientIndex - 1))}
                       disabled={activeRecipientIndex === 0}
-                      title="Previous Recipient"
+                      title="Previous Contact"
+                      style={{ padding: '2px 6px', height: 24 }}
                     >
-                      <ChevronLeft size={14} /> Prev
+                      <ChevronLeft size={12} />
                     </button>
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 40, textAlign: 'center' }}>
                       {activeRecipientIndex + 1} / {totalRecipients}
                     </span>
                     <button
@@ -645,380 +885,404 @@ export default function EmailPreview({
                       className="btn btn-secondary btn-sm"
                       onClick={() => setActiveRecipientIndex(Math.min(totalRecipients - 1, activeRecipientIndex + 1))}
                       disabled={activeRecipientIndex === totalRecipients - 1}
-                      title="Next Recipient"
+                      title="Next Contact"
+                      style={{ padding: '2px 6px', height: 24 }}
                     >
-                      Next <ChevronRight size={14} />
+                      <ChevronRight size={12} />
                     </button>
                   </div>
                 </div>
+              </div>
 
-                {/* Email Meta Header */}
-                <div className="email-meta-header">
-                  <div className="meta-row">
-                    <span className="meta-label">From:</span>
-                    <span className="meta-val">
-                      {defaultSmtp ? (
-                        <span>
-                          <strong>{defaultSmtp.fromName || 'Candidate'}</strong> &lt;{defaultSmtp.fromEmail || defaultSmtp.username}&gt;
-                        </span>
-                      ) : (
-                        <span style={{ color: 'var(--accent-warning)', fontSize: 12 }}>
-                          ⚠️ No default SMTP profile configured in Settings
-                        </span>
-                      )}
-                    </span>
-                  </div>
+              {/* Email Meta: From / To / Subject */}
+              <div className="email-meta-header" style={{ padding: '8px 14px', gap: 6, flexShrink: 0 }}>
+                <div className="meta-row">
+                  <span className="meta-label">From:</span>
+                  <span className="meta-val" style={{ fontSize: 12 }}>
+                    {defaultSmtp ? (
+                      <span>
+                        <strong>{defaultSmtp.fromName || 'Candidate'}</strong> &lt;{defaultSmtp.fromEmail || defaultSmtp.username}&gt;
+                      </span>
+                    ) : (
+                      <span style={{ color: 'var(--accent-warning)', fontSize: 11 }}>
+                        ⚠️ No SMTP profile configured
+                      </span>
+                    )}
+                  </span>
+                </div>
 
-                  <div className="meta-row">
-                    <span className="meta-label">To:</span>
-                    <span className="meta-val" style={{ fontFamily: 'var(--font-mono)' }}>
-                      {currentRecipient.name ? `"${currentRecipient.name}" ` : ''}&lt;{currentRecipient.email}&gt;
-                    </span>
-                  </div>
+                <div className="meta-row">
+                  <span className="meta-label">To:</span>
+                  <span className="meta-val" style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                    {currentRecipient.name ? `"${currentRecipient.name}" ` : ''}&lt;{currentRecipient.email}&gt;
+                  </span>
+                </div>
 
-                  {/* Subject Line & Length Meter */}
-                  <div className="meta-row" style={{ alignItems: 'flex-start' }}>
-                    <span className="meta-label" style={{ paddingTop: 4 }}>Subject:</span>
-                    <div style={{ flex: 1 }}>
-                      <input
-                        type="text"
-                        className="subject-input-styled"
-                        placeholder="Click to edit email subject line..."
-                        value={currentEmail?.subject || ''}
-                        onChange={e => handleSubjectChange(e.target.value)}
-                      />
-                      {/* Subject Length Bar */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-                        <div style={{ width: 140 }}>
-                          <div className="subject-meter-bar">
-                            <div
-                              className="subject-meter-fill"
-                              style={{
-                                width: `${Math.min(100, subjectMeter.pct)}%`,
-                                background: subjectMeter.color
-                              }}
-                            />
-                          </div>
+                <div className="meta-row" style={{ alignItems: 'flex-start' }}>
+                  <span className="meta-label" style={{ paddingTop: 3 }}>Subject:</span>
+                  <div style={{ flex: 1 }}>
+                    <input
+                      type="text"
+                      className="subject-input-styled"
+                      placeholder="Click to edit subject line..."
+                      value={currentEmail?.subject || ''}
+                      onChange={e => handleSubjectChange(e.target.value)}
+                      style={{ fontSize: 12, height: 24 }}
+                    />
+                    {/* Compact Subject Meter */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+                      <div style={{ width: 100 }}>
+                        <div className="subject-meter-bar" style={{ marginTop: 2 }}>
+                          <div
+                            className="subject-meter-fill"
+                            style={{
+                              width: `${Math.min(100, subjectMeter.pct)}%`,
+                              background: subjectMeter.color
+                            }}
+                          />
                         </div>
-                        <span style={{ fontSize: 11, color: subjectMeter.color }}>
-                          {subjectLen} chars • {subjectMeter.label}
-                        </span>
                       </div>
+                      <span style={{ fontSize: 10, color: subjectMeter.color }}>
+                        {subjectLen} chars • {subjectMeter.label}
+                      </span>
                     </div>
                   </div>
                 </div>
+              </div>
 
-                {/* Email Body Editor */}
-                <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column' }}>
+              {/* Email Body Editor or Pre-Generation Briefing Card */}
+              {!currentEmail?.body && !isGenerating ? (
+                <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 14 }}>
+                  <div className="pre-gen-briefing-card" style={{ margin: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Sparkles size={16} style={{ color: 'var(--accent-primary)' }} />
+                      <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                        Draft Ready to Synthesize
+                      </span>
+                    </div>
+
+                    <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4, margin: '6px 0 10px' }}>
+                      Generate a personalized email for <strong>{currentRecipient.name || 'this contact'}</strong> at <strong>{currentRecipient.company || 'their team'}</strong> based on your candidate profile.
+                    </p>
+
+                    <div className="pre-gen-grid" style={{ marginBottom: 12 }}>
+                      <div className="pre-gen-item">
+                        <span className="pre-gen-item-label">Target Lead</span>
+                        <span className="pre-gen-item-val">{currentRecipient.name || 'Hiring Lead'} {currentRecipient.role ? `• ${currentRecipient.role}` : ''}</span>
+                      </div>
+                      <div className="pre-gen-item">
+                        <span className="pre-gen-item-label">Company</span>
+                        <span className="pre-gen-item-val">{currentRecipient.company || 'Direct Outreach'}</span>
+                      </div>
+                      <div className="pre-gen-item">
+                        <span className="pre-gen-item-label">Candidate Resume</span>
+                        <span className="pre-gen-item-val">{resumeData?.originalFilename || 'Loaded'} ({resumeData?.wordCount || 0} words)</span>
+                      </div>
+                      <div className="pre-gen-item">
+                        <span className="pre-gen-item-label">Strategy</span>
+                        <span className="pre-gen-item-val">{jobDescription ? 'Tailored to Role JD' : 'Value Pitch'}</span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={handleRegenerateCurrent}
+                      disabled={isRegeneratingSingle || !resumeData}
+                      style={{ height: 30, padding: '0 14px' }}
+                    >
+                      <Sparkles size={13} />
+                      Generate Draft for {currentRecipient.name || 'This Contact'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
                   <textarea
                     className="email-body-editor"
-                    style={{ flex: 1, minHeight: 260 }}
+                    style={{ flex: 1, minHeight: 120, resize: 'none', overflowY: 'auto', padding: '10px 14px', fontSize: 12 }}
                     placeholder={
                       isGenerating
                         ? 'AI is crafting your tailored cold email...'
-                        : 'Click "Generate All Cold Emails" above, or write custom text here...'
+                        : 'Write or customize your cold email here...'
                     }
                     value={currentEmail?.body || ''}
                     onChange={e => handleBodyChange(e.target.value)}
                   />
 
-                  {/* Real-time Deliverability & Spam Analysis Bar */}
+                  {/* Compact Insights Bar: Spam Detection + Grounding Guardrail Score */}
                   <div
                     style={{
-                      padding: '8px 16px',
-                      background: 'rgba(0, 0, 0, 0.2)',
+                      padding: '6px 14px',
+                      background: 'var(--bg-tertiary)',
                       borderTop: '1px solid var(--border-subtle)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       flexWrap: 'wrap',
-                      gap: 8,
-                      fontSize: 11
+                      gap: 6,
+                      fontSize: 11,
+                      flexShrink: 0
                     }}
                   >
-                    {/* Deliverability Status */}
-                    {spamAnalysis.clean ? (
-                      <div className="spam-indicator-pill clean">
-                        <ShieldCheck size={13} />
-                        <span>Deliverability: Clean (No spam triggers detected)</span>
-                      </div>
-                    ) : (
-                      <div className="spam-indicator-pill warning" title={`Flagged phrases: ${spamAnalysis.detected.join(', ')}`}>
-                        <AlertTriangle size={13} />
-                        <span>Deliverability: {spamAnalysis.detected.length} potential spam trigger(s): <strong>{spamAnalysis.detected.join(', ')}</strong></span>
-                      </div>
-                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      {/* Deliverability Status */}
+                      {spamAnalysis.clean ? (
+                        <div className="spam-indicator-pill clean" style={{ padding: '2px 6px', fontSize: 10 }}>
+                          <ShieldCheck size={11} />
+                          <span>Deliverability: Clean</span>
+                        </div>
+                      ) : (
+                        <div className="spam-indicator-pill warning" style={{ padding: '2px 6px', fontSize: 10 }} title={`Flagged phrases: ${spamAnalysis.detected.join(', ')}`}>
+                          <AlertTriangle size={11} />
+                          <span>Deliverability: {spamAnalysis.detected.length} trigger(s)</span>
+                        </div>
+                      )}
 
-                    {/* Word & Char Counter */}
-                    <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                      {/* Claim Grounding Guardrail Pill */}
+                      {currentEmail?.groundingAudit && (
+                        currentEmail.groundingAudit.hasUngroundedClaims ? (
+                          <div
+                            className="spam-indicator-pill warning"
+                            style={{
+                              background: 'rgba(245, 158, 11, 0.15)',
+                              borderColor: 'rgba(245, 158, 11, 0.35)',
+                              color: 'var(--accent-warning)',
+                              fontWeight: 600,
+                              padding: '2px 6px',
+                              fontSize: 10
+                            }}
+                            title="Ungrounded claims detected against candidate resume"
+                          >
+                            <AlertTriangle size={11} />
+                            <span>Grounding: {currentEmail.groundingAudit.groundingScore || 0}% ({currentEmail.groundingAudit.flaggedClaims?.length || 1} unverified)</span>
+                          </div>
+                        ) : (
+                          <div
+                            className="spam-indicator-pill clean"
+                            style={{
+                              background: 'rgba(16, 185, 129, 0.12)',
+                              borderColor: 'rgba(16, 185, 129, 0.3)',
+                              color: 'var(--accent-success)',
+                              fontWeight: 600,
+                              padding: '2px 6px',
+                              fontSize: 10
+                            }}
+                            title="All claims and metrics corroborated by resume"
+                          >
+                            <ShieldCheck size={11} />
+                            <span>Grounding: 100% Fact-Checked</span>
+                          </div>
+                        )
+                      )}
+                    </div>
+
+                    <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 10 }}>
                       <strong>{bodyWordCount}</strong> words • <strong>{bodyCharCount}</strong> chars ({bodyLengthAdvice})
                     </div>
                   </div>
-                </div>
 
-                {/* Footer Bar */}
-                <div className="email-footer-bar">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    {resumeData && (
-                      <div className="info-pill" style={{ background: 'rgba(99, 102, 241, 0.1)', borderColor: 'rgba(99, 102, 241, 0.3)' }}>
-                        <Paperclip size={13} style={{ color: 'var(--primary-light)' }} />
-                        <span>Attached: <strong>{resumeData.originalFilename}</strong></span>
+                  {/* Ungrounded Claims breakdown (if any) */}
+                  {currentEmail?.groundingAudit?.hasUngroundedClaims && currentEmail.groundingAudit.flaggedClaims?.length > 0 && (
+                    <div
+                      style={{
+                        padding: '6px 14px',
+                        background: 'rgba(245, 158, 11, 0.08)',
+                        borderTop: '1px solid rgba(245, 158, 11, 0.25)',
+                        fontSize: 11,
+                        flexShrink: 0
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 700, color: 'var(--accent-warning)' }}>
+                        <AlertTriangle size={12} />
+                        <span>Ungrounded Claims:</span>
                       </div>
-                    )}
-                  </div>
-
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => handleCopyEmail(currentRecipient.id)}
-                      disabled={!currentEmail}
-                      title="Copy subject and body to clipboard"
-                    >
-                      {copiedId === currentRecipient.id ? (
-                        <>
-                          <Check size={13} style={{ color: 'var(--accent-success)' }} />
-                          Copied!
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={13} />
-                          Copy
-                        </>
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={handleRegenerateCurrent}
-                      disabled={isRegeneratingSingle || !resumeData}
-                      title="Re-write this specific email draft"
-                    >
-                      <RefreshCw size={13} className={isRegeneratingSingle ? 'spin-icon' : ''} />
-                      Regenerate This Draft
-                    </button>
-                  </div>
+                      <div style={{ margin: '2px 0 0', color: 'var(--text-secondary)' }}>
+                        {currentEmail.groundingAudit.flaggedClaims.map((item, idx) => (
+                          <span key={idx} style={{ marginRight: 10 }}>
+                            <strong style={{ color: 'var(--accent-warning)' }}>"{item.claim}"</strong>
+                            {item.reason ? ` (${item.reason})` : ''}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </>
-            ) : (
-              <div className="empty-state">
-                <AlertCircle className="empty-state-icon" />
-                <div style={{ fontWeight: 600, color: '#fff', marginBottom: 4 }}>Recipient Not Found</div>
-                <div style={{ fontSize: 13 }}>Select a contact from the list on the left to review their draft.</div>
-              </div>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="empty-state">
-          <Edit3 className="empty-state-icon" />
-          <div style={{ fontWeight: 600, color: '#fff', marginBottom: 4 }}>No Recipients Selected</div>
-          <div style={{ fontSize: 13 }}>Add at least one HR contact or upload an Excel sheet to preview drafts.</div>
-        </div>
-      )}
-
-      {/* Step 5: Send Outreach CTA Bar */}
-      <div
-        style={{
-          marginTop: 22,
-          padding: 18,
-          background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.1) 100%)',
-          border: '1px solid rgba(99, 102, 241, 0.3)',
-          borderRadius: 'var(--radius-md)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 14
-        }}
-      >
-        {/* Unapproved Warning Banner */}
-        {!allApproved && totalRecipients > 0 && (
-          <div
-            style={{
-              padding: '12px 16px',
-              background: 'rgba(251, 191, 36, 0.1)',
-              border: '1px solid rgba(251, 191, 36, 0.35)',
-              borderRadius: 'var(--radius-md)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-              flexWrap: 'wrap'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: 'var(--accent-warning)' }}>
-              <AlertTriangle size={18} style={{ flexShrink: 0 }} />
-              <span>
-                <strong>Explicit Approval Required:</strong> {unapprovedRecipients.length} contact(s) have not been explicitly approved. You must approve all recipients before dispatching emails.
-              </span>
-            </div>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={handleApproveAllRemaining}
-              style={{ fontSize: 11, height: 28, color: 'var(--accent-warning)', borderColor: 'rgba(251, 191, 36, 0.4)', flexShrink: 0 }}
-            >
-              Approve All ({unapprovedRecipients.length})
-            </button>
-          </div>
-        )}
-
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
-          <div>
-            <div style={{ fontWeight: 700, color: '#fff', fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>Ready to Dispatch Cold Outreach</span>
-              {allApproved && (
-                <span
-                  className="info-pill"
-                  style={{
-                    fontSize: 11,
-                    background: 'rgba(52, 211, 153, 0.12)',
-                    borderColor: 'rgba(52, 211, 153, 0.3)',
-                    color: 'var(--accent-success)'
-                  }}
-                >
-                  <ShieldCheck size={12} /> Contacts Approved
-                </span>
               )}
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-              Via: {defaultSmtp ? `${defaultSmtp.name} (${defaultSmtp.fromEmail || defaultSmtp.username})` : 'No SMTP account configured'}
-              {' '}• Attached: {resumeData ? resumeData.originalFilename : 'No resume'}
-            </div>
-          </div>
 
-          <button
-            type="button"
-            className="btn btn-primary btn-lg"
-            onClick={handleSendButtonClick}
-            disabled={!defaultSmtp || totalRecipients === 0 || emailsReadyCount === 0 || !allApproved}
-            title={!allApproved ? 'Explicit approval is required for all recipients before sending' : 'Review & Send'}
-          >
-            <Send size={18} />
-            Send {totalRecipients} Cold {totalRecipients === 1 ? 'Email' : 'Emails'}
-          </button>
+              {/* Editor Bottom Bar: Resume Pill + Copy + Regenerate */}
+              <div
+                style={{
+                  padding: '6px 14px',
+                  background: 'var(--bg-surface-elevated)',
+                  borderTop: '1px solid var(--border-subtle)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  flexShrink: 0
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {attachResume && resumeData && (
+                    <div className="info-pill" style={{ background: 'rgba(99, 102, 241, 0.1)', borderColor: 'rgba(99, 102, 241, 0.3)', padding: '2px 6px', fontSize: 10 }}>
+                      <Paperclip size={11} style={{ color: 'var(--primary-light)' }} />
+                      <span>Attached: <strong>{resumeData.originalFilename}</strong></span>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => handleCopyEmail(currentRecipient.id)}
+                    disabled={!currentEmail}
+                    title="Copy subject and body to clipboard"
+                    style={{ fontSize: 11, padding: '2px 8px', height: 24 }}
+                  >
+                    {copiedId === currentRecipient.id ? (
+                      <>
+                        <Check size={11} style={{ color: 'var(--accent-success)' }} />
+                        Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={11} />
+                        Copy
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleRegenerateCurrent}
+                    disabled={isRegeneratingSingle || !resumeData}
+                    title="Re-write this specific email draft"
+                    style={{ fontSize: 11, padding: '2px 8px', height: 24 }}
+                  >
+                    <RefreshCw size={11} className={isRegeneratingSingle ? 'spin-icon' : ''} />
+                    Regenerate Draft
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="empty-state" style={{ padding: 24 }}>
+              <AlertCircle className="empty-state-icon" size={32} />
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>Contact Not Selected</div>
+              <div style={{ fontSize: 12 }}>Choose a contact from the list on the left to review their draft.</div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Pre-Send Review & Explicit Authorization Modal */}
-      {isPreSendModalOpen && createPortal(
-        <div className="modal-overlay" onClick={() => setIsPreSendModalOpen(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 780 }}>
-            {/* Modal Header */}
-            <div className="modal-header">
-              <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <ShieldCheck size={20} style={{ color: 'var(--accent-success)' }} />
-                <span>Final Verification: Explicit Outreach Authorization</span>
-              </div>
-              <button className="btn-icon" onClick={() => setIsPreSendModalOpen(false)} aria-label="Close modal">
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="modal-body" style={{ maxHeight: '65vh', overflowY: 'auto' }}>
-              <div
-                style={{
-                  padding: '12px 16px',
-                  background: 'var(--bg-tertiary)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-md)',
-                  marginBottom: 16,
-                  fontSize: 12,
-                  color: 'var(--text-secondary)'
-                }}
-              >
-                <div><strong>Dispatching SMTP:</strong> {defaultSmtp?.name} ({defaultSmtp?.fromEmail || defaultSmtp?.username})</div>
-                <div><strong>Attachment:</strong> {resumeData ? resumeData.originalFilename : 'No resume attached'}</div>
-                <div style={{ marginTop: 4, color: 'var(--accent-success)' }}>
-                  ✓ All {readyRecipients.length} recipients verified row-by-row with valid syntax and explicit approval.
-                </div>
-              </div>
-
-              {/* Recipients Review Table */}
-              <div className="data-table-wrapper" style={{ maxHeight: 260 }}>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: 36 }}>#</th>
-                      <th>HR Contact Name</th>
-                      <th>Verified Email</th>
-                      <th>Company</th>
-                      <th>Subject Line Preview</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {readyRecipients.map((rec, index) => (
-                      <tr key={rec.id}>
-                        <td style={{ color: 'var(--text-muted)', fontSize: 11 }}>{index + 1}</td>
-                        <td style={{ fontWeight: 600 }}>{rec.name || 'Hiring Lead'}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{rec.email}</td>
-                        <td>{rec.company || '—'}</td>
-                        <td style={{ fontSize: 12, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {generatedEmails[rec.id]?.subject || 'Exploring Opportunities'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Explicit Authorization Checkbox */}
-              <div
-                style={{
-                  marginTop: 16,
-                  padding: '14px 18px',
-                  background: preSendApprovalChecked ? 'rgba(52, 211, 153, 0.08)' : 'rgba(251, 191, 36, 0.08)',
-                  border: '1px solid',
-                  borderColor: preSendApprovalChecked ? 'rgba(52, 211, 153, 0.4)' : 'rgba(251, 191, 36, 0.35)',
-                  borderRadius: 'var(--radius-md)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12
-                }}
-              >
-                <input
-                  type="checkbox"
-                  id="finalPreSendApproval"
-                  checked={preSendApprovalChecked}
-                  onChange={e => setPreSendApprovalChecked(e.target.checked)}
-                  style={{ width: 18, height: 18, cursor: 'pointer', accentColor: 'var(--accent-success)' }}
-                />
-                <label
-                  htmlFor="finalPreSendApproval"
-                  style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer', userSelect: 'none' }}
-                >
-                  I have verified each recipient's email, name, and draft above, and I <strong>explicitly authorize</strong> sending these {readyRecipients.length} cold emails.
-                </label>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <button className="btn btn-secondary" onClick={() => setIsPreSendModalOpen(false)}>
-                Cancel & Review
-              </button>
-
-              <button
-                className="btn btn-primary"
-                onClick={handleConfirmAndDispatch}
-                disabled={!preSendApprovalChecked}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  background: preSendApprovalChecked ? 'var(--primary-gradient)' : 'var(--bg-tertiary)',
-                  color: preSendApprovalChecked ? '#fff' : 'var(--text-muted)'
-                }}
-              >
-                <Send size={16} />
-                Authorize & Dispatch {readyRecipients.length} Emails
-              </button>
-            </div>
+      {/* 3. Compact Bottom Dispatch Bar: Sender Summary + Quota + Auth Checkbox + Dispatch Button */}
+      <div className="email-unified-dispatch-bar">
+        {/* Left: Sender Profile Summary, Daily Quota, Anti-Spam Pacing */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11, minWidth: 0, overflow: 'hidden' }}>
+          {/* SMTP Account Summary */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+            <Mail size={13} style={{ color: isSmtpConfigured ? 'var(--accent-primary)' : 'var(--accent-warning)', flexShrink: 0 }} />
+            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+              {defaultSmtp ? `${defaultSmtp.fromName || 'Sender'} (${defaultSmtp.fromEmail || defaultSmtp.username})` : 'No SMTP Profile'}
+            </span>
+            <button
+              type="button"
+              onClick={() => onOpenSettings?.('smtp')}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--primary-light)',
+                cursor: 'pointer',
+                fontSize: 10,
+                textDecoration: 'underline',
+                padding: '0 2px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 2
+              }}
+              title="Configure SMTP accounts"
+            >
+              <SettingsIcon size={10} /> Configure
+            </button>
           </div>
-        </div>,
-        document.body
-      )}
+
+          <span style={{ color: 'var(--border-subtle)' }}>|</span>
+
+          {/* Daily Quota Counter */}
+          {dailyStats && (
+            <div style={{ whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
+              Quota: <strong style={{ color: isQuotaExceeded ? 'var(--accent-warning)' : 'var(--text-primary)' }}>{dailyStats.sentToday}</strong> / {dailyStats.dailyLimit} sent today
+            </div>
+          )}
+
+          <span style={{ color: 'var(--border-subtle)' }}>|</span>
+
+          {/* Anti-Spam Pacing & Jitter */}
+          <div style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
+            <Clock size={11} />
+            <span>{delaySeconds}s delay ± jitter</span>
+          </div>
+        </div>
+
+        {/* Right: Explicit Authorization Checkbox & Send Outreach Button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+          <label
+            htmlFor="dispatchExplicitAuth"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 11,
+              fontWeight: 600,
+              color: explicitlyAuthorized ? 'var(--text-primary)' : 'var(--text-secondary)',
+              cursor: 'pointer',
+              userSelect: 'none'
+            }}
+          >
+            <input
+              type="checkbox"
+              id="dispatchExplicitAuth"
+              checked={explicitlyAuthorized}
+              onChange={e => setExplicitlyAuthorized(e.target.checked)}
+              style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--accent-primary)' }}
+            />
+            <span>I authorize outreach to approved contacts</span>
+          </label>
+
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={handleDispatchOutreach}
+            disabled={!isSmtpConfigured || readyRecipients.length === 0 || !allApproved || !explicitlyAuthorized}
+            style={{
+              height: 32,
+              padding: '0 16px',
+              fontSize: 12,
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+            title={
+              !isSmtpConfigured
+                ? 'Configure SMTP in Settings first'
+                : readyRecipients.length === 0
+                ? 'Generate at least one email draft'
+                : !allApproved
+                ? `Approve all ${unapprovedRecipients.length} remaining contacts`
+                : !explicitlyAuthorized
+                ? 'Check explicit authorization checkbox'
+                : 'Send approved emails'
+            }
+          >
+            <Send size={13} />
+            Send Outreach ({readyAndApprovedRecipients.length} Approved)
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,5 @@
 const xlsx = require('xlsx');
 const path = require('path');
-const fs = require('fs');
 
 /**
  * Standard case-insensitive email extraction regex.
@@ -23,7 +22,7 @@ function normalizeHeader(header) {
   return header
     .trim()
     .toLowerCase()
-    .replace(/[_\-]+/g, ' ')  // replace _ and - with space
+    .replace(/[-_]+/g, ' ')  // replace _ and - with space
     .replace(/\s+/g, ' ')     // collapse repeated spaces to single space
     .trim();
 }
@@ -48,7 +47,7 @@ function extractEmail(cellVal) {
 
   let email = match[0].trim();
   // Strip surrounding punctuation like < > ( ) [ ] " ' , ; :
-  email = email.replace(/^[<(\["']+|[>)\]"',;:]+$/g, '').trim();
+  email = email.replace(/^[<(["']+|[>)\]"',;:]+$/g, '').trim();
   return email;
 }
 
@@ -128,13 +127,13 @@ function cleanPersonName(raw) {
   let str = raw.trim();
 
   // Strip prefixes like "Name:", "HR Name:", "Recruiter:", "Contact Person:"
-  str = str.replace(/^(name|hr name|recruiter name|recruiter|contact name|contact person|contact|hiring manager|full name|candidate)\s*[:\-\|]\s*/i, '');
+  str = str.replace(/^(name|hr name|recruiter name|recruiter|contact name|contact person|contact|hiring manager|full name|candidate)\s*[:-|]\s*/i, '');
   // Strip surrounding quotes or parentheses
   str = str.replace(/^["'`(]+|[)"'`]+$/g, '').trim();
   // Strip any email address inside the text
   str = str.replace(/<[^>]+>/g, '').replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/i, '').trim();
   // Strip trailing punctuation like hyphens or colons
-  str = str.replace(/[\-–|,;:]+$/, '').trim();
+  str = str.replace(/[-–|,;:]+$/, '').trim();
   return str;
 }
 
@@ -169,9 +168,9 @@ function extractNameFromEmailCell(cellText, extractedEmail) {
     text = text.replace(extractedEmail, '');
   }
   text = text.replace(/<|>|\(|\)|\[|\]|"|'/g, ' ').trim();
-  text = text.replace(/^(contact|reach out to|email|write to|hr team|hr|recruiter)\s*[:\-\|]?\s*/i, '');
+  text = text.replace(/^(contact|reach out to|email|write to|hr team|hr|recruiter)\s*[:-|]?\s*/i, '');
   text = text.replace(/\s+(at|for|via|regarding).*$/i, '');
-  text = text.replace(/[\-–|:]+$/, '').trim();
+  text = text.replace(/[-–|:]+$/, '').trim();
 
   if (looksLikePersonName(text)) {
     return cleanPersonName(text);
@@ -227,7 +226,7 @@ function findBestSheetName(workbook) {
  */
 function detectHeaderRowIndex(jsonData) {
   if (!jsonData || jsonData.length === 0) return -1;
-  const headerKeywords = /email|mail|name|recruiter|hr|contact|hiring|company|role|title|position|firm|org/i;
+  const headerKeywords = /email|mail|name|recruiter|hr|contact|hiring|company|role|title|position|firm|org|jd|job/i;
 
   let bestIndex = -1;
   let highestScore = -1;
@@ -379,6 +378,18 @@ function analyzeHeaders(rawHeaders) {
     }
   }
 
+  // Job Description Match
+  let jdIdx = -1;
+  let jdHeader = null;
+  for (let i = 0; i < normHeaders.length; i++) {
+    const h = normHeaders[i];
+    if (/^(job\s*description|jd|job\s*details|role\s*description|job\s*desc)$/i.test(h)) {
+      jdIdx = i;
+      jdHeader = rawHeaders[i];
+      break;
+    }
+  }
+
   return {
     bestNameMatch,
     firstNameIdx,
@@ -388,6 +399,8 @@ function analyzeHeaders(rawHeaders) {
     companyHeader,
     roleIdx,
     roleHeader,
+    jdIdx,
+    jdHeader,
     rawHeaders,
     normHeaders
   };
@@ -449,7 +462,8 @@ function parseRecipientSheet(filePath, originalFilename, options = {}) {
     lastNameIdx,
     bestEmailMatch,
     companyIdx,
-    roleIdx
+    roleIdx,
+    jdIdx
   } = headerAnalysis;
 
   const rows = [];
@@ -564,10 +578,11 @@ function parseRecipientSheet(filePath, originalFilename, options = {}) {
     }
 
     // -------------------------------------------------------------
-    // STEP 3: Identify Company and Role from the SAME ROW
+    // STEP 3: Identify Company, Role, and Job Description from the SAME ROW
     // -------------------------------------------------------------
     const rawCompany = companyIdx !== -1 && companyIdx < rowArr.length ? String(rowArr[companyIdx] || '').trim() : '';
     const rawRole = roleIdx !== -1 && roleIdx < rowArr.length ? String(rowArr[roleIdx] || '').trim() : '';
+    const rawJd = jdIdx !== -1 && jdIdx < rowArr.length ? String(rowArr[jdIdx] || '').trim() : '';
 
     // Check for duplicate in this sheet
     const isDuplicate = cleanEmail ? seenEmails.has(cleanEmail) : false;
@@ -602,6 +617,7 @@ function parseRecipientSheet(filePath, originalFilename, options = {}) {
       nameDetectionMethod,
       company: rawCompany,
       role: rawRole,
+      jobDescription: rawJd,
       isValidEmail,
       isDuplicate,
       isPreviouslyContacted,
@@ -628,7 +644,8 @@ function parseRecipientSheet(filePath, originalFilename, options = {}) {
       emailCol: bestEmailMatch ? bestEmailMatch.header : null,
       nameCol: bestNameMatch ? bestNameMatch.header : null,
       companyCol: headerAnalysis.companyHeader,
-      roleCol: headerAnalysis.roleHeader
+      roleCol: headerAnalysis.roleHeader,
+      jdCol: headerAnalysis.jdHeader
     },
     totalCount: rows.length,
     validCount,

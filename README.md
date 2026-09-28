@@ -81,7 +81,15 @@
 - **Encryption Modes:** Supports **SSL** (Port 465), **TLS / STARTTLS** (Port 587), and custom ports.
 - **Strict TLS Certificate Verification:** Strictly validates TLS certificates by default against system CA bundles to defend against MitM interception; supports opt-in toggle for self-signed certificates.
 - **Connection Verification:** One-click verification via `nodemailer.verify()` with descriptive error diagnostics (`EAUTH`, `ESOCKET`, `ETIMEDOUT`).
-- **Resilient Delivery & Auto-Retry:** Distinguishes between transient 4xx errors (auto-retried up to 3 times with exponential backoff) and permanent 5xx auth errors (fails fast immediately to protect account).
+- **Resilient 4-Stage Delivery Pipeline:**
+  - **Sequential & Controlled Concurrency:** Configurable dispatch concurrency (1-worker sequential by default for maximum deliverability safety, up to 5 workers), preventing rate bursts.
+  - **RFC 5321 Response Recording:** Accurately parses and records 3-digit status codes and raw server banner responses (e.g., `250 2.0.0 OK`, `452 Mailbox full`, `550 User unknown`) for every message across live SSE streams and persistent audit logs.
+  - **Adaptive Slowdown & Circuit Breaker:** Dynamically doubles inter-message pacing delay upon encountering transient 4xx or rate-limit responses; trips circuit breaker immediately to halt the queue if 3 consecutive transient failures or 2 quota limits occur, protecting sender domain reputation.
+  - **Smart RFC 5321 Retries:**
+    - `250` → Positive completion, marked delivered.
+    - `4xx` & network transients (`ETIMEDOUT`, `ECONNRESET`, `ESOCKET`) → Temporary failure, retried with exponential backoff.
+    - `5xx` (e.g. `550`, `554`) → Permanent rejection, fails fast immediately on attempt 1 without blind retries to prevent ESP blacklisting.
+    - `535 / EAUTH` → Authentication failure, halts dispatch immediately to prevent mailbox lockout.
 - **Anti-Spam Delay Jitter:** Dynamically fluctuates sending delays by ±20% to avoid rigid robotic delivery intervals flagged by mail filters.
 - **In-App Guided Setup:** Step-by-step instructions and direct links for generating App Passwords:
   - Google Gmail / Google Workspace (2-Step Verification App Passwords)
@@ -91,9 +99,9 @@
 
 ### 5. Safe Sending & Real-Time Delivery Tracking
 - **Server-Sent Events (SSE):** Real-time HTTP streaming progress (*"Sending 3 of 15..."*) without polling.
-- **Anti-Spam Throttling:** Configurable delay (1s–10s, default 3s) with dynamic jitter between consecutive emails to protect sender domain reputation and prevent spam blacklisting.
-- **Live Progress Modal:** Displays real-time sending states, countdown timers, and server response codes.
-- **Persistent Audit Logging:** Every dispatch is recorded in `server/data/logs.json` with timestamps, message IDs, SMTP account used, and failure reasons. Search, export, or clear logs at any time.
+- **Anti-Spam Throttling & Adaptive Pacing:** Configurable delay (1s–10s, default 3s) with dynamic jitter and automatic transient slowdown.
+- **Live Progress Modal:** Displays real-time sending states, countdown timers, slowdown warning banners, and colored RFC 5321 status badges (green 250, amber 4xx, red 5xx).
+- **Persistent Audit Logging:** Every dispatch is recorded in `server/data/logs.json` with timestamps, message IDs, SMTP account used, raw SMTP responses, and status codes. Search, export, or clear logs at any time.
 
 ### 6. Security & Encryption at Rest
 - **AES-256-GCM Authenticated Encryption:** All API keys, tokens, and SMTP passwords are encrypted at rest using a 256-bit master key (`server/data/.secret_key`) or `ENCRYPTION_MASTER_KEY` environment variable.
@@ -101,6 +109,13 @@
 - **Safe Credential Masking:** Keys and passwords under 16 characters are masked (`••••••••••••`) without exposing sensitive substrings.
 - **Zero Client Leakage:** API endpoints only return masked strings (`sk-...1234`, `••••••••••••`). Unencrypted credentials exist in memory only during active dispatches.
 - **One-Click Danger Zone Purge:** Securely wipes credentials and logs, permanently deletes uploaded candidate resumes in `server/uploads/`, and clears in-memory Copilot OAuth tokens with a single click.
+
+### 7. Zero File Retention Policy (Ephemeral Processing)
+- **Only Keys, Settings, and Logs Saved:** Only encrypted API keys, SMTP credentials, application settings/preferences, and dispatch history logs are saved.
+- **Resumes & Excel Never Permanently Retained:** Candidate resumes and uploaded Excel/CSV spreadsheets are strictly ephemeral and never stored permanently in cloud storage or persistent databases.
+- **Immediate Spreadsheet Unlink:** Spreadsheets are ingested directly into memory and immediately unlinked from disk upon parsing or error.
+- **Session-Scoped Resumes:** Resumes uploaded to `server/uploads/` are pruned upon uploading newer versions and deleted after campaign completion or session reset.
+- **Zero Cloud Storage:** Firebase Storage rules disable all read and write operations (`allow read, write: if false;`), ensuring documents are never stored in cloud buckets.
 
 ---
 
@@ -151,11 +166,11 @@
 [ Step 1: Upload Resume ]
        │  (PDF / DOCX -> Extracts text & candidate profile)
        ▼
-[ Step 2: Ingest Recipients ]
-       │  (Excel / CSV / Manual -> Scans headers, validates emails, approvals)
+[ Step 2: Target Role & Job Description ]
+       │  (Target specific JD or choose direct executive value pitch)
        ▼
-[ Step 3: Job Description & Tone ]
-       │  (Paste target JD -> Choose tone profile: Punchy, Technical, etc.)
+[ Step 3: Ingest Recipients ]
+       │  (Excel / CSV / Manual -> Scans headers, validates emails, approvals)
        ▼
 [ Step 4: AI Generation & Review ]
        │  (Synthesizes tailored emails -> Inline review, edit & approve)
@@ -165,15 +180,15 @@
 ```
 
 1. **Step 1: Upload Resume**  
-   Drag and drop your resume (`.pdf` or `.docx`). JDMail extracts the text and heuristically identifies your name, email, phone number, and word count. Or click "Load Sample Resume" to try it instantly.
-2. **Step 2: Manage Recipients**  
-   Upload an Excel (`.xlsx`, `.xls`) or `.csv` spreadsheet of HR contacts, or enter them manually. The modal previews detected columns, marks valid/invalid emails, and lets you select targets with Shift-Click.
-3. **Step 3: Target Job Description (Optional)**  
-   Paste the job description and select your preferred communication tone. If omitted, JDMail highlights your core career pillars for open roles.
-4. **Step 4: AI Email Generation Studio**  
-   Select your preferred AI provider and click "Generate Tailored Cold Emails". Cycle through recipient drafts, tweak text inline, toggle approvals, and ensure your resume is attached.
+   Drag and drop your resume (`.pdf` or `.docx`). JDMail extracts your profile, contact details, and engineering accomplishments automatically. Or click "Try with Sample Resume" for instant testing.
+2. **Step 2: Target Role & Job Description**  
+   Paste the target job description or choose a direct executive value pitch with one-click presets (Stripe, Founding AI, Tech Lead).
+3. **Step 3: Manage Recipients**  
+   Upload an Excel (`.xlsx`, `.xls`) or `.csv` spreadsheet of HR contacts, or enter leads manually. Preview detected columns, verify format validity, and manage approvals.
+4. **Step 4: AI Generation & Review**  
+   Select a tone (Punchy, Conversational, Founder, 3-Bullet, Custom) and synthesize personalized drafts. Cycle through recipients, edit subject/body inline, and monitor deliverability.
 5. **Step 5: Safe Dispatch & Live Monitoring**  
-   Click "Send All Approved Emails". The progress modal connects via Server-Sent Events, dispatching emails through your verified SMTP profile with anti-spam pacing (default 3s delay) to preserve domain reputation.
+   Verify sender profile, anti-spam delay (default 3s), and authorize dispatch. The progress modal tracks live SSE streaming delivery.
 
 ---
 
@@ -383,44 +398,74 @@ JDMail/
 
 ## Testing & Quality Assurance
 
-JDMail includes an automated unit and integration test suite verifying spreadsheet parsing, email normalization, RFC validation, AES-256-GCM encryption at rest, SMTP resilience and retries, AI fact-checking guardrails, 4-worker batch concurrency, cross-session deduplication, and danger-zone file eradication.
+JDMail maintains a comprehensive automated testing suite across both backend subsystems and frontend components:
 
-Run the full subsystem test suite from the `server` directory:
+### 1. Server Subsystem Suites (Node.js)
+Run the 16-suite backend test runner:
 
 ```bash
 cd server
 npm test
 ```
 
-Expected output:
+Current output:
 ```
 ====================================================
    RUNNING JDMAIL COMPREHENSIVE SUBSYSTEM SUITE    
 ====================================================
 
-• Running Sheet Parser & Extraction Engine (test_sheet_parser_full.js)... PASSED
-• Running AES-256-GCM Cryptographic Storage & Masking (test_crypto.js)... PASSED
-• Running Storage Service & Config Invariants (test_storage.js)... PASSED
-• Running SMTP Resilience, Strict TLS & Retries (test_smtp_resilience.js)... PASSED
-• Running Copilot AI Dispatch & Fallback (test_copilot_dispatch.js)... PASSED
-• Running AI Fact-Checking Guardrail & Prompts (test_ai_guardrail.js)... PASSED
-• Running Batch Concurrency & Order Preservation (test_batch_concurrency.js)... PASSED
-• Running Cross-Session Audit Deduplication (test_cross_session_dedup.js)... PASSED
-• Running Danger-Zone Full Purge Verification (test_danger_zone.js)... PASSED
-• Running Resume Text & Heuristic Parser (test_resume_parser.js)... PASSED
+• Running Sheet Parser & Extraction Engine (test_sheet_parser_full.js)... PASSED (144ms)
+• Running AES-256-GCM Cryptographic Storage & Masking (test_crypto.js)... PASSED (34ms)
+• Running Storage Service & Config Invariants (test_storage.js)... PASSED (36ms)
+• Running SMTP Resilience, Strict TLS & Retries (test_smtp_resilience.js)... PASSED (70ms)
+• Running Copilot AI Dispatch & Fallback (test_copilot_dispatch.js)... PASSED (30ms)
+• Running AI Fact-Checking Guardrail & Prompts (test_ai_guardrail.js)... PASSED (33ms)
+• Running Batch Concurrency & Order Preservation (test_batch_concurrency.js)... PASSED (413ms)
+• Running Cross-Session Audit Deduplication (test_cross_session_dedup.js)... PASSED (119ms)
+• Running Danger-Zone Full Purge Verification (test_danger_zone.js)... PASSED (32ms)
+• Running Resume Text & Heuristic Parser (test_resume_parser.js)... PASSED (65ms)
+• Running Design System & Theme Token Invariants (test_design_tokens.js)... PASSED (30ms)
+• Running Firebase Firestore Settings & Auth Migration (test_firebase_migration.js)... PASSED (42ms)
+• Running Security Guardrails & Hardening (test_security_guardrails.js)... PASSED (267ms)
+• Running Ephemeral Uploads & Zero Retention Policy (test_ephemeral_uploads.js)... PASSED (102ms)
+• Running AI Provider 429 Backoff & Retry Logic (test_ai_retry.js)... PASSED (97ms)
+• Running SMTP Pacing, Response Recording & Retry Pipeline (test_smtp_pipeline.js)... PASSED (5014ms)
 
 ====================================================
-SUMMARY: 10 PASSED, 0 FAILED across 10 test suites
+SUMMARY: 16 PASSED, 0 FAILED across 16 test suites
 ====================================================
 
 ALL SUBSYSTEM TEST SUITES PASSED CLEANLY!
 ```
 
-To run frontend linting:
+### 2. Frontend Component & Hook Suites (Vitest + React Testing Library)
+Run the client automated test suite:
+
+```bash
+cd client
+npm test
+```
+
+Current output:
+```
+ ✓ src/__tests__/wizardSteps.test.js (6 tests)
+ ✓ src/__tests__/hooks.test.js (9 tests)
+ ✓ src/__tests__/StepIndicator.test.jsx (4 tests)
+ ✓ src/__tests__/RecipientManager.test.jsx (7 tests)
+ ✓ src/__tests__/SettingsModal.test.jsx (4 tests)
+ ✓ src/__tests__/EmailPreview.test.jsx (5 tests)
+
+ Test Files  6 passed (6)
+      Tests  35 passed (35)
+```
+
+### 3. Code Quality & Linter
+Run the Oxlint static analysis engine:
 ```bash
 cd client
 npm run lint
 ```
+Output: `Found 0 warnings and 0 errors.`
 
 ---
 

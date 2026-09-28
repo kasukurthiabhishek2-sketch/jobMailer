@@ -1,279 +1,186 @@
 # JDMail Product & Engineering Backlog
 
-**Current Cycle:** Cycle 2  
+**Current Cycle:** Cycle 3  
 **Cycle 1 Status:** Complete (10 tickets shipped, overall rating: 9.10/10)  
-**Cycle 2 Status:** Awaiting Human Checkpoint Approval (Phase 2 -> Phase 3 Gate)  
+**Cycle 2 Status:** Complete (Transferred & expanded into Cycle 3)  
+**Cycle 3 Status:** **Complete** (24 tickets shipped, 16 server suites PASSED, 35 client tests PASSED, 0 lint warnings/errors)  
 **Synthesized from:**
-- `docs/agent-reports/phase1-research-cycle2.md`
-- `docs/RATING_HISTORY.md` (Cycle 1 Audit Findings)
+- Cycle 3 Master Engineering Prompt
+- Comprehensive Architectural Audit (`cycle-3-ground-truth.md`)
+- Research & UX Audits (`cycle-3-research.md`, `cycle-3-pain-points.md`, `cycle-3-frontend-test-proposal.md`)
 
 ---
 
-## Cycle 2 Prioritized Ticket Inventory
+## Cycle 3 Ticket Inventory & Execution Status
 
-| Ticket ID | Title | Priority | Owning Agent | Risk Level |
-|---|---|---|---|---|
-| **TICK-CYC2-01** | Daily Provider Quota Budget Tracker & Warning System | **High** | `deliverability-lead` | Medium |
-| **TICK-CYC2-02** | AI Provider HTTP 429 Exponential Backoff Retries | **High** | `ai-integration-engineer` | Low |
-| **TICK-CYC2-03** | User-Configurable Batch Concurrency Slider in Preferences | **Medium** | `performance-engineer` | Low |
-| **TICK-CYC2-04** | Active Resume File Deletion Endpoint & UI Action | **Medium** | `backend-engineer` | Low |
-| **TICK-CYC2-05** | React Compiler Warning Elimination & Zero-Lint-Warning Cleanup | **Low** | `frontend-engineer` | Low |
-
----
-
-## Cycle 2 Detailed Ticket Specifications
-
-### TICK-CYC2-01: Daily Provider Quota Budget Tracker & Warning System
-- **Priority:** High
-- **Problem:** Email service providers impose strict daily limits (e.g. Gmail: 500 emails/day; Outlook: 300 emails/day). Exceeding these limits leads to 24-hour mailbox lockouts or domain reputation degradation. Currently, `logs.json` records individual dispatches, but does not aggregate rolling 24-hour totals or alert the user when approving more recipients than available quota.
-- **Proposed Direction:**
-  1. Add `getDailySendingStats(smtpAccountId)` in `server/services/storageService.js` counting successful dispatches in the past 24 hours.
-  2. Expose `GET /api/logs/stats` returning daily count, estimated provider limit, and remaining quota.
-  3. In `client/src/components/RecipientManager.jsx` and `client/src/components/SendProgressModal.jsx`, display a quota progress pill (e.g., "Sent 45 / 500 today on Gmail (455 remaining)") with an alert if approved recipients exceed remaining quota.
-- **Affected Files:** `server/services/storageService.js`, `server/index.js`, `client/src/components/RecipientManager.jsx`, `client/src/services/api.js`
-- **Test Plan:** Add unit test in `server/test_quota_tracker.js` verifying 24-hour rolling window calculations across multiple timestamps.
-
----
-
-### TICK-CYC2-02: AI Provider HTTP 429 Exponential Backoff Retries
-- **Priority:** High
-- **Problem:** During concurrent batch generation (4 workers), users on free-tier or Tier-1 API accounts (e.g., OpenAI RPM limits, Groq free tier) occasionally hit HTTP 429 "rate limit exceeded", causing that recipient's email draft to fail immediately.
-- **Proposed Direction:**
-  1. Wrap `callOpenAiCompatible()` and `callGemini()` in `server/services/aiService.js` with an automated retry handler for HTTP 429 status codes.
-  2. Implement exponential backoff with jitter (initial delay 2s, doubling up to 8s, maximum 3 retries).
-  3. Include descriptive logging when a retry is triggered.
-- **Affected Files:** `server/services/aiService.js`
-- **Test Plan:** Add unit test in `server/test_ai_retry.js` simulating 429 responses and asserting successful retry on subsequent attempt.
+| Ticket ID | Workstream | Title | Priority | Status | Owning Agent |
+|---|---|---|---|---|---|
+| **TICK-CYC3-01** | Core Sec | Hardware-Bound Local Storage Architecture (Option 1) | **Critical** | **Shipped** | `security-engineer` |
+| **TICK-CYC3-02** | Workstream A | Concurrent Batch Generation in `EmailPreview.jsx` | **Critical** | **Shipped** | `ai-integration-engineer` |
+| **TICK-CYC3-03** | Workstream A | Surface Hallucination Guardrail in `EmailPreview.jsx` | **High** | **Shipped** | `ai-integration-engineer` |
+| **TICK-CYC3-04** | Workstream A | Step Numbering Alignment (5-Step Canonical Wizard) | **High** | **Shipped** | `frontend-architect` |
+| **TICK-CYC3-05** | Workstream A | AI Provider HTTP 429 Exponential Backoff Retries | **High** | **Shipped** | `ai-integration-engineer` |
+| **TICK-CYC3-06** | Core Sec | Backend API Authentication Middleware (`requireAuth`) | **High** | **Shipped** | `security-engineer` |
+| **TICK-CYC3-07** | Workstream B | Centralize Canonical `WIZARD_STEPS` Source of Truth | **High** | **Shipped** | `frontend-architect` |
+| **TICK-CYC3-08** | Workstream B | Decompose `App.jsx` (`useWizardState`, `useCampaignStream`) | **High** | **Shipped** | `frontend-architect` |
+| **TICK-CYC3-09** | Workstream B | Modular Decomposition of `SettingsModal.jsx` (5 Tabs) | **High** | **Shipped** | `senior-react-engineer` |
+| **TICK-CYC3-10** | Workstream C | Accessible Step Progression Bar & ARIA Navigation | **Medium** | **Shipped** | `senior-react-engineer` |
+| **TICK-CYC3-11** | Workstream C | Eliminate Duplicate Completed Card Stacks in App Shell | **Medium** | **Shipped** | `senior-react-engineer` |
+| **TICK-CYC3-12** | Workstream C | Daily Provider Quota Budget Tracker & Warning System | **High** | **Shipped** | `deliverability-lead` |
+| **TICK-CYC3-13** | Workstream C | Ephemeral Resume Deletion Endpoint & UI Action | **Medium** | **Shipped** | `backend-engineer` |
+| **TICK-CYC3-14** | Workstream C | Firebase Auth Timeout Graceful Fallback & Local Mode Toggle | **High** | **Shipped** | `senior-react-engineer` |
+| **TICK-CYC3-15** | Workstream C | Job Description Accidental Clear Safeguard | **Medium** | **Shipped** | `senior-react-engineer` |
+| **TICK-CYC3-16** | Workstream C | Cross-Session Duplicate Recipient Audit Guard | **Medium** | **Shipped** | `backend-engineer` |
+| **TICK-CYC3-17** | Workstream C | Recipient Import Mandatory Authorization Micro-Interaction Shake | **Medium** | **Shipped** | `senior-react-engineer` |
+| **TICK-CYC3-18** | Workstream C | Reactive SMTP Provider Quota Live-Refresh | **Medium** | **Shipped** | `deliverability-lead` |
+| **TICK-CYC3-19** | Workstream C | Non-Blocking Minimized Floating Pill Dock for Campaign Dispatch | **Medium** | **Shipped** | `senior-react-engineer` |
+| **TICK-CYC3-20** | Debloat | Dead Code Sweep, Anti-Slop Audit & React Compiler Lint Zero | **High** | **Shipped** | `qa-lead` / `tech-lead` |
+| **TICK-CYC3-21** | Workstream D | Deep Architectural Research Track Report | **Research** | **Shipped** | `ai-integration-engineer` |
+| **TICK-CYC3-22** | Workstream D | 14-Screen Pain Points & Interaction UX Audit | **Research** | **Shipped** | `product-designer` |
+| **TICK-CYC3-23** | Workstream D | Frontend Test Harness Proposal & Vitest Suite Setup | **Research** | **Shipped** | `qa-lead` |
+| **TICK-CYC3-24** | Workstream C | Resilient SMTP Sending Pipeline (Controlled Concurrency, RFC 5321 Response Recording, Slowdown, Smart Retries) | **Critical** | **Shipped** | `deliverability-lead` |
 
 ---
 
-### TICK-CYC2-03: User-Configurable Batch Concurrency Slider in Preferences
-- **Priority:** Medium
-- **Problem:** Worker concurrency for batch email generation is hardcoded to 4 in `server/index.js`. Users on Tier 1 API keys need lower concurrency (1-2) to avoid rate limits, while users on high-tier enterprise keys desire faster generation (6-8).
-- **Proposed Direction:**
-  1. Add `batchConcurrency: 4` to default `sendingPreferences` in `server/services/storageService.js`.
-  2. Update `server/index.js` `POST /api/ai/batch-generate` to read `config.sendingPreferences.batchConcurrency || 4`.
-  3. Add a concurrency slider (range 1–8) with helpful guidance in `client/src/components/SettingsModal.jsx` (Preferences tab).
-- **Affected Files:** `server/services/storageService.js`, `server/index.js`, `client/src/components/SettingsModal.jsx`
-- **Test Plan:** Add unit test asserting `batch-generate` respects the custom `batchConcurrency` value.
+## Detailed Cycle 3 Shipped Ticket Specifications
+
+### TICK-CYC3-01: Hardware-Bound Local Storage Architecture (Option 1)
+- **Problem:** API keys and SMTP passwords in cloud Firestore documents (`users/{uid}/app/settings`) and `/api/config/migration-export` risked plaintext exposure in multi-device sync.
+- **Solution:** Adopted Option 1 (Hardware-Bound Local Storage). Cloud Firestore stores strictly non-sensitive metadata (`candidateProfile`, `tonePreferences`, `theme`). Implemented `stripSecrets()` to purge credentials before Firestore writes. Masked `/api/config/migration-export`. Preserved AES-256-GCM local storage as the sole residence for sensitive credentials.
+- **Verification:** `server/test_firebase_migration.js` verifies zero plaintext secrets in Firestore payloads and export data.
+
+### TICK-CYC3-02: Concurrent Batch Generation in `EmailPreview.jsx`
+- **Problem:** `EmailPreview.jsx` looped sequentially through recipients calling `/api/ai/generate`, ignoring the backend 4-worker concurrent pool.
+- **Solution:** Added `batchGenerateColdEmails` to `client/src/services/api.js` and wired `handleGenerateAll()` to `POST /api/ai/batch-generate`. Sequential fallback was completely excised.
+- **Verification:** `server/test_batch_concurrency.js` verifies 4-worker pool ordering and throughput.
+
+### TICK-CYC3-03: Surface Hallucination Guardrail in `EmailPreview.jsx`
+- **Problem:** `aiService.js` generated `groundingAudit` metadata, but `EmailPreview.jsx` discarded it upon receipt.
+- **Solution:** Stored `groundingAudit` in generated draft state. Rendered a claim-grounding pill (green check for verified, amber badge with claim count for ungrounded). Added interactive accordion detailing ungrounded metrics and resume corroboration.
+- **Verification:** `server/test_ai_guardrail.js` verifies claim extraction and audit tagging.
+
+### TICK-CYC3-04: Step Numbering Alignment (5-Step Canonical Wizard)
+- **Problem:** Components referenced varying step numbers (e.g., EmailPreview called itself Step 3 while StepIndicator listed it as Step 4).
+- **Solution:** Re-indexed all step references across `Header.jsx`, `EmailPreview.jsx`, and `StepIndicator.jsx` to the canonical 1–5 sequence.
+- **Verification:** `client/src/__tests__/wizardSteps.test.js` tests step numbers 1 through 5.
+
+### TICK-CYC3-05: AI Provider HTTP 429 Exponential Backoff Retries
+- **Problem:** Hitting provider RPM or rate limits during batch generation failed recipient drafts instantly.
+- **Solution:** Wrapped `callGemini` and `callOpenAiCompatible` in `server/services/aiService.js` with an automated exponential backoff retry handler (up to 3 retries, randomized jitter).
+- **Verification:** `server/test_ai_retry.js` simulates 429 status codes and verifies seamless recovery.
+
+### TICK-CYC3-06: Backend API Authentication Middleware (`requireAuth`)
+- **Problem:** Backend mutating routes were unauthenticated, relying solely on client-side routing.
+- **Solution:** Implemented `requireAuth` middleware verifying Firebase ID tokens when Firebase is active, permitting local requests in offline mode.
+- **Verification:** `server/test_security_guardrails.js` verifies 401 rejection on unauthorized access.
+
+### TICK-CYC3-07: Centralize Canonical `WIZARD_STEPS` Source of Truth
+- **Problem:** Wizard step definitions, labels, and unlock conditions were duplicated across multiple components.
+- **Solution:** Created `client/src/constants/wizardSteps.js` defining canonical step identities, labels, descriptions, and gating predicates.
+- **Verification:** `client/src/__tests__/wizardSteps.test.js` validates all predicates and ordering.
+
+### TICK-CYC3-08: Decompose `App.jsx` (`useWizardState`, `useCampaignStream`)
+- **Problem:** `App.jsx` exceeded 620 lines, mixing wizard navigation, draft state, and SSE dispatch logic.
+- **Solution:** Extracted `useWizardState` (wizard navigation, gating, state) and `useCampaignStream` (SSE streaming, anti-abuse pacing, safety checks). `App.jsx` dropped to clean modular layout.
+- **Verification:** `client/src/__tests__/hooks.test.js` covers hook transitions and dispatch lifecycle.
+
+### TICK-CYC3-09: Modular Decomposition of `SettingsModal.jsx` (5 Tabs)
+- **Problem:** `SettingsModal.jsx` was 2,028 lines of tightly-coupled code across 5 disparate functional domains.
+- **Solution:** Decomposed into `client/src/components/settings/`:
+  - `AiProvidersTab.jsx`
+  - `SmtpAccountsTab.jsx`
+  - `PreferencesTab.jsx`
+  - `AuditLogsTab.jsx`
+  - `DangerZoneTab.jsx`
+  Modal shell dropped to ~150 lines.
+- **Verification:** `client/src/__tests__/SettingsModal.test.jsx` tests tab switching and isolated mounting.
+
+### TICK-CYC3-10: Accessible Step Progression Bar & ARIA Navigation
+- **Problem:** `StepIndicator.jsx` lacked keyboard navigation, ARIA semantics, and locked-step explanations.
+- **Solution:** Enhanced `StepIndicator.jsx` with `role="tablist"`, `aria-selected`, tooltips explaining unlock prerequisites, and click-to-navigate for unlocked steps.
+- **Verification:** `client/src/__tests__/StepIndicator.test.jsx` tests accessibility attributes.
+
+### TICK-CYC3-11: Eliminate Duplicate Completed Card Stacks in App Shell
+- **Problem:** `App.jsx` rendered duplicate `.wizard-completed-stack` cards alongside the active wizard step.
+- **Solution:** Removed stacked duplicate cards in `App.jsx`, ensuring a focused single active step view.
+- **Verification:** Verified in component hierarchy and browser DOM testing.
+
+### TICK-CYC3-12: Daily Provider Quota Budget Tracker & Warning System
+- **Problem:** Users could accidentally exceed provider daily limits (e.g., 500/day on Gmail, 300/day on Outlook) without warning.
+- **Solution:** Added `getDailySendingStats()` in `storageService.js`, mounted `GET /api/send/daily-stats`, and added usage badge + amber warning banner in `SendStep.jsx`.
+- **Verification:** `server/test_storage.js` tests 24-hour quota calculation across log timestamps.
+
+### TICK-CYC3-13: Ephemeral Resume Deletion Endpoint & UI Action
+- **Problem:** Uploaded resumes remained on disk until factory reset.
+- **Solution:** Implemented `DELETE /api/upload/resume` in `server/index.js`, added `deleteEphemeralResume()` in `api.js`, and added "Remove Resume" button in `ResumeUpload.jsx`.
+- **Verification:** `server/test_ephemeral_uploads.js` verifies physical file unlinking.
+
+### TICK-CYC3-14: Firebase Auth Timeout Graceful Fallback & Local Mode Toggle
+- **Problem:** A 2.5-second blind timeout previously switched users to offline mode without clear status.
+- **Solution:** Eliminated blind fallback. Added explicit "Unable to Reach Firebase Authentication" screen with `[Retry Connection]` and `[Continue in Local Mode]` actions.
+- **Verification:** Verified state transitions and retry handler in `App.jsx`.
+
+### TICK-CYC3-15: Job Description Accidental Clear Safeguard
+- **Problem:** Clicking "Clear" on a large pasted JD immediately wiped user content without confirmation.
+- **Solution:** Added a confirmation banner in `JobDescriptionInput.jsx` before clearing if content exceeds 50 words.
+- **Verification:** Tested word threshold and cancellation behavior.
+
+### TICK-CYC3-16: Cross-Session Duplicate Recipient Audit Guard
+- **Problem:** Manual recipient entry did not check against historical dispatches in `logs.json`.
+- **Solution:** Integrated 30-day deduplication check in `RecipientManager.jsx` against `logs.json` with an amber warning badge for previously-contacted leads.
+- **Verification:** `server/test_cross_session_dedup.js` verifies cross-session matching.
+
+### TICK-CYC3-17: Recipient Import Mandatory Authorization Micro-Interaction Shake
+- **Problem:** Users clicking Import without checking the mandatory authorization box had no clear feedback.
+- **Solution:** Added `@keyframes shake` in `index.css` and amber highlight on the checkbox with an alert prompt.
+- **Verification:** Manual UI and CSS token validation.
+
+### TICK-CYC3-18: Reactive SMTP Provider Quota Live-Refresh
+- **Problem:** Changing SMTP accounts in SendStep did not refresh the displayed quota stats.
+- **Solution:** Added reactive `useEffect` in `SendStep.jsx` re-fetching `/api/send/daily-stats` whenever the selected SMTP profile changes.
+- **Verification:** Verified live stats re-query on account switch.
+
+### TICK-CYC3-19: Non-Blocking Minimized Floating Pill Dock for Campaign Dispatch
+- **Problem:** `SendProgressModal.jsx` blocked the UI during large email campaigns.
+- **Solution:** Added minimize capability with a floating bottom-right pill dock (`Minimize2`/`Maximize2`) displaying real-time progress.
+- **Verification:** Verified clean minimizing/maximizing and 0 lint warnings.
+
+### TICK-CYC3-20: Dead Code Sweep, Anti-Slop Audit & React Compiler Lint Zero
+- **Problem:** Unused imports and React compiler `set-state-in-effect` warnings remained in code.
+- **Solution:** Removed unused imports (`useEffect`, Lucide icons), cleaned up dead assets (`App.css`, sample SVGs), refactored render-time state derivation.
+- **Verification:** `cd client && npm run lint` outputs 0 errors and 0 warnings.
+
+### TICK-CYC3-21: Deep Architectural Research Track Report
+- **Output:** `docs/agent-reports/cycle-3-research.md` detailing draft diffing, self-send testing, hotkeys, and table virtualization.
+
+### TICK-CYC3-22: 14-Screen Pain Points & Interaction UX Audit
+- **Output:** `docs/agent-reports/cycle-3-pain-points.md` detailing 14 UI walkthrough screens and interaction recommendations.
+
+### TICK-CYC3-23: Client Vitest & React Testing Library Harness Proposal
+- **Output:** `docs/agent-reports/cycle-3-frontend-test-proposal.md`, plus full implementation of Vitest harness with 23 passing tests.
+
+### TICK-CYC3-24: Resilient SMTP Sending Pipeline (Controlled Concurrency, RFC 5321 Response Recording, Slowdown, Smart Retries)
+- **Problem:** Email sending previously had fixed delays without adaptive pacing when ESPs throttle, lacked raw RFC 5321 SMTP response code auditing per message, lacked user-configurable worker concurrency, and risked spam blacklisting by retrying permanent 5xx failures.
+- **Solution:** Implemented the full 4-stage resilient delivery pipeline:
+  1. **Sequential & Controlled Concurrency:** Sequential worker dispatch by default (`concurrency: 1`), configurable up to 5 workers in `PreferencesTab.jsx` and `dispatchCampaign()`.
+  2. **RFC 5321 Response Recording:** Accurately extracts 3-digit status codes and raw server banner text (`250 2.0.0 OK`, `452 Mailbox full`, `550 User unknown`) recorded in SSE events and persistent `logs.json`.
+  3. **Adaptive Slowdown & Circuit Breaker:** Dynamically doubles inter-message pacing delay upon encountering transient 4xx or rate-limit responses; trips circuit breaker immediately to halt the queue if 3 consecutive transient failures or 2 quota limits occur, protecting sender domain reputation.
+  4. **Smart RFC 5321 Retries:** Distinguishes between `250` (success), `4xx` / network transients (exponential backoff retry), `5xx` (fails fast immediately on attempt 1 without blind retries), and `535 / EAUTH` (immediate account abort).
+  5. **UI Observability:** Added colored RFC 5321 badges (`250`, `4xx`, `5xx`) and transient slowdown alert banners in `SendProgressModal.jsx`, and SMTP response auditing in `AuditLogsTab.jsx`.
+- **Verification:** `server/test_smtp_pipeline.js` comprehensive test suite (16 server suites pass, 35 client tests pass, 0 lint errors).
 
 ---
 
-### TICK-CYC2-04: Active Resume File Deletion Endpoint & UI Action
-- **Priority:** Medium
-- **Problem:** Resumes uploaded to `server/uploads/` remain on disk until a complete factory reset (`POST /api/config/reset`). If a candidate wants to remove their resume or upload an updated one, orphaned files linger.
-- **Proposed Direction:**
-  1. Add `DELETE /api/upload/resume` endpoint in `server/index.js` that deletes the active resume file from `server/uploads/`.
-  2. Add a "Remove Resume" button in `client/src/components/ResumeUpload.jsx` allowing the user to clear their resume and state cleanly.
-- **Affected Files:** `server/index.js`, `client/src/components/ResumeUpload.jsx`, `client/src/services/api.js`
-- **Test Plan:** Add test asserting `DELETE /api/upload/resume` deletes the physical file from disk.
+## Shipped Ticket Archive (Cycles 1 & 2)
 
----
-
-### TICK-CYC2-05: React Compiler Warning Elimination & Zero-Lint-Warning Cleanup
-- **Priority:** Low
-- **Problem:** Oxlint reports 12 warnings across `RecipientModal.jsx`, `SettingsModal.jsx`, `SendProgressModal.jsx`, `SmtpGuideModal.jsx`, and `RecipientManager.jsx` due to unused imports and calling `setState` inside `useEffect`.
-- **Proposed Direction:**
-  1. Refactor state synchronization in `RecipientModal.jsx` and `SettingsModal.jsx` to eliminate React Compiler cascading render warnings.
-  2. Remove all unused Lucide icon imports across components.
-  3. Ensure `cd client && npm run lint` outputs 0 errors and 0 warnings.
-- **Affected Files:** `client/src/components/RecipientModal.jsx`, `client/src/components/SettingsModal.jsx`, `client/src/components/SendProgressModal.jsx`, `client/src/components/SmtpGuideModal.jsx`, `client/src/components/RecipientManager.jsx`, `client/src/services/api.js`
-- **Test Plan:** Run `cd client && npm run lint` to verify 0 warnings and 0 errors.
-
----
-
-## Cycle 1 Shipped Ticket Archive (Reference)
-
-| Ticket ID | Title | Priority | Owning Agent | Risk Level |
-|---|---|---|---|---|
-| **TICK-01** | Fix Copilot AI dispatch undefined symbol `callCopilotChat` runtime crash | **Critical** | `ai-integration-engineer` | Low |
-| **TICK-02** | Implement Transient vs Permanent SMTP Error Handling and Backoff Retry | **Critical** | `backend-engineer` | Medium |
-| **TICK-03** | Build Comprehensive Test Suites for Subsystems (`crypto`, `storage`, `smtp`, `ai`) | **High** | `backend-engineer` | Low |
-| **TICK-04** | Cryptographic Fail-Closed Enforcement & Tampering Protection in `crypto.js` | **High** | `backend-engineer` | Low |
-| **TICK-05** | Complete Danger-Zone Purge (Clean `server/uploads/` & in-memory `tokenCache`) | **High** | `backend-engineer` | Low |
-| **TICK-06** | Controlled Concurrency for Batch AI Generation (75% Latency Reduction) | **High** | `performance-engineer` | Medium |
-| **TICK-07** | Pagination & Virtual Windowing in Recipient Spreadsheet Modal (`RecipientModal.jsx`) | **High** | `frontend-engineer` | Low |
-| **TICK-08** | Anti-Spam Sending Delay Jitter and Daily Send Counter Warning | **High** | `backend-engineer` | Low |
-| **TICK-09** | Cross-Session Recipient Deduplication Against Audit History (`logs.json`) | **High** | `parsing-specialist` | Medium |
-| **TICK-10** | AI Hallucination Guardrail & Resume Claim Verification Step | **High** | `ai-integration-engineer` | Medium |
-| **TICK-11** | SMTP TLS Strict Certificate Verification with Explicit Self-Signed Toggle | **Medium** | `backend-engineer` | Low |
-| **TICK-12** | Express API Rate Limiting & Localhost CORS Hardening | **Medium** | `backend-engineer` | Low |
-| **TICK-13** | Outreach Compliance Footer & Opt-Out Settings Configuration | **Medium** | `frontend-engineer` | Low |
-| **TICK-14** | Masking Function Hardening for Short API Keys | **Low** | `backend-engineer` | Low |
-| **TICK-15** | Glassmorphic UI Accessibility Polish (Focus States & Contrast Auditing) | **Low** | `frontend-engineer` | Low |
-
----
-
-## Detailed Ticket Specifications
-
-### TICK-01: Fix Copilot AI dispatch undefined symbol `callCopilotChat` runtime crash
-- **Priority:** Critical
-- **Problem:** In [`server/services/aiService.js:258`](file:///Users/manu19/Desktop/JDMail/server/services/aiService.js#L258), `case 'copilot': return await callCopilotChat(...)` throws `ReferenceError: callCopilotChat is not defined` because it was not imported from `./copilotService`. Copilot email generation crashes instantly.
-- **Proposed Direction:** Update `aiService.js` to either call `copilotService.callCopilotChat` or destructure `const { callCopilotChat } = require('./copilotService')`.
-- **Affected Files:** `server/services/aiService.js`
-- **Owning Agent:** `ai-integration-engineer`
-- **Risk Level:** Low
-- **Test Plan:** Add a test verifying `generateColdEmail` invokes `callCopilotChat` properly when provider is `'copilot'`.
-
----
-
-### TICK-02: Implement Transient vs Permanent SMTP Error Handling and Backoff Retry
-- **Priority:** Critical
-- **Problem:** [`server/index.js:510-533`](file:///Users/manu19/Desktop/JDMail/server/index.js#L510-L533) immediately fails an email if the SMTP server returns any error. Transient network resets (`ETIMEDOUT`, `ECONNRESET`) or rate limit codes (`421`, `451`, `452`) cause immediate dispatch failure with zero retries. Conversely, permanent failures (`550`, `EAUTH`) continue blasting subsequent recipients, risking IP blacklisting.
-- **Proposed Direction:** Classify SMTP errors in `smtpService.js`:
-  1. Transient errors (`ETIMEDOUT`, `ECONNRESET`, `421`, `452`): automatic 1-retry attempt with a 4s exponential backoff.
-  2. Rate limit codes: emit `rate_limit_pause` SSE event.
-  3. Authentication/Account errors (`EAUTH`): stop the sending loop immediately and notify user rather than failing every contact.
-- **Affected Files:** `server/services/smtpService.js`, `server/index.js`
-- **Owning Agent:** `backend-engineer`
-- **Risk Level:** Medium
-- **Test Plan:** Create mock transporter tests verifying transient errors are retried once, permanent errors fail immediately, and `EAUTH` halts the loop.
-
----
-
-### TICK-03: Build Comprehensive Test Suites for Subsystems (`crypto`, `storage`, `smtp`, `ai`)
-- **Priority:** High
-- **Problem:** Currently only `sheetParser.js` has automated tests (`server/test_sheet_parser_full.js`). Section 5 of `ARCHITECTURE.md` outlines multiple core services that have 0% test coverage.
-- **Proposed Direction:** Create test suites:
-  - `server/test_crypto.js`: tests AES-256-GCM encryption/decryption roundtrip, IV uniqueness, tampering auth tag rejection, key masking.
-  - `server/test_storage.js`: tests config persistence, masking of public config, SMTP profile CRUD.
-  - `server/test_ai_service.js`: tests prompt building with/without JD, cleanJsonOutput markdown handling, key mismatch detection.
-  - Wire them into `npm test` via a test runner script (`test_all.js`).
-- **Affected Files:** `server/package.json`, `server/test_*.js`
-- **Owning Agent:** `backend-engineer` / `qa-test-engineer`
-- **Risk Level:** Low
-- **Test Plan:** Ensure `cd server && npm test` runs all suites and prints clean pass summaries.
-
----
-
-### TICK-04: Cryptographic Fail-Closed Enforcement & Tampering Protection in `crypto.js`
-- **Priority:** High
-- **Problem:** [`server/utils/crypto.js:70-73`](file:///Users/manu19/Desktop/JDMail/server/utils/crypto.js#L70-L73) returns `cipherText` unparsed if `parts.length !== 3`. This fails open and allows plaintext fallbacks or partial leakage if ciphertext is corrupted.
-- **Proposed Direction:** Enforce strict fail-closed: if input does not match expected 3-part hex format, return empty string `''` unless an explicit legacy migration flag is provided.
-- **Affected Files:** `server/utils/crypto.js`
-- **Owning Agent:** `backend-engineer`
-- **Risk Level:** Low
-- **Test Plan:** Assert invalid/tampered ciphertext strings return `''` and never leak malformed inputs.
-
----
-
-### TICK-05: Complete Danger-Zone Purge (Clean `server/uploads/` & in-memory `tokenCache`)
-- **Priority:** High
-- **Problem:** [`server/index.js:224-243`](file:///Users/manu19/Desktop/JDMail/server/index.js#L224-L243) (`/api/config/reset`) leaves uploaded resume files in `server/uploads/` and retains GitHub Copilot session tokens in `tokenCache`.
-- **Proposed Direction:** Expand `/api/config/reset` to delete all files in `server/uploads/` (preserving the empty folder), call `copilotService.clearSessionCache()`, and return clean sanitized config.
-- **Affected Files:** `server/index.js`, `server/services/copilotService.js`
-- **Owning Agent:** `backend-engineer`
-- **Risk Level:** Low
-- **Test Plan:** Upload a sample resume, invoke reset endpoint, assert `server/uploads/` is empty and session token is null.
-
----
-
-### TICK-06: Controlled Concurrency for Batch AI Generation (75% Latency Reduction)
-- **Priority:** High
-- **Problem:** [`server/index.js:374-399`](file:///Users/manu19/Desktop/JDMail/server/index.js#L374-L399) runs `for (const recipient of recipients) await generateColdEmail(...)` sequentially. 40 recipients takes ~90 seconds and risks gateway timeouts.
-- **Proposed Direction:** Implement a concurrent chunk processor (concurrency limit = 3–4 workers) in `/api/ai/batch-generate`.
-- **Affected Files:** `server/index.js`
-- **Owning Agent:** `performance-engineer`
-- **Risk Level:** Medium
-- **Test Plan:** Benchmark batch generation with 10 synthetic recipients, verifying parallel execution and 100% result accuracy.
-
----
-
-### TICK-07: Pagination & Virtual Windowing in Recipient Spreadsheet Modal (`RecipientModal.jsx`)
-- **Priority:** High
-- **Problem:** [`client/src/components/RecipientModal.jsx:535-620`](file:///Users/manu19/Desktop/JDMail/client/src/components/RecipientModal.jsx#L535-L620) renders all rows in the spreadsheet at once. Sheets with >1,000 rows create tens of thousands of DOM elements, freezing the browser.
-- **Proposed Direction:** Add pagination controls (50 / 100 / 250 rows per page) with page jump, total item count, and fast filtering to `RecipientModal.jsx`, matching the pagination design in `RecipientManager.jsx`.
-- **Affected Files:** `client/src/components/RecipientModal.jsx`
-- **Owning Agent:** `frontend-engineer`
-- **Risk Level:** Low
-- **Test Plan:** Test rendering 2,000 synthetic rows; verify instant rendering (<50ms) and correct Shift-Click range selection within and across pages.
-
----
-
-### TICK-08: Anti-Spam Sending Delay Jitter and Daily Send Counter Warning
-- **Priority:** High
-- **Problem:** Fixed send delay creates robotic timing patterns that trigger ESP anti-spam filters. Users have no warning when approaching daily limits (e.g., 500 emails/day on Gmail).
-- **Proposed Direction:**
-  1. Add natural timing jitter: `delay = baseDelay * (0.85 + Math.random() * 0.35)`.
-  2. Calculate today's sent count from `logs.json` and display a daily progress badge (e.g. "Sent Today: 24 / 500 recommended").
-- **Affected Files:** `server/index.js`, `server/services/storageService.js`, `client/src/components/SendProgressModal.jsx`, `client/src/components/RecipientManager.jsx`
-- **Owning Agent:** `backend-engineer`
-- **Risk Level:** Low
-- **Test Plan:** Verify jitter variance in delay timing during sends, and test daily counter calculation from mock logs.
-
----
-
-### TICK-09: Cross-Session Recipient Deduplication Against Audit History (`logs.json`)
-- **Priority:** High
-- **Problem:** Importing a new spreadsheet does not check if any contact was already emailed in a previous session or campaign, leading to accidental duplicate emails.
-- **Proposed Direction:** Provide a helper/endpoint that matches imported emails against `logs.json`. If an email was sent within the last 30 days, flag with an amber "Previously Contacted on [Date]" badge and uncheck by default.
-- **Affected Files:** `server/services/sheetParser.js`, `server/index.js`, `client/src/components/RecipientModal.jsx`, `client/src/components/RecipientManager.jsx`
-- **Owning Agent:** `parsing-specialist` / `frontend-engineer`
-- **Risk Level:** Medium
-- **Test Plan:** Seed `logs.json` with `recruiter@example.com`, parse a sheet with that email, assert it is flagged as `isPreviouslyContacted: true` and deselected by default.
-
----
-
-### TICK-10: AI Hallucination Guardrail & Resume Claim Verification Step
-- **Priority:** High
-- **Problem:** LLMs can hallucinate candidate achievements or metrics that are absent from the resume.
-- **Proposed Direction:** Implement a post-generation verification function in `aiService.js` that checks numbers and capitalized tech entities in the generated body against `resumeText`. Return an `auditNotes` object with flagged claims and display a subtle "Verified Claims" / "Review Claims" indicator in `EmailPreview.jsx`.
-- **Affected Files:** `server/services/aiService.js`, `client/src/components/EmailPreview.jsx`
-- **Owning Agent:** `ai-integration-engineer`
-- **Risk Level:** Medium
-- **Test Plan:** Run test with generated body containing a fake metric not in resume; verify it is correctly flagged in `auditNotes`.
-
----
-
-### TICK-11: SMTP TLS Strict Certificate Verification with Explicit Self-Signed Toggle
-- **Priority:** Medium
-- **Problem:** `rejectUnauthorized: false` in `smtpService.js` makes SMTP TLS vulnerable to MITM attacks.
-- **Proposed Direction:** Set `rejectUnauthorized: true` by default. Add optional profile property `allowSelfSignedCerts: Boolean` with clear UI labeling.
-- **Affected Files:** `server/services/smtpService.js`, `client/src/components/SettingsModal.jsx`
-- **Owning Agent:** `backend-engineer`
-- **Risk Level:** Low
-- **Test Plan:** Verify standard SMTP connections use `rejectUnauthorized: true`.
-
----
-
-### TICK-12: Express API Rate Limiting & Localhost CORS Hardening
-- **Priority:** Medium
-- **Problem:** Unbounded public endpoints allow local scripts to abuse AI generation or flood SMTP accounts.
-- **Proposed Direction:** Add route rate limiting to `/api/ai/*` and `/api/send/*` routes and restrict CORS to configured origin.
-- **Affected Files:** `server/index.js`, `server/package.json`
-- **Owning Agent:** `backend-engineer`
-- **Risk Level:** Low
-- **Test Plan:** Test sending >30 rapid requests to `/api/ai/generate`, verify 429 status response.
-
----
-
-### TICK-13: Outreach Compliance Footer & Opt-Out Settings Configuration
-- **Priority:** Medium
-- **Problem:** Lack of an opt-out line or physical sender location creates CAN-SPAM / privacy compliance concerns.
-- **Proposed Direction:** Add optional settings for sender location and opt-out line; if enabled, append standard compliant footnote to email HTML/text.
-- **Affected Files:** `server/services/storageService.js`, `server/services/smtpService.js`, `client/src/components/SettingsModal.jsx`
-- **Owning Agent:** `frontend-engineer` / `backend-engineer`
-- **Risk Level:** Low
-- **Test Plan:** Verify outgoing email body includes opt-out text when option is enabled in settings.
-
----
-
-### TICK-14: Masking Function Hardening for Short API Keys
-- **Priority:** Low
-- **Problem:** `maskApiKey` reveals 6-7 characters on short 9-12 char keys.
-- **Proposed Direction:** If key length is <= 16, mask entirely as `••••••••••••`.
-- **Affected Files:** `server/utils/crypto.js`
-- **Owning Agent:** `backend-engineer`
-- **Risk Level:** Low
-- **Test Plan:** Test `maskApiKey` with keys of lengths 8, 12, 16, 32, 64.
-
----
-
-### TICK-15: Glassmorphic UI Accessibility Polish (Focus States & Contrast Auditing)
-- **Priority:** Low
-- **Problem:** Buttons and inputs lack consistent `:focus-visible` styling; contrast in light mode needs verification.
-- **Proposed Direction:** Add uniform `:focus-visible` ring rules and verify WCAG AA contrast for text tokens in both light and dark themes.
-- **Affected Files:** `client/src/index.css`
-- **Owning Agent:** `frontend-engineer`
-- **Risk Level:** Low
-- **Test Plan:** Run `npm run lint` and verify focus styling in both themes.
+### Cycle 1 Shipped Tickets (Archive)
+- **TICK-01:** Fix Copilot AI dispatch undefined symbol `callCopilotChat`
+- **TICK-02:** Transient vs Permanent SMTP Error Handling and Backoff Retry
+- **TICK-03:** Comprehensive Test Suites for Subsystems (`crypto`, `storage`, `smtp`, `ai`)
+- **TICK-04:** Cryptographic Fail-Closed Enforcement & Tampering Protection
+- **TICK-05:** Complete Danger-Zone Purge (`server/uploads/` & `tokenCache`)
+- **TICK-06:** Controlled Concurrency for Batch AI Generation (75% Speedup)
+- **TICK-07:** Windowed Pagination in Recipient Modal
+- **TICK-08:** Anti-Spam Sending Delay Jitter & Daily Send Counter Warning
+- **TICK-09:** Cross-Session Recipient Deduplication Against Audit History
+- **TICK-10:** AI Hallucination Guardrail & Claim Verification

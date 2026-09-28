@@ -1,85 +1,159 @@
-/**
- * API service for communication with JDMail backend
- */
+import { getIdToken } from '../lib/firebase';
 
-export async function fetchConfig() {
-  const res = await fetch('/api/config');
-  if (!res.ok) throw new Error('Failed to load configuration');
-  return res.json();
+/**
+ * Authenticated fetch wrapper that automatically attaches Firebase ID token
+ * to the Authorization header if the user is authenticated.
+ */
+async function authFetch(url, options = {}) {
+  let token = null;
+  try {
+    token = await getIdToken();
+  } catch {
+    // Non-blocking fallback if Firebase is still initializing or unauthenticated
+  }
+
+  const headers = { ...(options.headers || {}) };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  return fetch(url, {
+    ...options,
+    headers
+  });
+}
+
+/**
+ * Safely parse JSON from fetch response with graceful fallback on non-JSON responses.
+ */
+async function parseJsonResponse(res, fallbackErrorMsg = 'Server error — check logs') {
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    try {
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || fallbackErrorMsg);
+      }
+      return data;
+    } catch (err) {
+      if (!res.ok || (err.message && !err.message.includes('JSON'))) {
+        throw err;
+      }
+    }
+  }
+  const text = await res.text();
+  console.error('[API Non-JSON Response]', res.status, text.slice(0, 300));
+  throw new Error(fallbackErrorMsg);
+}
+
+
+export async function fetchMigrationConfig() {
+  try {
+    const res = await authFetch('/api/config/migration-export');
+    if (!res.ok) return null;
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
 }
 
 export async function saveAiProviderConfig({ providerKey, apiKey, model, baseURL, enabled }) {
-  const res = await fetch('/api/config/ai', {
+  const res = await authFetch('/api/config/ai', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ providerKey, apiKey, model, baseURL, enabled })
   });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to save AI configuration');
-  }
-  return res.json();
+  return parseJsonResponse(res, 'Failed to save AI configuration');
 }
 
 export async function setActiveAiProvider(providerKey) {
-  const res = await fetch('/api/config/ai/active', {
+  const res = await authFetch('/api/config/ai/active', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ providerKey })
   });
   if (!res.ok) throw new Error('Failed to set active AI provider');
-  return res.json();
+  return parseJsonResponse(res, 'Failed to set active AI provider');
 }
 
 export async function testAiConnection({ providerKey, apiKey, model, baseURL }) {
-  const res = await fetch('/api/config/ai/test', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ providerKey, apiKey, model, baseURL })
-  });
-  return res.json();
+  try {
+    const res = await authFetch('/api/config/ai/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ providerKey, apiKey, model, baseURL })
+    });
+
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      try {
+        const data = await res.json();
+        if (!res.ok && data.success === undefined) {
+          return { success: false, error: data.error || `Server error (${res.status})` };
+        }
+        return data;
+      } catch (err) {
+        console.error('[testAiConnection] JSON parse failure:', err);
+      }
+    }
+
+    const text = await res.text();
+    console.error('[testAiConnection] Non-JSON response received:', res.status, text.slice(0, 300));
+    return {
+      success: false,
+      error: 'Server error — check logs'
+    };
+  } catch (err) {
+    console.error('[testAiConnection] Network error:', err);
+    return {
+      success: false,
+      error: err.message || 'Server error — check logs'
+    };
+  }
 }
 
 export async function saveSmtpProfile(profile) {
-  const res = await fetch('/api/config/smtp', {
+  const res = await authFetch('/api/config/smtp', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(profile)
   });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to save SMTP profile');
-  }
-  return res.json();
+  return parseJsonResponse(res, 'Failed to save SMTP profile');
 }
 
 export async function deleteSmtpProfile(id) {
-  const res = await fetch(`/api/config/smtp/${id}`, {
-    method: 'DELETE'
-  });
-  if (!res.ok) throw new Error('Failed to delete SMTP profile');
-  return res.json();
+  const res = await authFetch(`/api/config/smtp/${id}`, { method: 'DELETE' });
+  return parseJsonResponse(res, 'Failed to delete SMTP profile');
 }
 
 export async function setDefaultSmtpProfile(id) {
-  const res = await fetch(`/api/config/smtp/${id}/default`, {
-    method: 'POST'
-  });
-  if (!res.ok) throw new Error('Failed to set default SMTP profile');
-  return res.json();
+  const res = await authFetch(`/api/config/smtp/${id}/default`, { method: 'POST' });
+  return parseJsonResponse(res, 'Failed to set default SMTP profile');
 }
 
 export async function testSmtpConnection(profile) {
-  const res = await fetch('/api/config/smtp/test', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(profile)
-  });
-  return res.json();
+  try {
+    const res = await authFetch('/api/config/smtp/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(profile)
+    });
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      return res.json();
+    }
+    const text = await res.text();
+    console.error('[testSmtpConnection] Non-JSON response:', res.status, text.slice(0, 300));
+    return { success: false, error: 'Server error — check logs' };
+  } catch (err) {
+    return { success: false, error: err.message || 'Server error — check logs' };
+  }
 }
 
 export async function savePreferences(preferences) {
-  const res = await fetch('/api/config/preferences', {
+  const res = await authFetch('/api/config/preferences', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(preferences)
@@ -90,48 +164,32 @@ export async function savePreferences(preferences) {
 export async function uploadResume(file) {
   const formData = new FormData();
   formData.append('resume', file);
-
-  const res = await fetch('/api/upload/resume', {
-    method: 'POST',
-    body: formData
-  });
-
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to parse resume file');
-  }
-  return res.json();
+  const res = await authFetch('/api/upload/resume', { method: 'POST', body: formData });
+  return parseJsonResponse(res, 'Failed to parse resume file');
 }
 
 export async function uploadRecipientsSheet(file) {
   const formData = new FormData();
   formData.append('file', file);
-
-  const res = await fetch('/api/upload/recipients', {
-    method: 'POST',
-    body: formData
-  });
-
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to parse spreadsheet file');
-  }
-  return res.json();
+  const res = await authFetch('/api/upload/recipients', { method: 'POST', body: formData });
+  return parseJsonResponse(res, 'Failed to parse spreadsheet file');
 }
 
 export async function generateColdEmail({
   providerKey,
+  providerConfig,
   resumeText,
   jobDescription,
   recipient,
   customTone,
   senderName
 }) {
-  const res = await fetch('/api/ai/generate', {
+  const res = await authFetch('/api/ai/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       providerKey,
+      providerConfig,
       resumeText,
       jobDescription,
       recipient,
@@ -139,6 +197,13 @@ export async function generateColdEmail({
       senderName
     })
   });
+
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const text = await res.text();
+    console.error('[generateColdEmail] Non-JSON error:', res.status, text.slice(0, 300));
+    throw new Error('Server error — check logs');
+  }
 
   const data = await res.json();
   if (!res.ok || !data.success) {
@@ -149,17 +214,19 @@ export async function generateColdEmail({
 
 export async function batchGenerateColdEmails({
   providerKey,
+  providerConfig,
   resumeText,
   jobDescription,
   recipients,
   customTone,
   senderName
 }) {
-  const res = await fetch('/api/ai/batch-generate', {
+  const res = await authFetch('/api/ai/batch-generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       providerKey,
+      providerConfig,
       resumeText,
       jobDescription,
       recipients,
@@ -168,12 +235,20 @@ export async function batchGenerateColdEmails({
     })
   });
 
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const text = await res.text();
+    console.error('[batchGenerateColdEmails] Non-JSON error:', res.status, text.slice(0, 300));
+    throw new Error('Server error — check logs');
+  }
+
   const data = await res.json();
   if (!res.ok || !data.success) {
-    throw new Error(data.error || 'Batch AI generation failed');
+    throw new Error(data.error || 'AI batch generation failed');
   }
   return data;
 }
+
 
 /**
  * Send emails via SSE stream with live progress updates
@@ -182,20 +257,24 @@ export async function streamEmailSending({
   recipients,
   resumeFileId,
   smtpProfileId,
+  smtpProfile,
   delaySeconds,
+  concurrency = 1,
   onEvent,
   onFinished,
   onError
 }) {
   try {
-    const response = await fetch('/api/send/stream', {
+    const response = await authFetch('/api/send/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         recipients,
         resumeFileId,
         smtpProfileId,
-        delaySeconds
+        smtpProfile,
+        delaySeconds,
+        concurrency
       })
     });
 
@@ -226,7 +305,9 @@ export async function streamEmailSending({
           let eventData = {};
           try {
             eventData = JSON.parse(dataMatch[1]);
-          } catch (e) {}
+          } catch {
+            eventData = {};
+          }
 
           onEvent(eventType, eventData);
 
@@ -242,43 +323,56 @@ export async function streamEmailSending({
 }
 
 export async function fetchOutreachLogs() {
-  const res = await fetch('/api/logs');
+  const res = await authFetch('/api/logs');
   return res.json();
 }
 
 export async function clearOutreachLogs() {
-  const res = await fetch('/api/logs', { method: 'DELETE' });
+  const res = await authFetch('/api/logs', { method: 'DELETE' });
   return res.json();
 }
 
 export async function startCopilotAuth() {
-  const res = await fetch('/api/copilot/device-code', { method: 'POST' });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to request GitHub device code');
-  }
-  return res.json();
+  const res = await authFetch('/api/copilot/device-code', { method: 'POST' });
+  return parseJsonResponse(res, 'Failed to request GitHub device code');
 }
 
-export async function checkCopilotStatus(deviceCode) {
-  const res = await fetch('/api/copilot/check-status', {
+export async function getCurrentCopilotFlow() {
+  try {
+    const res = await authFetch('/api/copilot/current-flow');
+    if (!res.ok) return { active: false, flow: null };
+    return res.json();
+  } catch {
+    return { active: false, flow: null };
+  }
+}
+
+export async function checkCopilotStatus(deviceCode, autoActivate = true) {
+  const res = await authFetch('/api/copilot/check-status', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ deviceCode })
+    body: JSON.stringify({ deviceCode, autoActivate })
   });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to check authorization status');
-  }
-  return res.json();
+  return parseJsonResponse(res, 'Failed to check authorization status');
 }
 
 export async function resetAllData() {
-  const res = await fetch('/api/config/reset', { method: 'POST' });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to reset all data');
-  }
-  return res.json();
+  const res = await authFetch('/api/config/reset', { method: 'POST' });
+  return parseJsonResponse(res, 'Failed to reset all data');
+}
+
+export async function fetchDailySendingStats(smtpProfileId = null) {
+  const query = smtpProfileId ? `?smtpProfileId=${encodeURIComponent(smtpProfileId)}` : '';
+  const res = await authFetch(`/api/send/daily-stats${query}`);
+  return parseJsonResponse(res, 'Failed to fetch daily sending statistics');
+}
+
+export async function deleteEphemeralResume(fileId) {
+  const res = await authFetch('/api/upload/resume', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileId })
+  });
+  return parseJsonResponse(res, 'Failed to delete resume');
 }
 

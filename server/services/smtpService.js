@@ -34,60 +34,163 @@ function createTransporter(profile) {
 }
 
 /**
- * Classify SMTP error to distinguish transient vs permanent vs auth failures
+ * Extract 3-digit numeric SMTP response code or standard error code
+ */
+function extractSmtpCode(err) {
+  if (!err) return null;
+  if (typeof err.responseCode === 'number') return err.responseCode;
+  if (typeof err.responseCode === 'string' && /^\d{3}$/.test(err.responseCode.trim())) {
+    return parseInt(err.responseCode.trim(), 10);
+  }
+  if (typeof err.code === 'number') return err.code;
+  if (typeof err.code === 'string' && /^\d{3}$/.test(err.code.trim())) {
+    return parseInt(err.code.trim(), 10);
+  }
+  if (typeof err.response === 'string') {
+    const match = err.response.match(/\b([245]\d{2})\b/);
+    if (match) return parseInt(match[1], 10);
+  }
+  if (typeof err.message === 'string') {
+    const match = err.message.match(/\b([245]\d{2})\b/);
+    if (match) return parseInt(match[1], 10);
+  }
+  return null;
+}
+
+/**
+ * Classify SMTP error to distinguish transient (4xx / network) vs permanent (5xx) vs auth failures
+ * RFC 5321:
+ * - 250: Successful
+ * - 4xx: Temporary problem -> pause/retry (421, 450, 451, 452, 454)
+ * - 5xx: Permanent rejection -> don't blindly retry (500-504, 535, 550, 551, 552, 553, 554)
  */
 function classifySmtpError(err) {
   if (!err) {
-    return { isTransient: false, isAuthFailure: false, isRateLimit: false, code: null, userMessage: 'Unknown error' };
-  }
-
-  const code = err.code || (err.responseCode ? String(err.responseCode) : null);
-  const response = (err.response || '').toLowerCase();
-  const message = (err.message || '').toLowerCase();
-
-  // Authentication failure
-  if (code === 'EAUTH' || response.includes('535') || message.includes('authentication failed')) {
     return {
       isTransient: false,
+      isPermanent: false,
+      shouldRetry: false,
+      isAuthFailure: false,
+      isRateLimit: false,
+      code: null,
+      smtpCode: null,
+      smtpResponse: '',
+      userMessage: 'Unknown error'
+    };
+  }
+
+  const numericCode = extractSmtpCode(err);
+  const code = err.code || (numericCode ? String(numericCode) : null);
+  const rawResponse = err.response || err.message || '';
+  const responseLower = (err.response || '').toLowerCase();
+  const messageLower = (err.message || '').toLowerCase();
+
+  // 1. Authentication failure (535 or EAUTH)
+  if (
+    code === 'EAUTH' ||
+    numericCode === 535 ||
+    responseLower.includes('535') ||
+    messageLower.includes('authentication failed') ||
+    messageLower.includes('username and password not accepted')
+  ) {
+    return {
+      isTransient: false,
+      isPermanent: true,
+      shouldRetry: false,
       isAuthFailure: true,
       isRateLimit: false,
       code: 'EAUTH',
-      userMessage: 'Authentication failed. Please verify username and App Password.'
+      smtpCode: 535,
+      smtpResponse: rawResponse || '535 Authentication credentials invalid',
+      userMessage: 'Authentication failed (535). Please verify username and App Password.'
     };
   }
 
-  // Rate limit / quota exceeded
+  // 2. Rate limit / quota exceeded (452 or explicit quota messages)
   if (
+    numericCode === 452 ||
     code === '452' ||
-    response.includes('4.5.3') ||
-    response.includes('rate limit') ||
-    response.includes('too many recipients') ||
-    response.includes('quota exceeded') ||
-    message.includes('quota')
+    responseLower.includes('4.5.3') ||
+    responseLower.includes('rate limit') ||
+    responseLower.includes('too many recipients') ||
+    responseLower.includes('quota exceeded') ||
+    messageLower.includes('quota')
   ) {
     return {
       isTransient: true,
+      isPermanent: false,
+      shouldRetry: true,
       isAuthFailure: false,
       isRateLimit: true,
       code: 'RATE_LIMIT',
-      userMessage: 'Provider rate limit or daily quota reached. Temporarily paused.'
+      smtpCode: numericCode || 452,
+      smtpResponse: rawResponse || '452 4.5.3 Rate limit or daily quota reached',
+      userMessage: 'Provider rate limit or quota reached (452). Temporarily paused.'
     };
   }
 
-  // Transient network / temporary SMTP server failures
-  const transientCodes = ['ETIMEDOUT', 'ECONNRESET', 'ESOCKET', 'ECONNREFUSED', 'EHOSTUNREACH', '421', '450', '451'];
-  const isTransient =
-    transientCodes.includes(code) ||
-    response.startsWith('421') ||
-    response.startsWith('451') ||
-    message.includes('timeout') ||
-    message.includes('connection reset');
+  // 3. 4xx Transient errors (temporary problem -> pause/retry)
+  const transientNetworkCodes = ['ETIMEDOUT', 'ECONNRESET', 'ESOCKET', 'ECONNREFUSED', 'EHOSTUNREACH', 'ENOTFOUND', 'EPIPE'];
+  const is4xxCode = numericCode !== null && numericCode >= 400 && numericCode < 500;
+  const isTransientNetwork =
+    transientNetworkCodes.includes(code) ||
+    messageLower.includes('timeout') ||
+    messageLower.includes('connection reset') ||
+    messageLower.includes('socket closed');
 
+  if (is4xxCode || isTransientNetwork || responseLower.startsWith('421') || responseLower.startsWith('451')) {
+    let descriptiveMsg = 'Temporary SMTP failure (4xx).';
+    if (numericCode === 421) descriptiveMsg = 'Service temporarily unavailable (421).';
+    else if (numericCode === 450) descriptiveMsg = 'Mailbox temporarily busy or unavailable (450).';
+    else if (numericCode === 451) descriptiveMsg = 'Local server processing error (451).';
+    else if (isTransientNetwork) descriptiveMsg = `Temporary network issue (${code || 'connection interrupted'}).`;
+
+    return {
+      isTransient: true,
+      isPermanent: false,
+      shouldRetry: true,
+      isAuthFailure: false,
+      isRateLimit: false,
+      code: code || String(numericCode) || 'TRANSIENT',
+      smtpCode: numericCode || (code === 'ETIMEDOUT' ? 'ETIMEDOUT' : (code || 451)),
+      smtpResponse: rawResponse || `${numericCode || 451} Temporary problem`,
+      userMessage: descriptiveMsg
+    };
+  }
+
+  // 4. 5xx Permanent errors (permanent rejection -> don't blindly retry)
+  const is5xxCode = numericCode !== null && numericCode >= 500 && numericCode < 600;
+  if (is5xxCode || responseLower.startsWith('550') || responseLower.startsWith('554')) {
+    let descriptiveMsg = 'Permanent delivery rejection (5xx).';
+    if (numericCode === 550) descriptiveMsg = 'Recipient mailbox unavailable or does not exist (550).';
+    else if (numericCode === 551) descriptiveMsg = 'Recipient not local (551).';
+    else if (numericCode === 552) descriptiveMsg = 'Storage allocation exceeded (552).';
+    else if (numericCode === 553) descriptiveMsg = 'Mailbox name invalid (553).';
+    else if (numericCode === 554) descriptiveMsg = 'Transaction rejected by server policy or spam filter (554).';
+
+    return {
+      isTransient: false,
+      isPermanent: true,
+      shouldRetry: false,
+      isAuthFailure: false,
+      isRateLimit: false,
+      code: code || String(numericCode) || 'PERMANENT_REJECTION',
+      smtpCode: numericCode || 550,
+      smtpResponse: rawResponse || `${numericCode || 550} Permanent rejection`,
+      userMessage: descriptiveMsg
+    };
+  }
+
+  // 5. Fallback for unclassified errors — fail closed without blind retry
   return {
-    isTransient,
+    isTransient: false,
+    isPermanent: true,
+    shouldRetry: false,
     isAuthFailure: false,
     isRateLimit: false,
     code: code || 'UNKNOWN',
+    smtpCode: numericCode || 500,
+    smtpResponse: rawResponse || 'SMTP delivery failure',
     userMessage: err.message || 'SMTP delivery failure'
   };
 }
@@ -116,13 +219,14 @@ async function testSmtpConnection(profile) {
     return {
       success: false,
       error: classification.userMessage,
-      code: classification.code
+      code: classification.code,
+      smtpResponse: classification.smtpResponse
     };
   }
 }
 
 /**
- * Send a single email with optional attachment
+ * Send a single email with optional attachment and record SMTP server response
  */
 async function sendEmailMessage({
   profile,
@@ -166,33 +270,295 @@ async function sendEmailMessage({
   }
 
   const info = await transporter.sendMail(mailOptions);
+  const rawResponse = info.response || '250 2.0.0 OK';
+  let smtpResponseCode = 250;
+  const match = rawResponse.match(/\b([245]\d{2})\b/);
+  if (match) {
+    smtpResponseCode = parseInt(match[1], 10);
+  }
+
   return {
     success: true,
     messageId: info.messageId,
     accepted: info.accepted,
-    rejected: info.rejected
+    rejected: info.rejected,
+    response: info.response,
+    smtpResponse: rawResponse,
+    smtpResponseCode: smtpResponseCode
   };
 }
 
 /**
- * Send email with automatic single retry for transient failures
+ * Send email with automatic pause & retry for transient/temporary failures (4xx).
+ * Permanent failures (5xx) fail fast immediately without blind retry.
  */
-async function sendEmailMessageWithRetry(args, maxRetries = 1, backoffMs = 2000) {
+async function sendEmailMessageWithRetry(args, maxRetries = 2, backoffMs = 2000, onRetry = null) {
   let attempt = 0;
   while (true) {
+    attempt++;
     try {
-      return await sendEmailMessage(args);
+      const result = await sendEmailMessage(args);
+      return {
+        ...result,
+        attempts: attempt
+      };
     } catch (err) {
-      attempt++;
       const classification = classifySmtpError(err);
-      if (attempt <= maxRetries && classification.isTransient && !classification.isRateLimit) {
-        await new Promise(resolve => setTimeout(resolve, backoffMs));
+      err.classification = classification;
+      err.attempts = attempt;
+      err.smtpResponse = classification.smtpResponse || err.message;
+      err.smtpResponseCode = classification.smtpCode || 500;
+
+      // 4xx -> temporary problem -> pause/retry
+      // 5xx -> permanent rejection -> don't blindly retry
+      if (attempt <= maxRetries && classification.shouldRetry) {
+        const pauseDelay = backoffMs * attempt;
+        if (typeof onRetry === 'function') {
+          onRetry({
+            attempt,
+            maxRetries,
+            backoffMs: pauseDelay,
+            classification,
+            error: err
+          });
+        }
+        await new Promise(resolve => setTimeout(resolve, pauseDelay));
         continue;
       }
-      err.classification = classification;
+
       throw err;
     }
   }
+}
+
+/**
+ * Dispatch an email campaign either sequentially (concurrency: 1) or with controlled concurrency.
+ * Features:
+ * - Records SMTP response for every message (250, 4xx, 5xx)
+ * - Retries only appropriate temporary failures (4xx)
+ * - Avoids blind retries on permanent rejections (5xx)
+ * - Stops or slows down when transient errors occur (dynamic delay slowdown + circuit breaker)
+ */
+async function dispatchCampaign({
+  recipients,
+  profile,
+  attachmentPath = null,
+  attachmentName = null,
+  delaySeconds = 3,
+  concurrency = 1,
+  sendEvent = () => {},
+  sendEmailFn = sendEmailMessageWithRetry
+}) {
+  if (!Array.isArray(recipients) || recipients.length === 0) {
+    return { results: [], campaignLogs: [] };
+  }
+
+  const boundedConcurrency = Math.max(1, Math.min(Number(concurrency) || 1, 5));
+  const results = Array(recipients.length);
+  const campaignLogs = [];
+
+  const isPacingEnabled = Number(delaySeconds) > 0;
+  const campaignState = {
+    effectiveDelay: isPacingEnabled ? Math.max(1, Number(delaySeconds) || 3) : 0,
+    consecutiveTransientErrors: 0,
+    consecutiveSuccesses: 0,
+    isAborted: false,
+    abortReason: null
+  };
+
+  sendEvent('start', {
+    total: recipients.length,
+    fromEmail: profile.fromEmail || profile.username,
+    smtpProfileName: profile.name,
+    concurrency: boundedConcurrency,
+    delaySeconds: campaignState.effectiveDelay
+  });
+
+  let nextIndex = 0;
+
+  async function worker(workerId) {
+    while (nextIndex < recipients.length && !campaignState.isAborted) {
+      const i = nextIndex++;
+      const item = recipients[i];
+      const currentIndex = i + 1;
+
+      sendEvent('progress', {
+        current: currentIndex,
+        total: recipients.length,
+        recipientEmail: item.email,
+        recipientName: item.name,
+        status: 'sending',
+        workerId
+      });
+
+      try {
+        const sendResult = await sendEmailFn({
+          profile,
+          to: item.email,
+          recipientName: item.name,
+          subject: item.subject || `Application / Discussion - ${profile.fromName || 'Candidate'}`,
+          bodyText: item.body || item.text,
+          attachmentPath,
+          attachmentName
+        });
+
+        // 250 -> successful
+        campaignState.consecutiveTransientErrors = 0;
+        campaignState.consecutiveSuccesses++;
+
+        // Gradually ease delay back towards base if successful
+        if (isPacingEnabled && campaignState.effectiveDelay > delaySeconds && campaignState.consecutiveSuccesses >= 2) {
+          campaignState.effectiveDelay = Math.max(delaySeconds, campaignState.effectiveDelay - 1);
+        }
+
+        const logItem = {
+          id: 'log_' + Date.now() + '_' + i,
+          timestamp: new Date().toISOString(),
+          recipientEmail: item.email,
+          recipientName: item.name,
+          company: item.company,
+          subject: item.subject,
+          status: 'sent',
+          messageId: sendResult.messageId,
+          smtpResponse: sendResult.smtpResponse || '250 2.0.0 OK',
+          smtpResponseCode: sendResult.smtpResponseCode || 250,
+          attempts: sendResult.attempts || 1,
+          smtpAccount: profile.name
+        };
+
+        results[i] = logItem;
+        campaignLogs.push(logItem);
+
+        sendEvent('item_complete', {
+          current: currentIndex,
+          total: recipients.length,
+          recipientEmail: item.email,
+          status: 'sent',
+          smtpResponse: logItem.smtpResponse,
+          smtpResponseCode: logItem.smtpResponseCode,
+          attempts: logItem.attempts,
+          logItem
+        });
+      } catch (err) {
+        console.error(`Failed sending to ${item.email}:`, err);
+        const classification = err.classification || classifySmtpError(err);
+
+        const logItem = {
+          id: 'log_' + Date.now() + '_' + i,
+          timestamp: new Date().toISOString(),
+          recipientEmail: item.email,
+          recipientName: item.name,
+          company: item.company,
+          subject: item.subject,
+          status: 'failed',
+          error: classification.userMessage || err.message || 'SMTP delivery failure',
+          smtpResponse: classification.smtpResponse || `${classification.smtpCode || 500} Error`,
+          smtpResponseCode: classification.smtpCode || 500,
+          attempts: err.attempts || 1,
+          isTransient: classification.isTransient,
+          isPermanent: classification.isPermanent,
+          smtpAccount: profile.name
+        };
+
+        results[i] = logItem;
+        campaignLogs.push(logItem);
+
+        sendEvent('item_complete', {
+          current: currentIndex,
+          total: recipients.length,
+          recipientEmail: item.email,
+          status: 'failed',
+          error: classification.userMessage,
+          smtpResponse: logItem.smtpResponse,
+          smtpResponseCode: logItem.smtpResponseCode,
+          attempts: logItem.attempts,
+          isAuthFailure: classification.isAuthFailure,
+          isTransient: classification.isTransient,
+          logItem
+        });
+
+        // 1. Auth failure (535) -> Abort immediately to prevent account lockout
+        if (classification.isAuthFailure) {
+          campaignState.isAborted = true;
+          campaignState.abortReason = 'SMTP Authentication failed. Aborting remaining queue to protect account.';
+          sendEvent('auth_error', {
+            error: campaignState.abortReason,
+            smtpProfile: profile.name
+          });
+          break;
+        }
+
+        // 2. Transient error (4xx) -> Stop or slow down
+        if (classification.isTransient) {
+          campaignState.consecutiveTransientErrors++;
+          campaignState.consecutiveSuccesses = 0;
+
+          // Slow down: dynamically increase inter-message delay
+          const baseDelay = campaignState.effectiveDelay || Number(delaySeconds) || 3;
+          const newDelay = Math.min(30, Math.max(Math.round(baseDelay * 1.5), baseDelay + 3));
+          if (isPacingEnabled) {
+            campaignState.effectiveDelay = newDelay;
+          }
+
+          sendEvent('slowdown', {
+            currentDelay: newDelay,
+            reason: `Transient SMTP error (${classification.smtpCode || '4xx'}) encountered. Slowing down sending pace to ${newDelay}s.`
+          });
+
+          // Circuit breaker: stop if consecutive transient failures reach threshold
+          if (campaignState.consecutiveTransientErrors >= 3 || (classification.isRateLimit && campaignState.consecutiveTransientErrors >= 2)) {
+            campaignState.isAborted = true;
+            campaignState.abortReason = `Campaign stopped: ${campaignState.consecutiveTransientErrors} consecutive transient errors or rate limits (${classification.smtpCode || '4xx'}). Aborting remaining queue to preserve sender reputation.`;
+            sendEvent('circuit_breaker', {
+              error: campaignState.abortReason,
+              smtpProfile: profile.name,
+              consecutiveFailures: campaignState.consecutiveTransientErrors
+            });
+            break;
+          }
+        } else {
+          // 5xx permanent error: reset success streak, but do not slow down general queue
+          campaignState.consecutiveSuccesses = 0;
+        }
+      }
+
+      // Inter-message pacing delay with anti-spam jitter (omitted after last recipient, when aborted, or when 0)
+      if (nextIndex < recipients.length && !campaignState.isAborted && isPacingEnabled && campaignState.effectiveDelay > 0) {
+        const jitterFactor = 0.85 + Math.random() * 0.35;
+        const actualWaitSeconds = Math.max(1, Math.round(campaignState.effectiveDelay * jitterFactor * 10) / 10);
+
+        sendEvent('throttling', {
+          waitingSeconds: actualWaitSeconds,
+          nextIndex: nextIndex + 1,
+          effectiveDelay: campaignState.effectiveDelay
+        });
+        await new Promise(resolve => setTimeout(resolve, actualWaitSeconds * 1000));
+      }
+    }
+  }
+
+  // Launch controlled concurrency workers (or 1 worker for sequential)
+  const numWorkers = Math.min(boundedConcurrency, recipients.length);
+  const workers = [];
+  for (let w = 0; w < numWorkers; w++) {
+    workers.push(worker(w + 1));
+  }
+  await Promise.all(workers);
+
+  const cleanResults = results.filter(Boolean);
+  const sentCount = cleanResults.filter(l => l.status === 'sent').length;
+  const failedCount = cleanResults.filter(l => l.status === 'failed').length;
+
+  sendEvent('finished', {
+    total: recipients.length,
+    sentCount,
+    failedCount,
+    aborted: campaignState.isAborted,
+    abortReason: campaignState.abortReason,
+    logs: cleanResults
+  });
+
+  return { results: cleanResults, campaignLogs };
 }
 
 module.exports = {
@@ -200,5 +566,7 @@ module.exports = {
   testSmtpConnection,
   sendEmailMessage,
   sendEmailMessageWithRetry,
-  classifySmtpError
+  classifySmtpError,
+  dispatchCampaign,
+  extractSmtpCode
 };

@@ -6,8 +6,7 @@ const {
   parseRecipientSheet,
   validateEmail,
   extractEmail,
-  normalizeHeader,
-  cleanPersonName
+  normalizeHeader
 } = require('./services/sheetParser');
 
 console.log('====================================================');
@@ -184,7 +183,7 @@ try {
 
   console.log('✓ Excel Row-by-Row Isolation & Priority Extraction passed.');
 } finally {
-  try { fs.unlinkSync(testFilePath); } catch (e) {}
+  try { fs.unlinkSync(testFilePath); } catch {}
 }
 
 // 5. Test Priority Order: Recruiter Name vs Company Name, Hiring Manager vs Contact Name
@@ -213,7 +212,7 @@ try {
   assert.strictEqual(result2.rows[1].email, 'priya@google.com');
   console.log('✓ Name Priority (avoiding Company Name confusion) passed.');
 } finally {
-  try { fs.unlinkSync(testFilePath2); } catch (e) {}
+  try { fs.unlinkSync(testFilePath2); } catch {}
 }
 
 // 6. Test First Name + Last Name compound columns
@@ -236,7 +235,31 @@ try {
   assert.strictEqual(result3.rows[1].email, 'burr@law.org');
   console.log('✓ Compound First Name + Last Name passed.');
 } finally {
-  try { fs.unlinkSync(testFilePath3); } catch (e) {}
+  try { fs.unlinkSync(testFilePath3); } catch {}
+}
+
+// 7. Test Job Description column auto-detection and row mapping
+console.log('\nTest 7: Job Description Column Auto-Detection & Mapping');
+const testWb4 = xlsx.utils.book_new();
+const jdRows = [
+  ['Company', 'Recruiter Name', 'Email', 'Job Description'],
+  ['Anthropic', 'Dario Amodei', 'dario@anthropic.com', 'Senior AI Alignment Researcher with PyTorch experience.'],
+  ['OpenAI', 'Sam Altman', 'sam@openai.com', ''],
+  ['Cohere', 'Aidan Gomez', 'aidan@cohere.com', 'Transformer architecture specialist.']
+];
+xlsx.utils.book_append_sheet(testWb4, xlsx.utils.aoa_to_sheet(jdRows), 'Candidates');
+const testFilePath4 = path.join(__dirname, 'test_jd.xlsx');
+xlsx.writeFile(testWb4, testFilePath4);
+
+try {
+  const result4 = parseRecipientSheet(testFilePath4, 'test_jd.xlsx');
+  assert.strictEqual(result4.columnMapping.jdCol, 'Job Description');
+  assert.strictEqual(result4.rows[0].jobDescription, 'Senior AI Alignment Researcher with PyTorch experience.');
+  assert.strictEqual(result4.rows[1].jobDescription, '');
+  assert.strictEqual(result4.rows[2].jobDescription, 'Transformer architecture specialist.');
+  console.log('✓ Job Description Column Auto-Detection & Mapping passed.');
+} finally {
+  try { fs.unlinkSync(testFilePath4); } catch {}
 }
 
 console.log('\n====================================================');

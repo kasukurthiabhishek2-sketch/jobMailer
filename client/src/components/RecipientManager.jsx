@@ -1,27 +1,19 @@
-import React, { useRef, useState, useMemo, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Users,
   UserPlus,
   FileSpreadsheet,
   Trash2,
   Upload,
   Sparkles,
   Search,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  RefreshCw,
   AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
-  Filter,
   X,
   Check,
-  CheckCircle,
-  ShieldCheck
+  CheckCircle2,
+  Users
 } from 'lucide-react';
-import { uploadRecipientsSheet } from '../services/api';
+import { uploadRecipientsSheet, fetchOutreachLogs } from '../services/api';
 import RecipientModal from './RecipientModal';
 
 const SAMPLE_RECIPIENTS = [
@@ -31,6 +23,7 @@ const SAMPLE_RECIPIENTS = [
     email: 'sarah.jenkins@techcorp.io',
     company: 'TechCorp Labs',
     role: 'Senior Engineering Recruiter',
+    jobDescription: 'Seeking Senior Full Stack Engineers with expertise in React, Node.js, and cloud systems to scale our distributed streaming infrastructure.',
     isValidEmail: true,
     isSelected: true,
     isApproved: true,
@@ -42,6 +35,7 @@ const SAMPLE_RECIPIENTS = [
     email: 'david.zhao@finscale.ai',
     company: 'FinScale AI',
     role: 'VP of Engineering',
+    jobDescription: '',
     isValidEmail: true,
     isSelected: true,
     isApproved: true,
@@ -53,6 +47,7 @@ const SAMPLE_RECIPIENTS = [
     email: 'elena@hypergrowth.ventures',
     company: 'HyperGrowth Talent',
     role: 'Head of Technical Recruiting',
+    jobDescription: 'Leading hiring for portfolio companies. Looking for lead engineers with distributed backend experience.',
     isValidEmail: true,
     isSelected: true,
     isApproved: true,
@@ -64,37 +59,61 @@ export default function RecipientManager({
   recipients = [],
   onUpdateRecipients,
   onShowToast,
-  generatedEmails = {}
+  _generatedEmails = {}
 }) {
   const fileInputRef = useRef(null);
-  const [activeTab, setActiveTab] = useState('single'); // 'single' | 'sheet'
+  const [activeTab, setActiveTab] = useState('sheet'); // 'sheet' | 'single'
   const [isParsingSheet, setIsParsingSheet] = useState(false);
   const [sheetModalData, setSheetModalData] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Single recipient form state
+  // Manual contact form state
   const [singleName, setSingleName] = useState('');
   const [singleEmail, setSingleEmail] = useState('');
   const [singleCompany, setSingleCompany] = useState('');
   const [singleRole, setSingleRole] = useState('');
+  const [singleJd, setSingleJd] = useState('');
 
-  // Table filtering & sorting & selection
+  // 30-Day Dedup Check State
+  const [contactedLogsMap, setContactedLogsMap] = useState(new Map());
+  const [recentContactWarning, setRecentContactWarning] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    fetchOutreachLogs()
+      .then(logs => {
+        if (!mounted || !Array.isArray(logs)) return;
+        const map = new Map();
+        const cutoff = Date.now() - (30 * 24 * 60 * 60 * 1000);
+        for (const item of logs) {
+          if (item?.recipientEmail && item?.status === 'sent') {
+            const time = item.timestamp ? new Date(item.timestamp).getTime() : 0;
+            if (time >= cutoff) {
+              const email = item.recipientEmail.trim().toLowerCase();
+              if (!map.has(email) || time > map.get(email).timestamp) {
+                map.set(email, item);
+              }
+            }
+          }
+        }
+        setContactedLogsMap(map);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Search & Selection state
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'pending' | 'generated' | 'sent' | 'failed'
-  const [sortColumn, setSortColumn] = useState('name');
-  const [sortDirection, setSortDirection] = useState('asc'); // 'asc' | 'desc'
   const [selectedIds, setSelectedIds] = useState(new Set());
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 25;
-
-  // Confirmation modal state for destructive actions
   const [destructiveModal, setDestructiveModal] = useState(null); // { type: 'bulk' | 'all', count: number }
 
   const approvedCount = useMemo(() => recipients.filter(r => r.isApproved).length, [recipients]);
   const unapprovedCount = recipients.length - approvedCount;
 
   const handleAddSingle = (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     if (!singleEmail.trim()) {
       onShowToast({
         type: 'error',
@@ -123,15 +142,24 @@ export default function RecipientManager({
       return;
     }
 
+    // 30-day deduplication check
+    const trimmedEmail = singleEmail.trim().toLowerCase();
+    const previousContact = contactedLogsMap.get(trimmedEmail);
+    if (previousContact && !recentContactWarning) {
+      setRecentContactWarning(previousContact);
+      return;
+    }
+
     const newRecipient = {
       id: 'rec_single_' + Date.now(),
       name: singleName.trim(),
       email: singleEmail.trim(),
       company: singleCompany.trim(),
       role: singleRole.trim(),
+      jobDescription: singleJd.trim(),
       isValidEmail: true,
       isSelected: true,
-      isApproved: true, // Manually added recipients are approved by the user
+      isApproved: true,
       status: 'pending'
     };
 
@@ -140,12 +168,8 @@ export default function RecipientManager({
     setSingleEmail('');
     setSingleCompany('');
     setSingleRole('');
-
-    onShowToast({
-      type: 'success',
-      title: 'Recipient Added & Approved',
-      message: `Added and approved ${newRecipient.email} for outreach.`
-    });
+    setSingleJd('');
+    setRecentContactWarning(null);
   };
 
   const handleSheetUpload = async (e) => {
@@ -157,11 +181,6 @@ export default function RecipientManager({
       const data = await uploadRecipientsSheet(file);
       setSheetModalData(data);
       setIsModalOpen(true);
-      onShowToast({
-        type: 'info',
-        title: 'Spreadsheet Parsed Row-by-Row',
-        message: `Extracted ${data.totalCount} rows from ${file.name}. Review and explicitly approve.`
-      });
     } catch (err) {
       onShowToast({
         type: 'error',
@@ -180,16 +199,21 @@ export default function RecipientManager({
       .filter(r => !existingEmails.has(r.email.toLowerCase()))
       .map(r => ({
         ...r,
-        isApproved: true, // Marked as explicitly approved by user in modal
+        jobDescription: r.jobDescription || '',
+        isApproved: true,
         status: r.status || 'pending'
       }));
 
     onUpdateRecipients([...recipients, ...newItems]);
     onShowToast({
       type: 'success',
-      title: 'Recipients Approved & Queued',
-      message: `Added ${newItems.length} explicitly approved contact(s) to outreach queue.`
+      title: 'Recipients Queued',
+      message: `Added ${newItems.length} approved contact(s) to outreach queue.`
     });
+  };
+
+  const handleLoadSampleRecipients = () => {
+    onUpdateRecipients(SAMPLE_RECIPIENTS);
   };
 
   const handleToggleApproval = (id) => {
@@ -198,98 +222,50 @@ export default function RecipientManager({
     );
   };
 
-  const handleBulkApprove = () => {
-    const targetIds = selectedIds.size > 0 ? selectedIds : new Set(recipients.map(r => r.id));
-    onUpdateRecipients(
-      recipients.map(r => (targetIds.has(r.id) ? { ...r, isApproved: true } : r))
-    );
-    onShowToast({
-      type: 'success',
-      title: 'Contacts Approved',
-      message: `Explicitly approved ${targetIds.size} recipient(s).`
-    });
-  };
-
-  const handleLoadSampleRecipients = () => {
-    onUpdateRecipients(SAMPLE_RECIPIENTS);
-    onShowToast({
-      type: 'info',
-      title: 'Sample Leads Loaded',
-      message: 'Added 3 sample HR & Talent contacts for quick testing.'
-    });
-  };
-
-  // Determine row status (pending | generated | sent | failed)
-  const getRecipientStatus = useCallback((r) => {
-    if (r.status === 'sent') return 'sent';
-    if (r.status === 'failed') return 'failed';
-    if (generatedEmails[r.id]?.body) return 'generated';
-    return 'pending';
-  }, [generatedEmails]);
-
-  // Toggle sort
-  const handleSort = (column) => {
-    if (sortColumn === column) {
-      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
-    }
-  };
-
-  // Filtered and sorted recipients
-  const filteredRecipients = useMemo(() => {
-    return recipients.filter(r => {
-      const status = getRecipientStatus(r);
-      if (statusFilter !== 'all' && status !== statusFilter) return false;
-
-      if (!searchTerm) return true;
-      const term = searchTerm.toLowerCase();
-      return (
-        (r.name && r.name.toLowerCase().includes(term)) ||
-        (r.email && r.email.toLowerCase().includes(term)) ||
-        (r.company && r.company.toLowerCase().includes(term)) ||
-        (r.role && r.role.toLowerCase().includes(term)) ||
-        status.includes(term)
-      );
-    });
-  }, [recipients, searchTerm, statusFilter, getRecipientStatus]);
-
-  const sortedRecipients = useMemo(() => {
-    const list = [...filteredRecipients];
-    list.sort((a, b) => {
-      let valA = '';
-      let valB = '';
-
-      if (sortColumn === 'status') {
-        valA = getRecipientStatus(a);
-        valB = getRecipientStatus(b);
-      } else {
-        valA = (a[sortColumn] || '').toString().toLowerCase();
-        valB = (b[sortColumn] || '').toString().toLowerCase();
+  const handleRemoveSingle = (id) => {
+    onUpdateRecipients(recipients.filter(r => r.id !== id));
+    setSelectedIds(prev => {
+      if (prev.has(id)) {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
       }
-
-      if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
-      if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
+      return prev;
     });
-    return list;
-  }, [filteredRecipients, sortColumn, sortDirection, getRecipientStatus]);
+  };
 
-  // Paginated list
-  const totalPages = Math.max(1, Math.ceil(sortedRecipients.length / pageSize));
-  const paginatedRecipients = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return sortedRecipients.slice(start, start + pageSize);
-  }, [sortedRecipients, currentPage, pageSize]);
+  // Filtered recipients by search term
+  const filteredRecipients = useMemo(() => {
+    if (!searchTerm.trim()) return recipients;
+    const term = searchTerm.toLowerCase().trim();
+    return recipients.filter(r => (
+      (r.name && r.name.toLowerCase().includes(term)) ||
+      (r.email && r.email.toLowerCase().includes(term)) ||
+      (r.company && r.company.toLowerCase().includes(term)) ||
+      (r.role && r.role.toLowerCase().includes(term)) ||
+      (r.jobDescription && r.jobDescription.toLowerCase().includes(term))
+    ));
+  }, [recipients, searchTerm]);
 
-  // Row selection handlers
-  const handleToggleSelectAll = (checked) => {
-    if (checked) {
-      const allIds = new Set(paginatedRecipients.map(r => r.id));
-      setSelectedIds(allIds);
+  // Selection logic
+  const allFilteredSelected =
+    filteredRecipients.length > 0 &&
+    filteredRecipients.every(r => selectedIds.has(r.id));
+
+  const handleToggleSelectAll = () => {
+    const allFilteredIds = filteredRecipients.map(r => r.id);
+    if (allFilteredSelected) {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        allFilteredIds.forEach(id => next.delete(id));
+        return next;
+      });
     } else {
-      setSelectedIds(new Set());
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        allFilteredIds.forEach(id => next.add(id));
+        return next;
+      });
     }
   };
 
@@ -305,11 +281,6 @@ export default function RecipientManager({
     });
   };
 
-  const allVisibleSelected =
-    paginatedRecipients.length > 0 &&
-    paginatedRecipients.every(r => selectedIds.has(r.id));
-
-  // Bulk actions
   const handleBulkDeleteConfirm = () => {
     if (destructiveModal?.type === 'all') {
       onUpdateRecipients([]);
@@ -318,222 +289,322 @@ export default function RecipientManager({
       onShowToast({ type: 'info', title: 'Queue Cleared', message: 'All recipients removed.' });
     } else if (destructiveModal?.type === 'bulk') {
       onUpdateRecipients(recipients.filter(r => !selectedIds.has(r.id)));
-      onShowToast({
-        type: 'info',
-        title: 'Recipients Deleted',
-        message: `Removed ${selectedIds.size} recipient(s).`
-      });
       setSelectedIds(new Set());
       setDestructiveModal(null);
     }
   };
 
-  const handleBulkRevalidate = () => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    let validCount = 0;
-    let invalidCount = 0;
-
-    const updated = recipients.map(r => {
-      if (selectedIds.size === 0 || selectedIds.has(r.id)) {
-        const isValid = emailRegex.test((r.email || '').trim());
-        if (isValid) validCount++;
-        else invalidCount++;
-        return { ...r, isValidEmail: isValid };
-      }
-      return r;
-    });
-
-    onUpdateRecipients(updated);
-    onShowToast({
-      type: invalidCount === 0 ? 'success' : 'warning',
-      title: 'Re-validation Complete',
-      message: `Checked emails: ${validCount} valid, ${invalidCount} invalid format.`
-    });
-  };
-
-  const handleRemoveSingle = (id) => {
-    onUpdateRecipients(recipients.filter(r => r.id !== id));
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-  };
-
   return (
     <div className="glass-card">
-      <div className="card-header">
-        <div className="card-title">
-          <Users className="card-title-icon" size={20} />
-          <span>Step 2: HR & Hiring Recipients</span>
+      {/* Header */}
+      <div className="step-hero-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h2 className="step-hero-title">Recipients</h2>
+          <p className="step-hero-subtitle">
+            Upload a spreadsheet of hiring leads or add contacts directly.
+          </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
           <span
             className="badge-counter"
             style={{
               color: unapprovedCount === 0 && recipients.length > 0 ? 'var(--accent-success)' : undefined,
-              borderColor: unapprovedCount === 0 && recipients.length > 0 ? 'rgba(52, 211, 153, 0.4)' : undefined
+              borderColor: unapprovedCount === 0 && recipients.length > 0 ? 'rgba(52, 211, 153, 0.4)' : undefined,
+              padding: '4px 10px',
+              fontSize: 13
             }}
           >
             {recipients.length} {recipients.length === 1 ? 'Contact' : 'Contacts'} ({approvedCount} Approved)
           </span>
-          {recipients.length > 0 && (
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => setDestructiveModal({ type: 'all', count: recipients.length })}
-              title="Clear all recipients"
-            >
-              Clear All
-            </button>
-          )}
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="tab-pill-group">
-        <button
-          type="button"
-          className={`tab-pill ${activeTab === 'single' ? 'active' : ''}`}
-          onClick={() => setActiveTab('single')}
-        >
-          <UserPlus size={15} />
-          Single Contact
-        </button>
+      <div className="tab-pill-group" style={{ marginBottom: 'var(--sp-4)' }}>
         <button
           type="button"
           className={`tab-pill ${activeTab === 'sheet' ? 'active' : ''}`}
           onClick={() => setActiveTab('sheet')}
         >
           <FileSpreadsheet size={15} />
-          Import Excel / CSV
+          Import Spreadsheet (.xlsx, .csv)
+        </button>
+        <button
+          type="button"
+          className={`tab-pill ${activeTab === 'single' ? 'active' : ''}`}
+          onClick={() => setActiveTab('single')}
+        >
+          <UserPlus size={15} />
+          Add Manually
         </button>
       </div>
 
-      {/* Tab 1: Single Contact */}
-      {activeTab === 'single' && (
-        <form onSubmit={handleAddSingle}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--sp-3)' }}>
-            <div className="form-group" style={{ marginBottom: 'var(--sp-3)' }}>
-              <label className="form-label">Contact Name (Optional)</label>
+      {/* 2-Column Side-by-Side Layout */}
+      <div className="recipient-manager-grid">
+        {/* Left Column: Action / Details Container */}
+        <div className="recipient-panel-card">
+          {activeTab === 'sheet' ? (
+            <div>
+              <div className="recipient-panel-header">
+                <h3 className="recipient-panel-title">Spreadsheet Upload</h3>
+                <p className="recipient-panel-subtitle">
+                  Import multiple hiring leads from an Excel or CSV file.
+                </p>
+              </div>
+
               <input
-                type="text"
-                placeholder="e.g. Jessica Taylor"
-                value={singleName}
-                onChange={e => setSingleName(e.target.value)}
-                className="form-input"
+                type="file"
+                ref={fileInputRef}
+                onChange={handleSheetUpload}
+                accept=".xlsx,.xls,.csv"
+                style={{ display: 'none' }}
               />
-            </div>
-            <div className="form-group" style={{ marginBottom: 'var(--sp-3)' }}>
-              <label className="form-label">Email Address *</label>
-              <input
-                type="email"
-                placeholder="e.g. jessica@company.com"
-                value={singleEmail}
-                onChange={e => setSingleEmail(e.target.value)}
-                className="form-input"
-                required
-              />
-            </div>
-          </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--sp-3)' }}>
-            <div className="form-group" style={{ marginBottom: 'var(--sp-3)' }}>
-              <label className="form-label">Company / Organization (Optional)</label>
-              <input
-                type="text"
-                placeholder="e.g. Stripe, OpenAI, Figma"
-                value={singleCompany}
-                onChange={e => setSingleCompany(e.target.value)}
-                className="form-input"
-              />
-            </div>
-            <div className="form-group" style={{ marginBottom: 'var(--sp-3)' }}>
-              <label className="form-label">Recruiter / Target Role (Optional)</label>
-              <input
-                type="text"
-                placeholder="e.g. Technical Recruiter or Senior SWE"
-                value={singleRole}
-                onChange={e => setSingleRole(e.target.value)}
-                className="form-input"
-              />
-            </div>
-          </div>
+              <div
+                className="dropzone"
+                onClick={() => fileInputRef.current?.click()}
+                style={{ minHeight: 180, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <div className="dropzone-icon">
+                  <Upload size={24} />
+                </div>
+                <div className="dropzone-title">
+                  {isParsingSheet ? 'Parsing Spreadsheet...' : 'Upload Recipient List (.xlsx, .xls, .csv)'}
+                </div>
+                <div className="dropzone-desc">
+                  Auto-detects Name, Email, Company, Role & JD columns • Flags formatting errors
+                </div>
+              </div>
 
-          <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
-            <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
-              <UserPlus size={16} />
-              Add Recipient to Queue
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={handleLoadSampleRecipients}
-              title="Load demo sample contacts"
-            >
-              <Sparkles size={15} style={{ color: 'var(--accent-primary)' }} />
-              Demo Contacts
-            </button>
-          </div>
-        </form>
-      )}
+              <div style={{ marginTop: 'var(--sp-4)', display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleLoadSampleRecipients}
+                  style={{ width: '100%', justifyContent: 'center', gap: 6 }}
+                >
+                  <Sparkles size={14} style={{ color: 'var(--accent-primary)' }} />
+                  Or Load 3 Sample HR Contacts
+                </button>
 
-      {/* Tab 2: Excel / CSV Import */}
-      {activeTab === 'sheet' && (
-        <div>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleSheetUpload}
-            accept=".xlsx,.xls,.csv"
-            style={{ display: 'none' }}
-          />
+                <div
+                  style={{
+                    padding: '12px 14px',
+                    background: 'var(--bg-surface-elevated)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: 12,
+                    color: 'var(--text-secondary)'
+                  }}
+                >
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
+                    Expected Column Headers:
+                  </div>
+                  <div style={{ color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                    <code>Name</code>, <code>Email</code>, <code>Company</code>, <code>Role / Title</code>, and optional <code>Job Description</code>.
+                    Each row is validated against RFC standards before adding.
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleAddSingle} style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+              <div className="recipient-panel-header">
+                <h3 className="recipient-panel-title">Add Contact Manually</h3>
+                <p className="recipient-panel-subtitle">
+                  Enter contact information and optional target role requirements.
+                </p>
+              </div>
 
-          <div
-            className="dropzone"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <div className="dropzone-icon">
-              <Upload size={24} />
-            </div>
-            <div className="dropzone-title">
-              {isParsingSheet ? 'Parsing Spreadsheet...' : 'Upload Recipient List (.xlsx, .xls, .csv)'}
-            </div>
-            <div className="dropzone-desc">
-              Auto-detects Name, Email, Company, and Role columns • Flags invalid emails
-            </div>
-          </div>
+              <div className="responsive-grid-2" style={{ gap: 'var(--sp-3)', marginBottom: 'var(--sp-3)' }}>
+                <div className="form-group">
+                  <label className="form-label">Contact Name (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Jessica Taylor"
+                    value={singleName}
+                    onChange={e => setSingleName(e.target.value)}
+                    className="form-input"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Email Address *</label>
+                  <input
+                    type="email"
+                    placeholder="e.g. jessica@company.com"
+                    value={singleEmail}
+                    onChange={e => {
+                      setSingleEmail(e.target.value);
+                      if (recentContactWarning) setRecentContactWarning(null);
+                    }}
+                    className="form-input"
+                    required
+                  />
+                </div>
+              </div>
 
-          <div style={{ marginTop: 'var(--sp-3)', display: 'flex', justifyContent: 'center' }}>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={handleLoadSampleRecipients}
-              style={{ gap: 'var(--sp-2)' }}
-            >
-              <Sparkles size={14} style={{ color: 'var(--accent-primary)' }} />
-              Or Load 3 Sample HR Contacts
-            </button>
-          </div>
+              <div className="responsive-grid-2" style={{ gap: 'var(--sp-3)', marginBottom: 'var(--sp-3)' }}>
+                <div className="form-group">
+                  <label className="form-label">Company / Organization (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Stripe, OpenAI, Figma"
+                    value={singleCompany}
+                    onChange={e => setSingleCompany(e.target.value)}
+                    className="form-input"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Recruiter / Target Role (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Technical Recruiter or Senior SWE"
+                    value={singleRole}
+                    onChange={e => setSingleRole(e.target.value)}
+                    className="form-input"
+                  />
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 'var(--sp-3)', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <label className="form-label">Job Description for this Role (Optional)</label>
+                <textarea
+                  className="form-input"
+                  rows={4}
+                  placeholder="Paste job description or key requirements for this specific role..."
+                  value={singleJd}
+                  onChange={e => setSingleJd(e.target.value)}
+                  style={{
+                    resize: 'vertical',
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                    minHeight: 88
+                  }}
+                />
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                  Tailors the outreach email specifically to this role instead of a generic pitch.
+                </span>
+              </div>
+
+              {/* 30-Day Dedup Warning */}
+              {recentContactWarning && (
+                <div
+                  style={{
+                    padding: '10px 14px',
+                    background: 'var(--warning-bg)',
+                    border: '1px solid var(--accent-warning)',
+                    borderRadius: 'var(--radius-md)',
+                    color: 'var(--text-primary)',
+                    fontSize: 12,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                    marginBottom: 'var(--sp-3)',
+                    flexWrap: 'wrap'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <AlertTriangle size={15} style={{ color: 'var(--accent-warning)', flexShrink: 0 }} />
+                    <span>
+                      Contacted on <strong>{new Date(recentContactWarning.timestamp).toLocaleDateString()}</strong>
+                      {recentContactWarning.company ? ` (${recentContactWarning.company})` : ''} — still add?
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setRecentContactWarning(null)}
+                      style={{ fontSize: 11, padding: '2px 8px' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() => handleAddSingle()}
+                      style={{
+                        fontSize: 11,
+                        padding: '2px 8px',
+                        background: 'var(--accent-warning)',
+                        borderColor: 'var(--accent-warning)',
+                        color: '#000'
+                      }}
+                    >
+                      Yes, Add
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 'var(--sp-2)', marginTop: 'auto' }}>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
+                  <UserPlus size={16} />
+                  Add Recipient to Queue
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleLoadSampleRecipients}
+                  title="Load demo sample contacts"
+                >
+                  <Sparkles size={15} style={{ color: 'var(--accent-primary)' }} />
+                  Demo Contacts
+                </button>
+              </div>
+            </form>
+          )}
         </div>
-      )}
 
-      {/* Recipient Data Table */}
-      {recipients.length > 0 && (
-        <div style={{ marginTop: 'var(--sp-6)' }}>
-          {/* Table Toolbar */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 'var(--sp-2)',
-              marginBottom: 'var(--sp-3)',
-              flexWrap: 'wrap'
-            }}
-          >
-            {/* Search Box */}
-            <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+        {/* Right Column: Recipients List Queue (In BOTH tabs, placed beside the action container) */}
+        <div className="recipient-panel-card">
+          {/* Header with Title, Count & Bulk Actions */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--sp-3)', flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <h3 className="recipient-panel-title" style={{ margin: 0 }}>
+                Recipients List
+              </h3>
+              <span
+                className="badge-counter"
+                style={{
+                  fontSize: 11,
+                  padding: '2px 8px',
+                  color: unapprovedCount === 0 && recipients.length > 0 ? 'var(--accent-success)' : undefined
+                }}
+              >
+                {recipients.length} {recipients.length === 1 ? 'Contact' : 'Contacts'}
+              </span>
+            </div>
+
+            {/* Bulk Action Buttons: Select All, Clear All */}
+            {recipients.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleToggleSelectAll}
+                  style={{ fontSize: 11, height: 26, padding: '0 8px' }}
+                  title={allFilteredSelected ? 'Deselect all visible contacts' : 'Select all visible contacts'}
+                >
+                  {allFilteredSelected ? 'Deselect All' : 'Select All'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setDestructiveModal({ type: 'all', count: recipients.length })}
+                  style={{ fontSize: 11, height: 26, padding: '0 8px', color: 'var(--accent-danger)' }}
+                  title="Clear all contacts from queue"
+                >
+                  Clear All
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Search Input on top */}
+          {recipients.length > 0 && (
+            <div style={{ position: 'relative', marginBottom: 'var(--sp-3)' }}>
               <Search
                 size={14}
                 style={{
@@ -546,298 +617,248 @@ export default function RecipientManager({
               />
               <input
                 type="text"
-                placeholder="Search recipients by name, company, email..."
+                placeholder="Search recipients by name, email, company, role..."
                 value={searchTerm}
-                onChange={e => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
-                }}
+                onChange={e => setSearchTerm(e.target.value)}
                 className="form-input"
-                style={{ paddingLeft: 30, height: 34, fontSize: 12 }}
+                style={{ paddingLeft: 30, paddingRight: searchTerm ? 28 : 12, height: 32, fontSize: 12 }}
               />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  style={{
+                    position: 'absolute',
+                    right: 8,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    padding: 2
+                  }}
+                  aria-label="Clear search"
+                >
+                  <X size={12} />
+                </button>
+              )}
             </div>
+          )}
 
-            {/* Status Filter */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
-              <Filter size={13} style={{ color: 'var(--text-muted)' }} />
-              <select
-                className="form-select"
-                value={statusFilter}
-                onChange={e => {
-                  setStatusFilter(e.target.value);
-                  setCurrentPage(1);
-                }}
-                style={{ height: 34, fontSize: 12, padding: '0 var(--sp-2)' }}
-              >
-                <option value="all">All Statuses</option>
-                <option value="pending">Pending</option>
-                <option value="generated">Generated</option>
-                <option value="sent">Sent</option>
-                <option value="failed">Failed</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Bulk Action Controls */}
+          {/* Bulk Selected Toolbar (when 1+ selected) */}
           {selectedIds.size > 0 && (
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: 'var(--sp-2) var(--sp-3)',
-                background: 'var(--bg-surface-elevated)',
-                border: '1px solid var(--accent-primary)',
-                borderRadius: 'var(--radius-md)',
+                padding: '6px 10px',
+                background: 'rgba(99, 102, 241, 0.08)',
+                border: '1px solid rgba(99, 102, 241, 0.25)',
+                borderRadius: 'var(--radius-sm)',
                 marginBottom: 'var(--sp-2)',
-                fontSize: 12
+                fontSize: 11
               }}
             >
               <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
                 {selectedIds.size} recipient(s) selected
               </span>
-              <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={handleBulkApprove}
-                  style={{ fontSize: 11, height: 28, color: 'var(--accent-success)', borderColor: 'rgba(52, 211, 153, 0.4)' }}
-                >
-                  <CheckCircle size={11} /> Approve Selected
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={handleBulkRevalidate}
-                  style={{ fontSize: 11, height: 28 }}
-                >
-                  <RefreshCw size={11} /> Re-validate Selected
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-danger btn-sm"
-                  onClick={() => setDestructiveModal({ type: 'bulk', count: selectedIds.size })}
-                  style={{ fontSize: 11, height: 28 }}
-                >
-                  <Trash2 size={11} /> Delete Selected
-                </button>
-              </div>
+              <button
+                type="button"
+                className="btn btn-danger btn-sm"
+                onClick={() => setDestructiveModal({ type: 'bulk', count: selectedIds.size })}
+                style={{ fontSize: 10, height: 22, padding: '0 6px' }}
+              >
+                <Trash2 size={11} /> Delete Selected
+              </button>
             </div>
           )}
 
-          {/* Data Table */}
-          <div className="data-table-wrapper" style={{ maxHeight: 380 }}>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 36, textAlign: 'center' }}>
-                    <input
-                      type="checkbox"
-                      checked={allVisibleSelected}
-                      onChange={e => handleToggleSelectAll(e.target.checked)}
-                      style={{ cursor: 'pointer', transform: 'scale(1.1)' }}
-                      title="Select / deselect all visible rows"
-                    />
-                  </th>
-                  <th className="sortable" onClick={() => handleSort('name')}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span>Name</span>
-                      {sortColumn === 'name' ? (
-                        sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
-                      ) : (
-                        <ArrowUpDown size={11} style={{ opacity: 0.4 }} />
-                      )}
-                    </div>
-                  </th>
-                  <th className="sortable" onClick={() => handleSort('email')}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span>Email</span>
-                      {sortColumn === 'email' ? (
-                        sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
-                      ) : (
-                        <ArrowUpDown size={11} style={{ opacity: 0.4 }} />
-                      )}
-                    </div>
-                  </th>
-                  <th className="sortable" onClick={() => handleSort('company')}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span>Company</span>
-                      {sortColumn === 'company' ? (
-                        sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
-                      ) : (
-                        <ArrowUpDown size={11} style={{ opacity: 0.4 }} />
-                      )}
-                    </div>
-                  </th>
-                  <th className="sortable" onClick={() => handleSort('role')}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span>Role</span>
-                      {sortColumn === 'role' ? (
-                        sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
-                      ) : (
-                        <ArrowUpDown size={11} style={{ opacity: 0.4 }} />
-                      )}
-                    </div>
-                  </th>
-                  <th className="sortable" onClick={() => handleSort('status')}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span>Status</span>
-                      {sortColumn === 'status' ? (
-                        sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
-                      ) : (
-                        <ArrowUpDown size={11} style={{ opacity: 0.4 }} />
-                      )}
-                    </div>
-                  </th>
-                  <th style={{ width: 100, textAlign: 'center' }}>Approval</th>
-                  <th style={{ width: 44, textAlign: 'center' }}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedRecipients.length === 0 ? (
-                  <tr>
-                    <td colSpan="8" style={{ textAlign: 'center', padding: 28, color: 'var(--text-muted)' }}>
-                      No recipients match the current filter.
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedRecipients.map(r => {
-                    const status = getRecipientStatus(r);
-                    const isChecked = selectedIds.has(r.id);
+          {/* Queue Content: Empty state or List of recipients */}
+          {recipients.length === 0 ? (
+            <div
+              style={{
+                flex: 1,
+                minHeight: 240,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textAlign: 'center',
+                padding: 'var(--sp-6) var(--sp-4)'
+              }}
+            >
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: '50%',
+                  background: 'var(--bg-surface-elevated)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 12,
+                  color: 'var(--text-muted)'
+                }}
+              >
+                <Users size={22} style={{ opacity: 0.6 }} />
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                No contacts in queue
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 260, lineHeight: 1.4 }}>
+                Upload a sheet or add contacts manually to begin.
+              </div>
+            </div>
+          ) : filteredRecipients.length === 0 ? (
+            <div style={{ padding: '30px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
+              No contacts match "{searchTerm}".
+            </div>
+          ) : (
+            <div className="recipient-queue-scrollable" style={{ flex: 1 }}>
+              {filteredRecipients.map(r => {
+                const isChecked = selectedIds.has(r.id);
+                const isRfcValid = r.isValidEmail !== false && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((r.email || '').trim());
+                const hasJd = Boolean(r.jobDescription && typeof r.jobDescription === 'string' && r.jobDescription.trim().length > 0);
 
-                    return (
-                      <tr
-                        key={r.id}
-                        className={isChecked ? 'row-selected' : ''}
-                        style={{ background: isChecked ? 'rgba(124, 92, 255, 0.05)' : undefined }}
-                      >
-                        <td style={{ textAlign: 'center' }}>
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => handleToggleSelectRow(r.id)}
-                            style={{ cursor: 'pointer' }}
-                          />
-                        </td>
-                        <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                          {r.name || <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                        </td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                return (
+                  <div
+                    key={r.id}
+                    className={`recipient-card-item ${isChecked ? 'selected' : ''}`}
+                  >
+                    {/* Selection Checkbox */}
+                    <div style={{ paddingTop: 2 }}>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => handleToggleSelectRow(r.id)}
+                        style={{ cursor: 'pointer' }}
+                        aria-label={`Select ${r.name || r.email}`}
+                      />
+                    </div>
+
+                    {/* Main Details */}
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      {/* Name & Email with RFC indicator */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>
+                          {r.name || 'Hiring Lead'}
+                        </span>
+                        <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
                           {r.email}
-                        </td>
-                        <td>
-                          {r.company ? (
-                            <span className="badge-counter" style={{ fontSize: 11 }}>
-                              {r.company}
-                            </span>
-                          ) : (
-                            <span style={{ color: 'var(--text-muted)' }}>—</span>
-                          )}
-                        </td>
-                        <td style={{ fontSize: 12 }}>
-                          {r.role || <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                        </td>
-                        <td>
-                          <span className={`status-chip ${status}`}>
-                            {status === 'sent' && '✓ '}
-                            {status === 'failed' && '✕ '}
-                            {status}
+                        </span>
+                        {isRfcValid ? (
+                          <span
+                            className="rfc-badge valid"
+                            title="RFC 5322 Compliant Email Format"
+                          >
+                            <CheckCircle2 size={10} /> RFC Valid
                           </span>
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
-                          {r.isApproved ? (
-                            <span
-                              className="info-pill"
-                              style={{
-                                fontSize: 11,
-                                padding: '2px 8px',
-                                background: 'rgba(52, 211, 153, 0.1)',
-                                borderColor: 'rgba(52, 211, 153, 0.3)',
-                                color: 'var(--accent-success)',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 4
-                              }}
-                              title="Contact explicitly approved for outreach"
-                            >
-                              <Check size={11} /> Approved
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              className="btn btn-secondary btn-sm"
-                              style={{
-                                padding: '2px 8px',
-                                fontSize: 10,
-                                height: 22,
-                                color: 'var(--accent-warning)',
-                                borderColor: 'rgba(251, 191, 36, 0.4)'
-                              }}
-                              onClick={() => handleToggleApproval(r.id)}
-                              title="Click to explicitly approve this recipient"
-                            >
-                              Approve
-                            </button>
-                          )}
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
+                        ) : (
+                          <span
+                            className="rfc-badge invalid"
+                            title="Invalid RFC Email Format"
+                          >
+                            <AlertTriangle size={10} /> Invalid RFC
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Company & Role */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+                        {r.company && (
+                          <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>
+                            {r.company}
+                          </span>
+                        )}
+                        {r.company && r.role && <span>•</span>}
+                        {r.role && (
+                          <span>{r.role}</span>
+                        )}
+                        {!r.company && !r.role && <span>No company/role specified</span>}
+                      </div>
+
+                      {/* JD Badge & Approval Status */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+                        {hasJd ? (
+                          <span
+                            className="badge-jd-added"
+                            title={r.jobDescription.length > 140 ? r.jobDescription.slice(0, 140) + '...' : r.jobDescription}
+                          >
+                            <Sparkles size={11} /> JD Added
+                          </span>
+                        ) : (
+                          <span
+                            className="badge-jd-generic"
+                            title="No role-specific JD provided. Will use generic/core pitch."
+                          >
+                            Generic Pitch
+                          </span>
+                        )}
+
+                        {r.isApproved ? (
+                          <span
+                            style={{
+                              fontSize: 10,
+                              padding: '1px 6px',
+                              borderRadius: 'var(--radius-sm)',
+                              background: 'rgba(52, 211, 153, 0.1)',
+                              color: 'var(--accent-success)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 3
+                            }}
+                            title="Explicitly approved for outreach"
+                          >
+                            <Check size={9} /> Approved
+                          </span>
+                        ) : (
                           <button
                             type="button"
-                            onClick={() => handleRemoveSingle(r.id)}
-                            style={{
-                              background: 'transparent',
-                              border: 'none',
-                              color: 'var(--text-muted)',
-                              cursor: 'pointer',
-                              padding: 4
-                            }}
-                            title="Remove recipient"
-                            aria-label={`Remove ${r.email}`}
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => handleToggleApproval(r.id)}
+                            style={{ fontSize: 10, height: 20, padding: '0 6px', color: 'var(--accent-warning)' }}
+                            title="Click to approve"
                           >
-                            <Trash2 size={14} />
+                            Approve
                           </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                        )}
+                      </div>
+                    </div>
 
-          {/* Pagination Controls */}
-          {sortedRecipients.length > pageSize && (
-            <div className="table-pagination">
-              <span>
-                Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, sortedRecipients.length)} of {sortedRecipients.length}
-              </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  disabled={currentPage <= 1}
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  aria-label="Previous page"
-                >
-                  <ChevronLeft size={14} />
-                </button>
-                <span>
-                  Page {currentPage} of {totalPages}
-                </span>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  disabled={currentPage >= totalPages}
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  aria-label="Next page"
-                >
-                  <ChevronRight size={14} />
-                </button>
-              </div>
+                    {/* Remove Button */}
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSingle(r.id)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--text-muted)',
+                          cursor: 'pointer',
+                          padding: 4,
+                          borderRadius: 4,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'color var(--transition-fast)'
+                        }}
+                        title="Remove contact"
+                        aria-label={`Remove ${r.email}`}
+                        onMouseEnter={e => e.currentTarget.style.color = 'var(--accent-danger)'}
+                        onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
-      )}
+      </div>
 
       {/* Destructive Action Confirmation Modal */}
       {destructiveModal && createPortal(

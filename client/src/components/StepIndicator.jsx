@@ -1,70 +1,55 @@
 import React from 'react';
 import { Check, AlertTriangle } from 'lucide-react';
+import { WIZARD_STEPS } from '../constants/wizardSteps';
 
 export default function StepIndicator({
-  currentStep,
+  currentStep = 1,
   onSelectStep,
+  onLockedClick,
+  state,
   resumeReady = false,
-  aiReady = true,
   recipientsCount = 0,
+  recipients = [],
   jdReady = false,
+  jobDescription = '',
   emailReady = false,
+  generatedEmails = {},
   stepStates
 }) {
-  const steps = [
-    {
-      id: 1,
-      title: 'Setup',
-      isUnlocked: true,
-      isCompleted: stepStates?.[1]?.completed ?? (resumeReady && aiReady),
-      hasError: stepStates?.[1]?.hasError ?? (!resumeReady && currentStep > 1)
-    },
-    {
-      id: 2,
-      title: recipientsCount > 0 ? `Recipients (${recipientsCount})` : 'Recipients',
-      isUnlocked: stepStates?.[2]?.unlocked ?? resumeReady,
-      isCompleted: stepStates?.[2]?.completed ?? (recipientsCount > 0),
-      hasError: stepStates?.[2]?.hasError ?? (currentStep > 2 && recipientsCount === 0)
-    },
-    {
-      id: 3,
-      title: 'Job Description',
-      optional: true,
-      isUnlocked: stepStates?.[3]?.unlocked ?? (resumeReady && recipientsCount > 0),
-      isCompleted: stepStates?.[3]?.completed ?? Boolean(jdReady),
-      hasError: false
-    },
-    {
-      id: 4,
-      title: 'Generate & Review',
-      isUnlocked: stepStates?.[4]?.unlocked ?? (resumeReady && recipientsCount > 0),
-      isCompleted: stepStates?.[4]?.completed ?? Boolean(emailReady),
-      hasError: stepStates?.[4]?.hasError ?? (currentStep > 4 && !emailReady)
-    },
-    {
-      id: 5,
-      title: 'Send',
-      isUnlocked: stepStates?.[5]?.unlocked ?? Boolean(emailReady),
-      isCompleted: stepStates?.[5]?.completed ?? false,
-      hasError: false
-    },
-    {
-      id: 6,
-      title: 'Logs',
-      alwaysUnlocked: true,
-      isUnlocked: true,
-      isCompleted: false,
-      hasError: false
-    }
-  ];
+  // Normalize state for gating predicates
+  const activeRecipients = Array.isArray(recipients) && recipients.length > 0
+    ? recipients
+    : Array.from({ length: recipientsCount || 0 }, (_, i) => ({ id: `rec_${i}` }));
+
+  const currentState = state || {
+    resumeData: resumeReady ? { text: 'loaded' } : null,
+    recipients: activeRecipients,
+    jobDescription: jdReady ? (jobDescription || 'provided') : jobDescription,
+    generatedEmails: emailReady && Object.keys(generatedEmails).length === 0
+      ? { default: { body: 'draft' } }
+      : generatedEmails
+  };
 
   return (
     <nav className="step-bar" aria-label="Workflow Steps">
-      {steps.map((step, idx) => {
+      {WIZARD_STEPS.map((step, idx) => {
         const isActive = currentStep === step.id;
-        const isDone = step.isCompleted;
-        const isUnlocked = step.isUnlocked || step.alwaysUnlocked;
-        const hasError = step.hasError;
+        const isUnlocked = step.isUnlocked(currentState);
+        const isDone = stepStates?.[step.id]?.completed ?? step.isCompleted(currentState);
+        const hasError = stepStates?.[step.id]?.hasError ?? false;
+        const lockReason = step.getLockReason(currentState);
+
+        // Dynamic title for recipients step
+        let displayTitle = step.shortLabel || step.label;
+        if (step.id === 3 && activeRecipients.length > 0) {
+          displayTitle = `Recipients (${activeRecipients.length})`;
+        }
+
+        const tooltip = !isUnlocked
+          ? (lockReason || `Complete previous steps to unlock ${step.label}`)
+          : hasError
+          ? `${displayTitle} needs attention`
+          : step.label;
 
         return (
           <React.Fragment key={step.id}>
@@ -72,17 +57,16 @@ export default function StepIndicator({
               type="button"
               className={`step-item ${isActive ? 'active' : ''} ${isDone ? 'completed' : ''} ${hasError ? 'has-error' : ''} ${!isUnlocked ? 'locked' : ''}`}
               onClick={() => {
-                if (isUnlocked) onSelectStep(step.id);
+                if (isUnlocked) {
+                  onSelectStep?.(step.id);
+                } else if (onLockedClick && lockReason) {
+                  onLockedClick(lockReason);
+                }
               }}
               disabled={!isUnlocked}
-              title={
-                !isUnlocked
-                  ? `Complete previous steps to unlock ${step.title}`
-                  : hasError
-                  ? `${step.title} needs attention`
-                  : step.title
-              }
+              title={tooltip}
               aria-current={isActive ? 'step' : undefined}
+              aria-disabled={!isUnlocked ? 'true' : undefined}
             >
               <div className="step-number">
                 {isDone ? (
@@ -90,15 +74,15 @@ export default function StepIndicator({
                 ) : hasError ? (
                   <AlertTriangle size={14} />
                 ) : (
-                  step.id
+                  step.stepNumber
                 )}
               </div>
               <div className="step-title-group">
-                <span className="step-title">{step.title}</span>
+                <span className="step-title">{displayTitle}</span>
                 {step.optional && <span className="step-optional-badge">Optional</span>}
               </div>
             </button>
-            {idx < steps.length - 1 && (
+            {idx < WIZARD_STEPS.length - 1 && (
               <div className={`step-separator ${isDone ? 'completed' : ''}`} />
             )}
           </React.Fragment>

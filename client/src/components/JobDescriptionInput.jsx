@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Briefcase, Sparkles, XCircle, FileText, Info, ChevronDown } from 'lucide-react';
+import { Sparkles, XCircle, FileText, Info, AlertCircle } from 'lucide-react';
 
 const SAMPLE_JDS = [
   {
@@ -58,7 +58,6 @@ export default function JobDescriptionInput({
   onChangeJd,
   onShowToast
 }) {
-  const [showSampleMenu, setShowSampleMenu] = useState(false);
   const [activeMode, setActiveMode] = useState(jobDescription ? 'tailored' : 'general');
 
   // Word and character count
@@ -69,157 +68,82 @@ export default function JobDescriptionInput({
   let qualityIndicator = {
     color: 'var(--text-muted)',
     badge: 'Empty',
-    message: 'Leave blank for a general high-impact intro, or paste a JD to match skills against role requirements.'
+    message: 'Paste a job description or choose a preset role above'
   };
 
   if (wordCount > 0 && wordCount < 35) {
     qualityIndicator = {
       color: 'var(--accent-warning)',
       badge: 'Brief',
-      message: 'Brief overview. Consider adding specific technical requirements or responsibilities for sharper AI skill alignment.'
+      message: 'Brief overview. Add key requirements for sharper AI matching'
     };
   } else if (wordCount >= 35 && wordCount <= 350) {
     qualityIndicator = {
       color: 'var(--accent-success)',
       badge: 'Optimal',
-      message: 'Optimal detail. Great depth for AI to align candidate achievements directly to role requirements.'
+      message: 'Optimal depth for personalized skill alignment'
     };
   } else if (wordCount > 350) {
     qualityIndicator = {
       color: 'var(--accent-primary)',
-      badge: 'Comprehensive',
-      message: 'Comprehensive job description. AI will prioritize the top technical requirements and leadership qualifications.'
+      badge: 'Detailed',
+      message: 'Comprehensive description. Top requirements prioritized'
     };
   }
 
   const handleSelectSample = (sample) => {
     onChangeJd(sample.text);
     setActiveMode('tailored');
-    setShowSampleMenu(false);
     onShowToast({
       type: 'info',
-      title: 'Sample JD Loaded',
-      message: `Loaded "${sample.title}".`
+      title: 'Preset Role Selected',
+      message: `Loaded "${sample.title.split('—')[0].trim()}".`
+    });
+  };
+
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  const executeClear = () => {
+    onChangeJd('');
+    setActiveMode('general');
+    onShowToast?.({
+      type: 'info',
+      title: 'Target Cleared',
+      message: 'Switched to Direct Value Pitch mode.'
     });
   };
 
   const handleClear = () => {
-    onChangeJd('');
-    setActiveMode('general');
-    onShowToast({
-      type: 'info',
-      title: 'Job Description Cleared',
-      message: 'Switched to General Value Pitch mode.'
-    });
+    if (wordCount > 50) {
+      setShowClearConfirm(true);
+    } else {
+      executeClear();
+    }
   };
 
   const handleSwitchMode = (mode) => {
     setActiveMode(mode);
-    if (mode === 'general' && jobDescription) {
-      // Keep or clear? Stash confirmation or note
-      onShowToast({
-        type: 'info',
-        title: 'General Mode Active',
-        message: 'AI will craft a direct value pitch. Existing JD text is saved below.'
-      });
-    }
   };
 
   return (
     <div className="glass-card">
-      {/* Header */}
-      <div className="card-header">
-        <div className="card-title">
-          <Briefcase className="card-title-icon" size={20} />
-          <span>Step 3: Target Role / Job Description</span>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'relative' }}>
-          {jobDescription && (
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={handleClear}
-              title="Clear job description"
-            >
-              <XCircle size={14} /> Clear
-            </button>
-          )}
-
-          {/* Sample JD Selector Dropdown */}
-          <div style={{ position: 'relative' }}>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => setShowSampleMenu(prev => !prev)}
-              style={{ gap: 6 }}
-            >
-              <Sparkles size={14} style={{ color: 'var(--primary-light)' }} />
-              Sample JDs
-              <ChevronDown size={13} style={{ transform: showSampleMenu ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-            </button>
-
-            {showSampleMenu && (
-              <div
-                style={{
-                  position: 'absolute',
-                  right: 0,
-                  top: 'calc(100% + 6px)',
-                  background: 'var(--bg-secondary)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-md)',
-                  boxShadow: 'var(--shadow-lg)',
-                  zIndex: 20,
-                  minWidth: 260,
-                  overflow: 'hidden',
-                  animation: 'fadeIn 0.15s ease-out'
-                }}
-              >
-                <div style={{ padding: '8px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', borderBottom: '1px solid var(--border-subtle)' }}>
-                  SELECT A PRE-POPULATED JD
-                </div>
-                {SAMPLE_JDS.map(s => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => handleSelectSample(s)}
-                    style={{
-                      width: '100%',
-                      textAlign: 'left',
-                      padding: '10px 12px',
-                      background: 'transparent',
-                      border: 'none',
-                      borderBottom: '1px solid var(--border-subtle)',
-                      color: 'var(--text-primary)',
-                      fontSize: 12,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 2,
-                      transition: 'background 0.15s'
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <span style={{ fontWeight: 600 }}>{s.title}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+      <div className="step-hero-header">
+        <h2 className="step-hero-title">Target Role</h2>
+        <p className="step-hero-subtitle">
+          Target a specific job opening or choose a direct executive value pitch.
+        </p>
       </div>
 
       {/* Mode Toggle Pills */}
       <div
         style={{
           display: 'flex',
-          background: 'var(--bg-secondary)',
+          background: 'var(--bg-surface-elevated)',
           border: '1px solid var(--border-subtle)',
           borderRadius: 'var(--radius-md)',
           padding: 4,
           gap: 6,
-          marginBottom: 14
+          marginBottom: 16
         }}
       >
         <button
@@ -228,7 +152,7 @@ export default function JobDescriptionInput({
           style={{
             flex: 1,
             padding: '8px 12px',
-            fontSize: 12,
+            fontSize: 13,
             fontWeight: 600,
             borderRadius: 'var(--radius-sm)',
             border: 'none',
@@ -239,12 +163,11 @@ export default function JobDescriptionInput({
             gap: 6,
             background: activeMode === 'tailored' ? 'var(--accent-primary)' : 'transparent',
             color: activeMode === 'tailored' ? '#fff' : 'var(--text-secondary)',
-            boxShadow: activeMode === 'tailored' ? 'var(--shadow-sm)' : 'none',
             transition: 'all var(--transition-fast)'
           }}
         >
-          <FileText size={14} />
-          Shared Job Description (Tailored Match)
+          <FileText size={15} />
+          Specific Role (JD)
         </button>
 
         <button
@@ -253,7 +176,7 @@ export default function JobDescriptionInput({
           style={{
             flex: 1,
             padding: '8px 12px',
-            fontSize: 12,
+            fontSize: 13,
             fontWeight: 600,
             borderRadius: 'var(--radius-sm)',
             border: 'none',
@@ -264,38 +187,111 @@ export default function JobDescriptionInput({
             gap: 6,
             background: activeMode === 'general' ? 'var(--accent-primary)' : 'transparent',
             color: activeMode === 'general' ? '#fff' : 'var(--text-secondary)',
-            boxShadow: activeMode === 'general' ? 'var(--shadow-sm)' : 'none',
             transition: 'all var(--transition-fast)'
           }}
         >
-          <Sparkles size={14} />
-          Direct Value Pitch (No JD Required)
+          <Sparkles size={15} />
+          Direct Value Pitch
         </button>
       </div>
 
-      {/* Mode Context Banner */}
-      {activeMode === 'general' ? (
+      {/* Sample JDs Quick Chips (Tailored Mode) */}
+      {activeMode === 'tailored' && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Presets:</span>
+            {SAMPLE_JDS.map(s => (
+              <button
+                key={s.id}
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => handleSelectSample(s)}
+                style={{ fontSize: 11, padding: '3px 9px', height: 26 }}
+              >
+                {s.title.split('—')[0].trim()}
+              </button>
+            ))}
+          </div>
+
+          {jobDescription && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={handleClear}
+              style={{ fontSize: 11, height: 26, color: 'var(--text-muted)' }}
+            >
+              <XCircle size={13} /> Clear
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Mode Context Banner for General Mode */}
+      {activeMode === 'general' && (
         <div
           style={{
-            background: 'rgba(99, 102, 241, 0.08)',
-            border: '1px solid rgba(99, 102, 241, 0.25)',
+            background: 'var(--bg-surface-elevated)',
+            border: '1px solid var(--border-subtle)',
             borderRadius: 'var(--radius-md)',
-            padding: '12px 16px',
-            marginBottom: 14,
+            padding: '10px 14px',
+            marginBottom: 16,
             display: 'flex',
-            alignItems: 'flex-start',
+            alignItems: 'center',
             gap: 10,
-            fontSize: 12,
-            lineHeight: 1.5,
+            fontSize: 13,
             color: 'var(--text-secondary)'
           }}
         >
-          <Info size={16} style={{ color: 'var(--primary-light)', flexShrink: 0, marginTop: 1 }} />
-          <div>
-            <strong style={{ color: '#fff' }}>Direct Value Pitch Mode Active:</strong> AI will generate punchy outreach focused on candidate engineering achievements and core strengths, automatically addressing each recipient's company and role without forcing alignment to a single job description.
+          <Info size={16} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
+          <span>
+            AI will synthesize a direct executive value pitch focused on your standout achievements.
+          </span>
+        </div>
+      )}
+
+      {/* Confirm Before Clear Banner (TICK-CYC3-15 / C6) */}
+      {showClearConfirm && (
+        <div
+          style={{
+            padding: '10px 14px',
+            background: 'var(--warning-bg)',
+            border: '1px solid var(--accent-warning)',
+            borderRadius: 'var(--radius-md)',
+            marginBottom: 12,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)' }}>
+            <AlertCircle size={16} style={{ color: 'var(--accent-warning)', flexShrink: 0 }} />
+            <span>
+              Clear this job description (<strong>{wordCount} words</strong>)?
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => setShowClearConfirm(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger btn-sm"
+              onClick={() => {
+                setShowClearConfirm(false);
+                executeClear();
+              }}
+            >
+              Confirm Clear
+            </button>
           </div>
         </div>
-      ) : null}
+      )}
 
       {/* Textarea */}
       <div style={{ position: 'relative' }}>

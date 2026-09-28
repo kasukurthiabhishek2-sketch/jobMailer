@@ -66,6 +66,12 @@ JDMail is a decoupled, full-stack monorepo application engineered to generate an
 5. **Deterministic Heuristic Parsing**
    - Spreadsheets created by recruiters come in hundreds of unstructured variations (empty title rows, compound names, embedded email mailto links, non-standard column headers).
    - The sheet parser employs normalized multi-sheet scanning, header keyword scoring, cell regex extraction, and RFC validation before data reaches the application state.
+6. **Zero File Retention Policy (Ephemeral Uploads)**
+   - Only API keys, delivery logs/history, and configuration settings are saved permanently in encrypted local storage (`config.json`, `logs.json`) or user Firestore documents.
+   - Candidate resumes and uploaded Excel/CSV spreadsheets are strictly ephemeral and never stored permanently in cloud storage or databases.
+   - Spreadsheets are parsed into memory and immediately unlinked from disk in a `finally` block even if parsing fails.
+   - Resumes uploaded to `server/uploads/` are temporary session files: uploading a new resume automatically prunes prior files, all uploads are purged upon sending or session cleanup, and orphaned files are cleaned up upon server startup.
+   - Cloud storage (`storage.rules`) explicitly disables all read and write operations (`allow read, write: if false;`), guaranteeing zero cloud file retention.
 
 ---
 
@@ -155,16 +161,16 @@ sequenceDiagram
     Server-->>UI: { fileId, rawText, detectedName, detectedEmail, wordCount }
     UI->>UI: Store resumeData in state, advance to Step 2
 
-    Note over User, UI: STEP 2: Ingest Recipients
+    Note over User, UI: STEP 2: Target Role & Job Description
+    User->>UI: Selects preset role or inputs target JD / direct value pitch
+
+    Note over User, UI: STEP 3: Ingest Recipients
     User->>UI: Uploads recruiters.xlsx or enters manual contact
     UI->>Server: POST /api/upload/recipients
     Server->>Server: Detect sheet, score headers, extract & validate emails
     Server-->>UI: { headers, previewRows, totalRows, detectedMappings }
     UI->>User: RecipientModal shows preview, validation badges & column mapping
     User->>UI: Confirms selection & approvals
-
-    Note over User, UI: STEP 3: Job Description & Tone
-    User->>UI: Inputs target JD (optional) & selects tone (Punchy, Technical, etc.)
 
     Note over User, UI: STEP 4: AI Generation & Review
     User->>UI: Clicks "Generate Tailored Cold Emails"
@@ -347,36 +353,33 @@ sequenceDiagram
 
 ```mermaid
 graph TD
-    App["App.jsx (Root Coordinator)\nState: config, resumeData, recipients, jobDescription,\ngeneratedEmails, toasts, theme, modal states"]
+    App["App.jsx (Root Coordinator)\nHooks: useWizardState, useCampaignStream\nState: config, user, toasts, theme, modal states"]
 
-    App --> Header["Header.jsx\n- App Brand & Status Pills\n- Theme Toggle (Dark/Light)\n- Settings & Logs Modal Triggers"]
-    App --> StepIndicator["StepIndicator.jsx\n- 5-Step Workflow Status\n- Ready/Pending Badges\n- Direct Step Navigation"]
+    App --> Header["Header.jsx\n- App Brand & Status Pills\n- Theme Toggle (Dark/Light)\n- Settings & Logs Modal Triggers\n- Auth Sign-Out & Quick Guide"]
+    App --> StepIndicator["StepIndicator.jsx (Canonical WIZARD_STEPS)\n- 5-Step Workflow Status & Gating\n- ARIA accessibility & keyboard tabs\n- Tooltip explanations for locked steps"]
 
-    subgraph LeftCol ["Left Column (Inputs & Data Ingestion)"]
-        ResumeUpload["ResumeUpload.jsx\n- Drag-and-drop PDF/DOCX\n- Summary snippet & word count\n- Quick 'Load Sample' button"]
-        RecipientManager["RecipientManager.jsx\n- Manual Contact Input\n- Spreadsheet Upload Trigger\n- Approved / Unapproved Toggles\n- Recipient Count & Clear Queue"]
-        JobDescriptionInput["JobDescriptionInput.jsx\n- Optional Target JD Textarea\n- Tone selector (5 options)\n- 'Load Sample JD' shortcut"]
+    subgraph Steps ["Wizard Step Modules"]
+        ResumeUpload["Step 1: ResumeUpload.jsx\n- Drag-and-drop PDF/DOCX\n- Summary snippet & word count\n- Ephemeral resume removal CTA"]
+        JobDescriptionInput["Step 2: JobDescriptionInput.jsx\n- Target JD Textarea\n- Accidental clear safeguard\n- Tone selector (5 options)"]
+        RecipientManager["Step 3: RecipientManager.jsx\n- Manual Contact Input with 30-day Dedup\n- Spreadsheet Upload Trigger\n- Approved / Unapproved Toggles\n- Recipient Count & Clear Queue"]
+        EmailPreview["Step 4: EmailPreview.jsx\n- AI Provider & Model Switcher\n- 4-Worker Concurrent Batch Generator\n- Claim Grounding Pill & Hallucination Auditor\n- Pager Controls with Search\n- Inline Editable Subject & Body"]
+        SendStep["Step 5: SendStep.jsx\n- Final Pre-flight Campaign Review\n- Daily Sending Quota Tracker & ESP Limit Warning\n- Two-Stage Human Send Gate Checkbox\n- 'Send Approved Emails' Dispatch CTA"]
     end
 
-    subgraph RightCol ["Right Column (AI Studio & Dispatch)"]
-        EmailPreview["EmailPreview.jsx\n- AI Provider & Model Switcher\n- Single & Batch 'Generate' CTA\n- Pager Controls (1 of N) with Search\n- Inline Editable Subject & Body\n- Explicit Approval Checkbox\n- Resume Attachment Toggle\n- 'Send Approved Emails' CTA"]
-    end
-
-    App --> LeftCol
-    App --> RightCol
+    App --> Steps
 
     subgraph Modals ["Modals & Overlays"]
-        RecipientModal["RecipientModal.jsx\n- Sheet Column Mapping Dropdowns\n- Table Preview with Shift-Click Selection\n- RFC Validation Badges\n- Sample Recipient CSV Loader"]
-        SettingsModal["SettingsModal.jsx\n- AI Providers Tab (Keys, Models, Connection Tests)\n- GitHub Copilot OAuth Device Flow\n- SMTP Profiles Tab (Add, Edit, Test, Default)\n- Preferences Tab (Throttling Delay 1-10s)\n- Audit Logs Tab (Search, Filter, Export, Clear)\n- Danger Zone (Purge All Encrypted Data)"]
+        RecipientModal["RecipientModal.jsx\n- Sheet Column Mapping Dropdowns\n- Table Preview with Shift-Click Selection\n- RFC Validation Badges\n- Mandatory Approval Shake Animation"]
+        SettingsModal["SettingsModal.jsx (Modular Shell)\n- AiProvidersTab.jsx\n- SmtpAccountsTab.jsx\n- PreferencesTab.jsx (Delay & Concurrency)\n- AuditLogsTab.jsx (Search & Filter)\n- DangerZoneTab.jsx (Purge All Data)"]
         SmtpGuideModal["SmtpGuideModal.jsx\n- Step-by-step App Password guides\n- Direct links for Gmail, Outlook, Yahoo, Zoho"]
-        SendProgressModal["SendProgressModal.jsx\n- SSE Live Event Consumer\n- Progress Bar & Throttling Timer\n- Live Status Feed per Recipient\n- Final Summary Report"]
+        SendProgressModal["SendProgressModal.jsx\n- SSE Live Event Consumer\n- Progress Bar & Throttling Timer\n- Non-Blocking Minimized Floating Pill Dock\n- Final Summary Report"]
         Toast["Toast.jsx\n- Global Notification Banners (info, success, error, warning)"]
     end
 
     RecipientManager -.->|Opens on File Upload| RecipientModal
     Header -.->|Opens Settings| SettingsModal
     SettingsModal -.->|Opens Setup Guide| SmtpGuideModal
-    EmailPreview -.->|Triggers Campaign Send| SendProgressModal
+    SendStep -.->|Triggers Campaign Send| SendProgressModal
     App --> Toast
 ```
 
@@ -435,9 +438,15 @@ Hallucinations and fabricated credentials destroy candidate credibility:
    - Currency / Revenue numbers (`\$\d+[\d,]*(?:\.\d+)?(?:k|m|b| billion| million|k)?`)
    - Scale metrics (`\b\d+[\d,]*(?:\+)?\s*(?:users|clients|customers|engineers|developers|downloads|requests|qps|tps|lines|stars)\b`)
 3. **Resume Corroboration:** Each claim is cross-checked against the raw resume text. If ungrounded metrics are detected, the email draft is tagged with `groundingAudit: { isGrounded: false, ungroundedClaims: [...] }`.
+4. **Surfaced Candidate Review UI:** In `EmailPreview.jsx`, drafts display a grounding score pill (green check when verified, amber badge with claim count when ungrounded). Clicking ungrounded claims displays a dedicated banner highlighting the exact uncorroborated claims.
 
-#### 4-Worker Concurrent Batch Generation
-Batch email generation (`POST /api/ai/batch-generate`) utilizes a concurrent worker pool:
+#### HTTP 429 Exponential Backoff & Retry Handling
+To prevent batch generation failures when hitting provider rate limits (e.g. OpenAI RPM limits or Groq free tiers), `callGemini` and `callOpenAiCompatible` implement automatic HTTP 429 exponential backoff retries:
+- Up to 3 automatic retries with randomized jitter (`Math.pow(2, attempt) * 1000 + Math.random() * 500`).
+- Seamless retry without failing the batch queue.
+
+#### 4-Worker Concurrent Batch Generation Pipeline
+Batch email generation (`POST /api/ai/batch-generate`) is wired directly to the client via `batchGenerateColdEmails`:
 - Runs up to **4 parallel LLM requests** simultaneously.
 - Preserves deterministic array index order for recipient drafts.
 - Emits real-time batch progress events to support live UI progress bars.
@@ -514,6 +523,11 @@ Credentials stored on disk are protected using authenticated encryption:
   - Checks for `process.env.ENCRYPTION_MASTER_KEY` (64 hex characters = 32 bytes).
   - If absent, checks `server/data/.secret_key`.
   - If absent, generates 32 cryptographic random bytes via `crypto.randomBytes(32)` and saves it with restricted permissions (`0o600`).
+- **Hardware-Bound Local Storage (Option 1 Architecture):**
+  - **Zero Secrets in Cloud:** Cloud Firestore (`users/{uid}/app/settings`) stores only non-sensitive profile data (`candidateProfile`, `tonePreferences`, `theme`).
+  - **Secret Stripping Gate:** `stripSecrets()` strips all `apiKey` and SMTP `password` fields prior to any Firestore document mutation.
+  - **Masked Migration Export:** `GET /api/config/migration-export` masks all API keys and SMTP passwords, preventing credential leakage to cloud sync.
+  - **Backend Route Authentication Middleware:** `requireAuth` guards all sensitive and mutating backend endpoints (`/api/ai/*`, `/api/upload/*`, `/api/send/*`, `/api/config/*`), verifying Firebase ID tokens when Firebase is active and allowing localhost access in local mode.
 - **Data Protection at Rest (`storageService.js`):**
   - All AI provider `apiKey` fields and SMTP `password` fields are encrypted before writing to `config.json`.
   - `getPublicConfig()` masks all secrets before responding to frontend GET requests (`sk-1234...5678`, `••••••••••••`).
@@ -536,37 +550,57 @@ Credentials stored on disk are protected using authenticated encryption:
   - Strict TLS Default: `rejectUnauthorized: !profile.allowSelfSignedCerts` validates TLS certificates strictly against system CA bundles by default, guarding against MitM attacks on public Wi-Fi while offering an explicit opt-in toggle for self-signed certificates.
   - Explicit timeouts: `connectionTimeout: 15000ms`, `greetingTimeout: 15000ms`, `socketTimeout: 20000ms`.
 - **Intelligent Error Classification & Resilience (`classifySmtpError`):**
-  - Distinguishes between `TRANSIENT` errors (4xx codes, connection resets, 421/450/451/452 rate limits) and `PERMANENT` errors (5xx codes, 535 authentication failed, 550 recipient mailbox unavailable).
-  - Transient errors automatically trigger exponential backoff retries (up to 3 attempts with 2s and 4s delays).
-  - Permanent authentication failures fail-fast immediately without retry loops to protect the sender's mail account from lockout.
+  - Adheres strictly to RFC 5321 response codes:
+    - **250**: Success — recorded with exact server response string and code.
+    - **4xx** (421, 450, 451, 452, 454) & Network Transients (`ETIMEDOUT`, `ECONNRESET`, `ESOCKET`): Temporary problems — pauses with exponential backoff and retries.
+    - **5xx** (500–504, 535, 550–554): Permanent rejections — fails fast immediately on attempt 1 without blind retries.
+    - **535 / EAUTH**: Authentication failure — aborts campaign queue immediately to protect the sender's account from lockout.
+- **Dynamic Slowdown & Circuit Breaker Protection:**
+  - When a transient error (4xx) occurs during dispatch, the pacing delay is dynamically increased (`slowdown` event) to protect domain and IP reputation.
+  - If 3 consecutive transient errors occur, a circuit breaker trips (`circuit_breaker` event) and halts the remaining queue safely.
+- **Sequential vs Controlled Concurrency:**
+  - Configurable dispatch concurrency (default `1` for sequential, or `2`–`3` for controlled concurrent workers).
+  - Preserves deterministic recipient indexing and ordered audit logs.
+- **Full Response Recording:**
+  - Every dispatch audit log records `smtpResponse`, `smtpResponseCode`, `attempts`, and delivery status.
 - **Anti-Spam Delay Jitter:**
   - Standard robotic intervals between outbound emails trigger spam filters.
-  - Inter-message pacing introduces a ±20% randomized jitter (`delaySeconds * (0.8 + Math.random() * 0.4)`), mimicking human delivery cadence.
+  - Inter-message pacing introduces a ±20% randomized jitter (`delaySeconds * (0.85 + Math.random() * 0.35)`), mimicking human delivery cadence.
+- **Daily Sending Quota Budget Tracker (`GET /api/send/daily-stats`):**
+  - `storageService.getDailySendingStats(smtpAccountId)` aggregates successful dispatches in a rolling 24-hour window from `logs.json`.
+  - Displays real-time quota status in `SendStep.jsx` (e.g. `12 / 500 sent today on Gmail`).
+  - Flags amber warning banners if approved recipients exceed remaining 24-hour quota.
+- **Active Ephemeral File Deletion (`DELETE /api/upload/resume`):**
+  - Explicit "Remove Resume" action unlinks the active resume immediately from `server/uploads/` and resets local state.
 - **HTML Body Styling:** Plain text drafts are automatically transformed into clean HTML email blocks with responsive typography (`font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif`, `line-height: 1.6`, `color: #1e293b`).
 - **Resume Attachment:** If enabled, the uploaded resume file is attached with its original filename (e.g. `Alex_Rivera_Resume.pdf`).
 - **Throttled SSE Dispatcher:**
   - Route: `POST /api/send/stream`.
-  - Streams events: `start`, `progress`, `item_complete`, `throttling`, `finished`.
-  - Configurable pacing: `delaySeconds` (1 to 10 seconds) with dynamic jitter.
+  - Streams events: `start`, `progress`, `item_complete`, `throttling`, `slowdown`, `circuit_breaker`, `auth_error`, `finished`.
+  - Configurable pacing: `delaySeconds` (1 to 10 seconds) with dynamic jitter and transient error slowdown.
   - Non-blocking: Uses `await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000))` between sends (omitted after the final email).
-  - Audit logging: Saves delivery status, message IDs, SMTP profile, and error codes to `server/data/logs.json`.
+  - Audit logging: Saves delivery status, message IDs, SMTP profile, error codes, and SMTP responses to `server/data/logs.json`.
 
 ---
 
 ### 3.6 Frontend Reactive Architecture (`App.jsx`, `api.js`, CSS Tokens)
 
-- **Root Coordinator (`App.jsx`):** Maintains primary state:
-  - `config`: Public application settings & provider states.
-  - `resumeData`: Parsed resume object with `fileId` and text.
-  - `recipients`: Array of recipient objects with `isApproved` toggles.
-  - `jobDescription`: Target job description string.
-  - `generatedEmails`: Map of recipient IDs to `{ subject, body }` drafts.
-  - `theme`: `'dark'` or `'light'`, persisted in `localStorage` and synchronized with `data-theme` on `<html>`.
+- **Root Coordinator & Custom Hook Decomposition (`App.jsx`):**
+  - **`useWizardState`:** Manages 5-step wizard progression, navigation gating, candidate resume, target JD, recipients, and drafts.
+  - **`useCampaignStream`:** Encapsulates outbound SSE email streaming, anti-abuse throttling, pre-flight safety checks, and completion reporting.
+  - **Canonical Step Configuration (`client/src/constants/wizardSteps.js`):** Single source of truth for step definitions, progression rules, and lock reason predicates.
+- **Modular Settings Architecture (`client/src/components/settings/`):**
+  - Split from monolithic 2,000+ line modal into 5 isolated tabs:
+    - `AiProvidersTab.jsx`: AI provider keys, models, connection testing, and Copilot OAuth.
+    - `SmtpAccountsTab.jsx`: SMTP profile management, TLS toggles, socket testing, and guide link.
+    - `PreferencesTab.jsx`: Delivery delay pacing and batch concurrency slider.
+    - `AuditLogsTab.jsx`: Delivery history log viewer, searching, filtering, and export.
+    - `DangerZoneTab.jsx`: Factory reset and full data eradication.
 - **Pure Vanilla CSS Design System (`index.css`):**
   - No TailwindCSS or external CSS frameworks; zero runtime bundle overhead.
-  - Complete CSS variable token system: `--bg-base`, `--bg-surface`, `--accent-primary` (`#7c5cff`), `--accent-success` (`#34d399`), `--accent-danger` (`#f87171`).
+  - Complete CSS variable token system: `--bg-base`, `--bg-surface`, `--accent-primary` (`#7c5cff`), `--accent-success` (`#34d399`), `--accent-danger` (`#f87171`), `--accent-warning` (`#fbbf24`).
   - Dark mode default with seamless Light mode support via `[data-theme="light"]`.
-  - Glassmorphic surfaces (`backdrop-filter: blur(16px)`), micro-animations, custom scrollbars, and accessible focus states.
+  - Glassmorphic surfaces (`backdrop-filter: blur(16px)`), micro-animations, keyframe shake interactions, custom scrollbars, and accessible focus states.
 
 ---
 
@@ -729,36 +763,60 @@ JDMail/
 ├── package.json                 # Root monorepo script coordinator (npm run dev, install:all)
 ├── README.md                    # Project overview, quickstart & user guide
 ├── ARCHITECTURE.md              # THIS FILE: Comprehensive technical architecture & spec
+├── firestore.rules              # Firebase owner-only security rules
+├── storage.rules                # Ephemeral zero-retention rules (deny read/write)
 │
 ├── client/                      # React 19 + Vite Frontend Application
 │   ├── index.html               # Single-page HTML shell with font preconnects
-│   ├── vite.config.js           # Vite dev configuration with /api reverse proxy to port 5001
-│   ├── package.json             # Frontend dependencies: react, react-dom, lucide-react, oxlint
-│   ├── .oxlintrc.json           # Oxlint code quality configuration
+│   ├── vite.config.js           # Vite dev configuration with Vitest setup & /api proxy
+│   ├── package.json             # Frontend dependencies & scripts (dev, build, lint, test)
+│   ├── .oxlintrc.json           # Oxlint code quality configuration (0 errors, 0 warnings)
 │   └── src/
-│       ├── main.jsx             # React DOM root entrypoint
-│       ├── App.jsx              # Global state coordinator, theme manager & send handler
-│       ├── App.css              # App layout styles
+│       ├── main.jsx             # React DOM root entrypoint with ErrorBoundary
+│       ├── App.jsx              # Global state coordinator, theme manager & auth gate
 │       ├── index.css            # 1,400+ line pure Vanilla CSS design system & tokens
+│       ├── setupTests.js        # Vitest & @testing-library/jest-dom test environment
+│       ├── constants/
+│       │   └── wizardSteps.js   # Single source of truth for 5-step wizard progression & gating
+│       ├── hooks/
+│       │   ├── useWizardState.js# Wizard steps, navigation gating, candidate/JD/recipients state
+│       │   └── useCampaignStream.js # SSE email streaming, pacing, and completion handler
+│       ├── lib/
+│       │   ├── firebase.js      # Firebase client SDK initialization & auth helpers
+│       │   └── settings.js      # Firestore settings adapter, stripSecrets() & deep sanitizers
 │       ├── services/
-│       │   └── api.js           # Unified HTTP API client & SSE stream reader
-│       └── components/
-│           ├── Header.jsx             # Top navbar with live status pills, theme toggle & modal buttons
-│           ├── StepIndicator.jsx      # Interactive 5-step workflow progress indicator
-│           ├── ResumeUpload.jsx       # Drag-and-drop resume uploader with heuristic summary
-│           ├── RecipientManager.jsx   # Contact queue, manual adder, approval checks & import triggers
-│           ├── RecipientModal.jsx     # Spreadsheet preview table, column mapping & Shift-Click selector
-│           ├── JobDescriptionInput.jsx# Optional JD input with tone selector (5 tone profiles)
-│           ├── EmailPreview.jsx       # AI model selector, batch generator, draft pager & editor
-│           ├── SendProgressModal.jsx  # SSE real-time streaming modal with anti-spam timer
-│           ├── SettingsModal.jsx      # Multi-tab settings (AI, SMTP, Preferences, Logs, Reset)
-│           ├── SmtpGuideModal.jsx     # Guided App Password instructions for Gmail, Outlook, Yahoo, Zoho
-│           └── Toast.jsx              # Floating notification alert stack
+│       │   └── api.js           # Unified HTTP API client & SSE stream reader with authFetch
+│       ├── components/
+│       │   ├── AuthGate.jsx           # Firebase Google/GitHub sign-in and local mode toggle
+│       │   ├── ErrorBoundary.jsx      # Global React crash containment boundary
+│       │   ├── Header.jsx             # Top navbar with live status pills, theme toggle & guide
+│       │   ├── StepIndicator.jsx      # Interactive 5-step workflow progress indicator (ARIA)
+│       │   ├── ResumeUpload.jsx       # Step 1: Drag-and-drop resume uploader with remove CTA
+│       │   ├── JobDescriptionInput.jsx# Step 2: Target JD textarea with clear safeguard
+│       │   ├── RecipientManager.jsx   # Step 3: Recipient queue with 30-day dedup against logs
+│       │   ├── RecipientModal.jsx     # Spreadsheet preview table, column mapping & shake gate
+│       │   ├── EmailPreview.jsx       # Step 4: AI batch generator, claim grounding & editor
+│       │   ├── SendStep.jsx           # Step 5: Quota budget tracker & two-stage send gate
+│       │   ├── SendProgressModal.jsx  # SSE real-time streaming modal with floating pill dock
+│       │   ├── SettingsModal.jsx      # Modular slideover shell hosting 5 settings tabs
+│       │   ├── SmtpGuideModal.jsx     # Guided App Password instructions for Gmail, Outlook, etc.
+│       │   ├── Toast.jsx              # Floating notification alert stack
+│       │   └── settings/              # Decomposed Settings Modal Tab Components
+│       │       ├── AiProvidersTab.jsx # Keys, models, connection testing, Copilot OAuth
+│       │       ├── SmtpAccountsTab.jsx# SMTP profiles, TLS toggles, socket testing
+│       │       ├── PreferencesTab.jsx # Delay pacing & batch concurrency slider
+│       │       ├── AuditLogsTab.jsx   # Delivery history log viewer, search, export
+│       │       └── DangerZoneTab.jsx  # Factory reset & complete data purge
+│       └── __tests__/                 # Vitest Client Unit & Component Test Suites
+│           ├── wizardSteps.test.js    # Gating predicates & metadata tests
+│           ├── hooks.test.js          # useWizardState & useCampaignStream hook lifecycle
+│           ├── StepIndicator.test.jsx # ARIA attributes, tooltip, and click tests
+│           └── SettingsModal.test.jsx # Tab switching, backdrop close, and render tests
 │
 └── server/                      # Node.js Express 4 Backend Application
     ├── index.js                 # Express HTTP API routes, multer middleware & SSE handler
     ├── package.json             # Server dependencies & test script ("test": "node test_runner_all.js")
-    ├── test_runner_all.js       # Unified runner executing all 10 subsystem test suites
+    ├── test_runner_all.js       # Unified runner executing all 15 subsystem test suites
     ├── test_sheet_parser_full.js# Automated test suite for sheetParser & email validation
     ├── test_crypto.js           # Automated test suite for AES-256-GCM fail-closed crypto & masking
     ├── test_storage.js          # Automated test suite for storageService invariants & config persistence
@@ -769,16 +827,22 @@ JDMail/
     ├── test_cross_session_dedup.js# Automated test suite for cross-campaign recipient deduplication
     ├── test_danger_zone.js      # Automated test suite for danger-zone file & cache eradication
     ├── test_resume_parser.js    # Automated test suite for resume text extraction & heuristics
+    ├── test_design_tokens.js    # Automated test suite for CSS custom properties & token consistency
+    ├── test_firebase_migration.js# Automated test suite for Firestore security & migration export
+    ├── test_security_guardrails.js# Automated test suite for SSRF, path traversal & requireAuth
+    ├── test_ephemeral_uploads.js# Automated test suite for zero file retention & resume deletion
+    ├── test_ai_retry.js         # Automated test suite for HTTP 429 exponential backoff retries
     ├── data/                    # Encrypted local data directory (gitignored)
     │   ├── .secret_key          # 256-bit AES master key (0o600 permissions)
     │   ├── config.json          # Encrypted settings, credentials & SMTP profiles
     │   └── logs.json            # Persistent campaign audit logs
-    ├── uploads/                 # Temporary storage for uploaded resumes during campaigns
+    ├── uploads/                 # Ephemeral storage for resumes during campaigns
     ├── utils/
     │   └── crypto.js            # AES-256-GCM encrypt/decrypt & credential masking utilities
     └── services/
-        ├── aiService.js         # Unified AI caller, fact-grounding auditor & prompt builder
+        ├── aiService.js         # Unified AI caller, 429 retries, fact-grounding auditor
         ├── copilotService.js    # GitHub Copilot OAuth Device Flow & chat completions
+        ├── firebaseAdmin.js     # Firebase Admin SDK initialization & ID token verification
         ├── resumeParser.js      # PDF & DOCX text extraction & heuristic metadata extraction
         ├── sheetParser.js       # Multi-sheet workbook detection, header scoring & cross-session dedup
         ├── smtpService.js       # Nodemailer transport creation, strict TLS, retries & HTML mail sender
@@ -789,29 +853,32 @@ JDMail/
 
 ## 6. API Specification Matrix
 
-| Method | Endpoint | Description | Request Body / Params | Expected Response |
-| :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/api/health` | Service health check | None | `{ status: "ok", timestamp: string }` |
-| `GET` | `/api/config` | Read public masked configuration | None | `{ activeProvider, aiProviders, smtpProfiles, sendingPreferences }` |
-| `POST` | `/api/config/ai` | Update provider credentials/model | `{ providerKey, apiKey, model, baseURL, enabled }` | Updated config object |
-| `POST` | `/api/config/ai/active` | Switch active AI provider | `{ providerKey }` | Updated config object |
-| `POST` | `/api/config/ai/test` | Live test provider API key | `{ providerKey, apiKey?, model?, baseURL? }` | `{ success: boolean, message?: string, error?: string }` |
-| `POST` | `/api/copilot/device-code` | Begin GitHub Device Flow | None | `{ deviceCode, userCode, verificationUri, interval }` |
-| `POST` | `/api/copilot/check-status`| Poll GitHub Device Flow status | `{ deviceCode }` | `{ status: "pending" \| "authorized" \| "slow_down" \| "expired", accessToken? }` |
-| `POST` | `/api/config/smtp` | Add or update SMTP profile | `{ id?, name, host, port, encryption, username, password?, fromName, fromEmail }` | Updated config object |
-| `DELETE`| `/api/config/smtp/:id` | Delete an SMTP profile | `id` in route param | Updated config object |
-| `POST` | `/api/config/smtp/:id/default` | Set default SMTP account | `id` in route param | Updated config object |
-| `POST` | `/api/config/smtp/test`| Test SMTP socket & credentials | `{ host, port, username, password?, encryption }` | `{ success: boolean, message?: string, error?: string }` |
-| `POST` | `/api/config/preferences` | Update delay & attachment settings | `{ delaySeconds, attachResume }` | Updated config object |
-| `POST` | `/api/config/reset` | Purge all credentials, logs, uploads & cache | None | Cleared default config |
-| `POST` | `/api/upload/resume` | Parse uploaded resume (PDF/DOCX) | `multipart/form-data`: `resume` file | `{ fileId, rawText, detectedName, detectedEmail, wordCount }` |
-| `POST` | `/api/upload/recipients`| Parse uploaded sheet (XLSX/CSV) with dedup | `multipart/form-data`: `file` | `{ headers, previewRows, totalRows, detectedMappings }` |
-| `POST` | `/api/ai/generate` | Generate cold email with fact audit | `{ providerKey?, resumeText, jobDescription, recipient, customTone, senderName }` | `{ success: true, provider, model, email: { subject, body, groundingAudit } }` |
-| `POST` | `/api/ai/batch-generate`| 4-worker concurrent batch generation | `{ providerKey?, resumeText, jobDescription, recipients: [], customTone, senderName }` | `{ success: true, results: [ { recipientId, email, success } ] }` |
-| `POST` | `/api/send/stream` | Stream email sending via SSE (retry + jitter) | `{ recipients: [], resumeFileId?, smtpProfileId?, delaySeconds: 3 }` | `text/event-stream` stream |
-| `POST` | `/api/send` | Standard batch send (non-SSE) | `{ recipients: [], resumeFileId?, smtpProfileId?, delaySeconds: 3 }` | `{ success: true, results: [] }` |
-| `GET` | `/api/logs` | Fetch campaign audit history | None | Array of `OutreachLogEntry` objects |
-| `DELETE`| `/api/logs` | Clear campaign audit history | None | `[]` |
+| Method | Endpoint | Auth | Description | Request Body / Params | Expected Response |
+| :--- | :--- | :---: | :--- | :--- | :--- |
+| `GET` | `/api/health` | Public | Service health check | None | `{ status: "ok", timestamp: string }` |
+| `GET` | `/api/config` | Public | Read public masked configuration | None | `{ activeProvider, aiProviders, smtpProfiles, sendingPreferences }` |
+| `GET` | `/api/config/migration-export` | `Bearer` | Export sanitized profile & masked config | None | `{ candidateProfile, aiProviders, sendingPreferences }` |
+| `POST` | `/api/config/ai` | `Bearer` | Update provider credentials/model | `{ providerKey, apiKey, model, baseURL, enabled }` | Updated config object |
+| `POST` | `/api/config/ai/active` | `Bearer` | Switch active AI provider | `{ providerKey }` | Updated config object |
+| `POST` | `/api/config/ai/test` | `Bearer` | Live test provider API key | `{ providerKey, apiKey?, model?, baseURL? }` | `{ success: boolean, message?: string, error?: string }` |
+| `POST` | `/api/copilot/device-code` | Public | Begin GitHub Device Flow | None | `{ deviceCode, userCode, verificationUri, interval }` |
+| `POST` | `/api/copilot/check-status`| Public | Poll GitHub Device Flow status | `{ deviceCode }` | `{ status: "pending" \| "authorized" \| "slow_down" \| "expired", accessToken? }` |
+| `POST` | `/api/config/smtp` | `Bearer` | Add or update SMTP profile | `{ id?, name, host, port, encryption, username, password?, fromName, fromEmail }` | Updated config object |
+| `DELETE`| `/api/config/smtp/:id` | `Bearer` | Delete an SMTP profile | `id` in route param | Updated config object |
+| `POST` | `/api/config/smtp/:id/default` | `Bearer` | Set default SMTP account | `id` in route param | Updated config object |
+| `POST` | `/api/config/smtp/test`| `Bearer` | Test SMTP socket & credentials | `{ host, port, username, password?, encryption }` | `{ success: boolean, message?: string, error?: string }` |
+| `POST` | `/api/config/preferences` | `Bearer` | Update delay & attachment settings | `{ delaySeconds, attachResume }` | Updated config object |
+| `POST` | `/api/config/reset` | `Bearer` | Purge all credentials, logs, uploads & cache | None | Cleared default config |
+| `POST` | `/api/upload/resume` | `Bearer` | Parse uploaded resume (PDF/DOCX) | `multipart/form-data`: `resume` file | `{ fileId, rawText, detectedName, detectedEmail, wordCount }` |
+| `DELETE`| `/api/upload/resume` | `Bearer` | Delete ephemeral active resume file | `{ fileId? }` | `{ success: true, message: string }` |
+| `POST` | `/api/upload/recipients`| `Bearer` | Parse uploaded sheet (XLSX/CSV) with dedup | `multipart/form-data`: `file` | `{ headers, previewRows, totalRows, detectedMappings }` |
+| `POST` | `/api/ai/generate` | `Bearer` | Generate cold email with fact audit | `{ providerKey?, resumeText, jobDescription, recipient, customTone, senderName }` | `{ success: true, provider, model, email: { subject, body, groundingAudit } }` |
+| `POST` | `/api/ai/batch-generate`| `Bearer` | 4-worker concurrent batch generation | `{ providerKey?, resumeText, jobDescription, recipients: [], customTone, senderName }` | `{ success: true, results: [ { recipientId, email, success } ] }` |
+| `GET` | `/api/send/daily-stats` | `Bearer` | 24-hour sent quota tracking against ESP limits | `smtpProfileId?` in query | `{ todaySentCount, limit, remaining, providerName }` |
+| `POST` | `/api/send/stream` | `Bearer` | Stream email sending via SSE (retry + jitter) | `{ recipients: [], resumeFileId?, smtpProfileId?, delaySeconds: 3 }` | `text/event-stream` stream |
+| `POST` | `/api/send` | `Bearer` | Standard batch send (non-SSE) | `{ recipients: [], resumeFileId?, smtpProfileId?, delaySeconds: 3 }` | `{ success: true, results: [] }` |
+| `GET` | `/api/logs` | `Bearer` | Fetch campaign audit history | None | Array of `OutreachLogEntry` objects |
+| `DELETE`| `/api/logs` | `Bearer` | Clear campaign audit history | None | `[]` |
 
 ---
 

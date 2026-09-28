@@ -3,7 +3,6 @@
  */
 
 const copilotService = require('./copilotService');
-const { callCopilotChat, testCopilotConnection } = copilotService;
 
 /**
  * Clean and parse JSON from model output (handles markdown code blocks like ```json ... ```)
@@ -18,13 +17,13 @@ function cleanJsonOutput(text) {
   }
   try {
     return JSON.parse(cleaned);
-  } catch (err) {
+  } catch {
     // Attempt to extract JSON substring between { and }
     const match = cleaned.match(/\{[\s\S]*\}/);
     if (match) {
       try {
         return JSON.parse(match[0]);
-      } catch (e) {
+      } catch {
         // Fallback to text parsing
       }
     }
@@ -102,11 +101,25 @@ async function callGemini({ apiKey, model = 'gemini-1.5-flash', systemPrompt, us
     }
   };
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
+  const RETRY_DELAYS = [2000, 4000, 8000];
+  let response;
+  let attempt = 0;
+  while (true) {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (response.status === 429 && attempt < RETRY_DELAYS.length) {
+      const delay = process.env.TEST_FAST_RETRY === 'true' ? 10 : RETRY_DELAYS[attempt];
+      console.warn(`[AI Rate Limit] Gemini HTTP 429 received. Retrying in ${delay}ms (attempt ${attempt + 1}/${RETRY_DELAYS.length})...`);
+      await new Promise(r => setTimeout(r, delay));
+      attempt++;
+      continue;
+    }
+    break;
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -114,7 +127,10 @@ async function callGemini({ apiKey, model = 'gemini-1.5-flash', systemPrompt, us
     try {
       const errJson = JSON.parse(errorText);
       msg = errJson.error?.message || msg;
-    } catch (e) {}
+    } catch {}
+    if (response.status === 429) {
+      msg = `Gemini rate limit exceeded (HTTP 429) after ${RETRY_DELAYS.length} retries: ${msg}`;
+    }
     throw new Error(msg);
   }
 
@@ -136,6 +152,73 @@ async function callGemini({ apiKey, model = 'gemini-1.5-flash', systemPrompt, us
 }
 
 /**
+ * Strict SSRF protection for user-configurable AI endpoint URLs.
+ * Rejects non-HTTP(S) schemes, cloud metadata addresses, link-local IPs, and private network ranges in production.
+ */
+function validateCustomBaseUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') {
+    throw new Error('Custom provider baseURL must be a valid URL string.');
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(rawUrl.trim());
+  } catch (err) {
+    throw new Error(`Invalid custom baseURL format: ${err.message}`);
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`Forbidden protocol "${parsed.protocol}". Only HTTP and HTTPS are permitted.`);
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+
+  // Prohibit cloud metadata endpoints across all cloud providers (AWS, GCP, Azure, DigitalOcean)
+  const forbiddenHostnames = [
+    '169.254.169.254',
+    'metadata.google.internal',
+    'metadata',
+    'instance-data'
+  ];
+  if (forbiddenHostnames.includes(hostname) || hostname.endsWith('.metadata.google.internal')) {
+    throw new Error('Access to cloud instance metadata services is forbidden.');
+  }
+
+  // Prohibit IPv4 link-local (169.254.0.0/16) and IPv6 link-local
+  if (hostname.startsWith('169.254.') || hostname.startsWith('fe80:')) {
+    throw new Error('Access to link-local address range is forbidden.');
+  }
+
+  // In production, prohibit loopback and RFC 1918 private IP subnets to prevent SSRF into VPC/internal services
+  const isProduction = process.env.NODE_ENV === 'production';
+  const allowLocal = process.env.ALLOW_LOCAL_AI_ENDPOINTS === 'true';
+
+  if (isProduction && !allowLocal) {
+    const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+    const ipMatch = hostname.match(ipv4Regex);
+    if (ipMatch) {
+      const o1 = Number(ipMatch[1]);
+      const o2 = Number(ipMatch[2]);
+      if (
+        o1 === 127 || // Loopback
+        o1 === 10 ||  // 10.0.0.0/8
+        (o1 === 172 && o2 >= 16 && o2 <= 31) || // 172.16.0.0/12
+        (o1 === 192 && o2 === 168) ||           // 192.168.0.0/16
+        o1 === 0
+      ) {
+        throw new Error(`Access to private or loopback IP (${hostname}) is forbidden in production.`);
+      }
+    }
+
+    if (hostname === 'localhost' || hostname === '::1' || hostname === '0.0.0.0') {
+      throw new Error('Access to localhost is forbidden in production.');
+    }
+  }
+
+  return parsed.origin + parsed.pathname.replace(/\/+$/, '');
+}
+
+/**
  * Generic OpenAI-compatible caller (OpenAI, Grok, NVIDIA, Custom)
  */
 async function callOpenAiCompatible({ apiKey, baseURL, model, systemPrompt, userPrompt }) {
@@ -151,14 +234,28 @@ async function callOpenAiCompatible({ apiKey, baseURL, model, systemPrompt, user
     max_tokens: 550
   };
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify(payload)
-  });
+  const RETRY_DELAYS = [2000, 4000, 8000];
+  let response;
+  let attempt = 0;
+  while (true) {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (response.status === 429 && attempt < RETRY_DELAYS.length) {
+      const delay = process.env.TEST_FAST_RETRY === 'true' ? 10 : RETRY_DELAYS[attempt];
+      console.warn(`[AI Rate Limit] OpenAI-compatible HTTP 429 received from ${endpoint}. Retrying in ${delay}ms (attempt ${attempt + 1}/${RETRY_DELAYS.length})...`);
+      await new Promise(r => setTimeout(r, delay));
+      attempt++;
+      continue;
+    }
+    break;
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -166,7 +263,10 @@ async function callOpenAiCompatible({ apiKey, baseURL, model, systemPrompt, user
     try {
       const errJson = JSON.parse(errorText);
       msg = errJson.error?.message || errJson.message || msg;
-    } catch (e) {}
+    } catch {}
+    if (response.status === 429) {
+      msg = `API rate limit exceeded (HTTP 429) from ${endpoint} after ${RETRY_DELAYS.length} retries: ${msg}`;
+    }
     throw new Error(msg);
   }
 
@@ -349,15 +449,17 @@ async function generateColdEmail({ providerKey, providerConfig, resumeText, jobD
       });
       break;
 
-    case 'custom':
+    case 'custom': {
+      const sanitizedBaseUrl = validateCustomBaseUrl(providerConfig.baseURL || 'https://api.openai.com/v1');
       draftResult = await callOpenAiCompatible({
         apiKey,
-        baseURL: providerConfig.baseURL || 'https://api.openai.com/v1',
+        baseURL: sanitizedBaseUrl,
         model: model || 'gpt-4o',
         systemPrompt,
         userPrompt
       });
       break;
+    }
 
     default:
       throw new Error(`Unsupported AI provider: ${providerKey}`);
@@ -421,31 +523,32 @@ async function testAiConnection(providerKey, config) {
         try {
           const j = JSON.parse(text);
           msg = j.error?.message || msg;
-        } catch (e) {}
+        } catch {}
         return { success: false, error: msg };
       }
       return { success: true, message: `Connected to Gemini (${model}) successfully!` };
     }
 
     // OpenAI compatible providers
-    let baseURL = 'https://api.openai.com/v1';
-    let model = config.model || 'gpt-4o-mini';
+    let baseURL = (config && config.baseURL) ? config.baseURL : 'https://api.openai.com/v1';
+    let model = (config && config.model) || 'gpt-4o-mini';
 
     if (providerKey === 'groq') {
-      baseURL = 'https://api.groq.com/openai/v1';
-      model = config.model || 'qwen/qwen3.8-27b';
+      baseURL = (config && config.baseURL) || 'https://api.groq.com/openai/v1';
+      model = (config && config.model) || 'qwen/qwen3.8-27b';
     } else if (providerKey === 'grok') {
-      baseURL = 'https://api.x.ai/v1';
-      model = config.model || 'grok-2-1212';
+      baseURL = (config && config.baseURL) || 'https://api.x.ai/v1';
+      model = (config && config.model) || 'grok-2-1212';
     } else if (providerKey === 'nvidia') {
-      baseURL = 'https://integrate.api.nvidia.com/v1';
-      model = config.model || 'meta/llama-3.1-70b-instruct';
+      baseURL = (config && config.baseURL) || 'https://integrate.api.nvidia.com/v1';
+      model = (config && config.model) || 'meta/llama-3.1-70b-instruct';
     } else if (providerKey === 'custom') {
-      baseURL = config.baseURL || 'https://api.openai.com/v1';
-      model = config.model || 'gpt-4o';
+      baseURL = validateCustomBaseUrl((config && config.baseURL) || 'https://api.openai.com/v1');
+      model = (config && config.model) || 'gpt-4o';
     }
 
-    const endpoint = `${baseURL.replace(/\/+$/, '')}/chat/completions`;
+    const safeBaseUrl = (baseURL && typeof baseURL === 'string') ? baseURL.trim() : 'https://api.openai.com/v1';
+    const endpoint = `${safeBaseUrl.replace(/\/+$/, '')}/chat/completions`;
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -465,12 +568,13 @@ async function testAiConnection(providerKey, config) {
       try {
         const j = JSON.parse(text);
         msg = j.error?.message || j.message || msg;
-      } catch (e) {}
+      } catch {}
       return { success: false, error: msg };
     }
 
     return { success: true, message: `Connected to ${providerKey.toUpperCase()} (${model}) successfully!` };
   } catch (err) {
+    console.error(`[testAiConnection] Error testing ${providerKey}:`, err);
     return { success: false, error: err.message || 'Network request failed' };
   }
 }
@@ -480,5 +584,8 @@ module.exports = {
   testAiConnection,
   cleanJsonOutput,
   buildPrompts,
-  auditDraftClaims
+  auditDraftClaims,
+  validateCustomBaseUrl,
+  callGemini,
+  callOpenAiCompatible
 };

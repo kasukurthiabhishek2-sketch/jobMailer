@@ -4,10 +4,11 @@
  */
 
 const CLIENT_ID = 'Iv1.b507a08c87ecfe98'; // Official public Copilot Client ID
-let tokenCache = {
+let defaultCache = {
   copilotToken: null,
   expiresAt: 0
 };
+const tokenCaches = new Map();
 
 /**
  * Initiate Device Code Authorization
@@ -92,9 +93,10 @@ async function checkDeviceStatus(deviceCode) {
  * Retrieve Copilot Session Token from GitHub API
  */
 async function getCopilotSessionToken(githubAccessToken) {
+  const cache = githubAccessToken ? getSessionCache(githubAccessToken) : defaultCache;
   const now = Math.floor(Date.now() / 1000);
-  if (tokenCache.copilotToken && tokenCache.expiresAt > now + 60) {
-    return tokenCache.copilotToken;
+  if (cache.copilotToken && cache.expiresAt > now + 60) {
+    return cache.copilotToken;
   }
 
   const response = await fetch('https://api.github.com/copilot_internal/v2/token', {
@@ -126,10 +128,8 @@ async function getCopilotSessionToken(githubAccessToken) {
     throw new Error('No token returned by Copilot endpoint.');
   }
 
-  tokenCache = {
-    copilotToken: data.token,
-    expiresAt: data.expires_at || (now + 1800)
-  };
+  cache.copilotToken = data.token;
+  cache.expiresAt = data.expires_at || (now + 1800);
 
   return data.token;
 }
@@ -186,8 +186,17 @@ async function callCopilotChat({ githubAccessToken, model = 'gpt-4o', systemProm
     let msg = `Copilot API error (${response.status})`;
     try {
       const j = JSON.parse(text);
+      if ((j.error?.code === 'model_not_supported' || j.error?.message?.toLowerCase().includes('not supported') || text.includes('not supported')) && model !== 'gpt-4o') {
+        console.warn(`[Copilot] Model '${model}' not supported by GitHub Copilot. Automatically falling back to 'gpt-4o'.`);
+        return await callCopilotChat({ githubAccessToken, model: 'gpt-4o', systemPrompt, userPrompt });
+      }
       msg = j.error?.message || j.message || msg;
-    } catch (e) {}
+    } catch (e) {
+      if (text.includes('not supported') && model !== 'gpt-4o') {
+        console.warn(`[Copilot] Model '${model}' not supported by GitHub Copilot. Automatically falling back to 'gpt-4o'.`);
+        return await callCopilotChat({ githubAccessToken, model: 'gpt-4o', systemPrompt, userPrompt });
+      }
+    }
     throw new Error(msg);
   }
 
@@ -225,14 +234,19 @@ async function callCopilotChat({ githubAccessToken, model = 'gpt-4o', systemProm
  * Clear in-memory token cache (used by Danger Zone data purge)
  */
 function clearSessionCache() {
-  tokenCache = {
-    copilotToken: null,
-    expiresAt: 0
-  };
+  defaultCache.copilotToken = null;
+  defaultCache.expiresAt = 0;
+  tokenCaches.clear();
 }
 
-function getSessionCache() {
-  return tokenCache;
+function getSessionCache(userKey) {
+  if (userKey) {
+    if (!tokenCaches.has(userKey)) {
+      tokenCaches.set(userKey, { copilotToken: null, expiresAt: 0 });
+    }
+    return tokenCaches.get(userKey);
+  }
+  return defaultCache;
 }
 
 module.exports = {

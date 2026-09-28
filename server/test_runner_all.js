@@ -15,7 +15,13 @@ const testSuites = [
   { name: 'Batch Concurrency & Order Preservation', file: 'test_batch_concurrency.js' },
   { name: 'Cross-Session Audit Deduplication', file: 'test_cross_session_dedup.js' },
   { name: 'Danger-Zone Full Purge Verification', file: 'test_danger_zone.js' },
-  { name: 'Resume Text & Heuristic Parser', file: 'test_resume_parser.js' }
+  { name: 'Resume Text & Heuristic Parser', file: 'test_resume_parser.js' },
+  { name: 'Design System & Theme Token Invariants', file: 'test_design_tokens.js' },
+  { name: 'Firebase Firestore Settings & Auth Migration', file: 'test_firebase_migration.js' },
+  { name: 'Security Guardrails & Hardening', file: 'test_security_guardrails.js' },
+  { name: 'Ephemeral Uploads & Zero Retention Policy', file: 'test_ephemeral_uploads.js' },
+  { name: 'AI Provider 429 Backoff & Retry Logic', file: 'test_ai_retry.js' },
+  { name: 'SMTP Pacing, Response Recording & Retry Pipeline', file: 'test_smtp_pipeline.js' }
 ];
 
 console.log('====================================================');

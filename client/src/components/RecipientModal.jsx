@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X,
@@ -62,14 +62,17 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
   const [editingValue, setEditingValue] = useState('');
   const [editError, setEditError] = useState('');
 
-  // Explicit Approval Checkbox State
+  // Explicit Approval Checkbox State (TICK-CYC3-17 / C8)
   const [isExplicitlyApproved, setIsExplicitlyApproved] = useState(false);
+  const [highlightApproval, setHighlightApproval] = useState(false);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50); // 50 | 100 | 250 | 'all'
 
-  useEffect(() => {
+  const [prevSheetData, setPrevSheetData] = useState(sheetData);
+  if (sheetData !== prevSheetData) {
+    setPrevSheetData(sheetData);
     if (sheetData?.rows) {
       setRows(sheetData.rows);
       setIsExplicitlyApproved(false);
@@ -78,12 +81,15 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
       setEditingRowId(null);
       setCurrentPage(1);
     }
-  }, [sheetData]);
+  }
 
-  // Reset to first page when filtering or searching
-  useEffect(() => {
+  const [prevFilterTab, setPrevFilterTab] = useState(filterTab);
+  const [prevSearchTerm, setPrevSearchTerm] = useState(searchTerm);
+  if (filterTab !== prevFilterTab || searchTerm !== prevSearchTerm) {
+    setPrevFilterTab(filterTab);
+    setPrevSearchTerm(searchTerm);
     setCurrentPage(1);
-  }, [filterTab, searchTerm]);
+  }
 
   const totalCount = rows.length;
   const validCount = useMemo(() => rows.filter(r => r.isValidEmail).length, [rows]);
@@ -222,9 +228,15 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
     }
   };
 
-  // Confirm and explicitly approve selected contacts
+  // Confirm and explicitly approve selected contacts (TICK-CYC3-17 / C8)
   const handleApproveAndConfirm = () => {
-    if (!isExplicitlyApproved || selectedCount === 0) return;
+    if (selectedCount === 0) return;
+
+    if (!isExplicitlyApproved) {
+      setHighlightApproval(true);
+      setTimeout(() => setHighlightApproval(false), 2200);
+      return;
+    }
 
     const selectedRows = rows
       .filter(r => r.isSelected)
@@ -274,7 +286,7 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
               <FileSpreadsheet size={20} />
             </div>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 16, color: '#fff', letterSpacing: '-0.2px' }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)', letterSpacing: '-0.2px' }}>
                 Review & Explicitly Approve Extracted Contacts
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
@@ -574,7 +586,7 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
                             type="checkbox"
                             checked={row.isSelected}
                             disabled={isInvalid}
-                            onChange={e => handleToggleRow(idx, e)}
+                            onChange={e => handleToggleRow(realFilteredIdx, e)}
                             style={{ cursor: isInvalid ? 'not-allowed' : 'pointer', transform: 'scale(1.15)' }}
                             aria-label={`Select row ${row.rowIndex}`}
                           />
@@ -843,26 +855,39 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
             <span>Click the pencil icon next to any contact name to rename.</span>
           </div>
 
-          {/* EXPLICIT APPROVAL CHECKBOX SECTION */}
+          {/* EXPLICIT APPROVAL CHECKBOX SECTION (TICK-CYC3-17 / C8) */}
           <div
             style={{
               marginTop: 14,
               padding: '12px 16px',
-              background: isExplicitlyApproved ? 'rgba(52, 211, 153, 0.08)' : 'rgba(251, 191, 36, 0.08)',
-              border: '1px solid',
-              borderColor: isExplicitlyApproved ? 'rgba(52, 211, 153, 0.45)' : 'rgba(251, 191, 36, 0.4)',
+              background: highlightApproval
+                ? 'rgba(245, 158, 11, 0.18)'
+                : isExplicitlyApproved
+                ? 'rgba(52, 211, 153, 0.08)'
+                : 'rgba(251, 191, 36, 0.08)',
+              border: highlightApproval ? '2px solid var(--accent-warning)' : '1px solid',
+              borderColor: highlightApproval
+                ? 'var(--accent-warning)'
+                : isExplicitlyApproved
+                ? 'rgba(52, 211, 153, 0.45)'
+                : 'rgba(251, 191, 36, 0.4)',
               borderRadius: 'var(--radius-md)',
               display: 'flex',
               alignItems: 'center',
               gap: 12,
-              transition: 'all 0.2s ease'
+              transition: 'all 0.2s ease',
+              boxShadow: highlightApproval ? '0 0 18px rgba(245, 158, 11, 0.4)' : 'none',
+              animation: highlightApproval ? 'shake 0.4s ease' : 'none'
             }}
           >
             <input
               type="checkbox"
               id="explicitApprovalCheckbox"
               checked={isExplicitlyApproved}
-              onChange={e => setIsExplicitlyApproved(e.target.checked)}
+              onChange={e => {
+                setIsExplicitlyApproved(e.target.checked);
+                if (highlightApproval) setHighlightApproval(false);
+              }}
               style={{
                 width: 18,
                 height: 18,
@@ -883,8 +908,17 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
               }}
             >
               <span>I have reviewed the row-by-row extracted contacts and <strong>explicitly approve</strong> sending cold outreach to these {selectedCount} verified HR contacts.</span>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginTop: 2 }}>
-                Explicit user approval is strictly mandatory before any emails can be generated or sent.
+              <div
+                style={{
+                  fontSize: 11,
+                  color: highlightApproval ? 'var(--accent-warning)' : 'var(--text-muted)',
+                  fontWeight: highlightApproval ? 700 : 400,
+                  marginTop: 2
+                }}
+              >
+                {highlightApproval
+                  ? '⚠️ Checkbox confirmation is mandatory before contacts can be imported.'
+                  : 'Explicit user approval is strictly mandatory before any emails can be generated or sent.'}
               </div>
             </label>
           </div>
@@ -904,15 +938,24 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
             <button
               className="btn btn-primary"
               onClick={handleApproveAndConfirm}
-              disabled={!isExplicitlyApproved || selectedCount === 0}
+              disabled={selectedCount === 0}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
-                background: isExplicitlyApproved && selectedCount > 0 ? 'var(--primary-gradient)' : 'var(--bg-tertiary)',
-                color: isExplicitlyApproved && selectedCount > 0 ? '#fff' : 'var(--text-muted)',
+                background: isExplicitlyApproved && selectedCount > 0
+                  ? 'var(--primary-gradient)'
+                  : selectedCount > 0
+                  ? 'var(--bg-surface-elevated)'
+                  : 'var(--bg-tertiary)',
+                color: isExplicitlyApproved && selectedCount > 0
+                  ? '#fff'
+                  : selectedCount > 0
+                  ? 'var(--text-primary)'
+                  : 'var(--text-muted)',
+                border: selectedCount > 0 && !isExplicitlyApproved ? '1px solid var(--accent-warning)' : undefined,
                 boxShadow: isExplicitlyApproved && selectedCount > 0 ? '0 4px 14px var(--primary-glow)' : 'none',
-                cursor: !isExplicitlyApproved || selectedCount === 0 ? 'not-allowed' : 'pointer'
+                cursor: selectedCount === 0 ? 'not-allowed' : 'pointer'
               }}
             >
               <CheckCircle size={16} />

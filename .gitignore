@@ -9,4 +9,7 @@ server/data/config.json
 server/data/logs.json
 .env
 server/.env
+client/.env*
 *.local
+*serviceAccount*.json
+server/serviceAccountKey.json

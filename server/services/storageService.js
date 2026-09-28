@@ -59,7 +59,7 @@ const DEFAULT_CONFIG = {
       model: 'gpt-4o',
       enabled: true,
       authType: 'device_flow',
-      supportedModels: ['gpt-4o', 'gpt-4o-mini', 'claude-3.5-sonnet', 'o1-mini']
+      supportedModels: ['gpt-4o', 'gpt-4o-mini']
     },
     custom: {
       name: 'Custom (OpenAI-Compatible Endpoint)',
@@ -90,11 +90,11 @@ function readConfigFile() {
       ...parsed,
       aiProviders: {
         ...DEFAULT_CONFIG.aiProviders,
-        ...(parsed.aiProviders || {})
+        ...parsed.aiProviders
       },
       sendingPreferences: {
         ...DEFAULT_CONFIG.sendingPreferences,
-        ...(parsed.sendingPreferences || {})
+        ...parsed.sendingPreferences
       }
     };
   } catch (err) {
@@ -364,6 +364,38 @@ function getRecentlyContactedMap(days = 30) {
   return map;
 }
 
+/**
+ * Returns daily sending statistics (sent today count, start of day timestamp, daily quota limit)
+ */
+function getDailySendingStats(smtpProfileId = null) {
+  const logs = readLogsFile();
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const startOfDayMs = startOfDay.getTime();
+
+  let sentToday = 0;
+  for (const item of logs) {
+    if (item && item.status === 'sent') {
+      const itemTime = item.timestamp ? new Date(item.timestamp).getTime() : 0;
+      if (itemTime >= startOfDayMs) {
+        if (!smtpProfileId || item.smtpProfileId === smtpProfileId) {
+          sentToday++;
+        }
+      }
+    }
+  }
+
+  const config = readConfigFile();
+  const dailyLimit = config.sendingPreferences?.dailyLimit || 500;
+
+  return {
+    sentToday,
+    dailyLimit,
+    remaining: Math.max(0, dailyLimit - sentToday),
+    startOfDay: startOfDay.toISOString()
+  };
+}
+
 module.exports = {
   getDecryptedConfig,
   getPublicConfig,
@@ -376,5 +408,6 @@ module.exports = {
   addCampaignLogs,
   getCampaignLogs,
   clearCampaignLogs,
-  getRecentlyContactedMap
+  getRecentlyContactedMap,
+  getDailySendingStats
 };

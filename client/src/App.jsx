@@ -7,31 +7,61 @@ import JobDescriptionInput from './components/JobDescriptionInput';
 import EmailPreview from './components/EmailPreview';
 import SendProgressModal from './components/SendProgressModal';
 import SettingsModal from './components/SettingsModal';
+import AuthGate from './components/AuthGate';
 import Toast from './components/Toast';
-import { fetchConfig, streamEmailSending } from './services/api';
+import { fetchMigrationConfig } from './services/api';
+import { watchAuthState, signOutUser } from './lib/firebase';
+import { loadSettings, saveSettings, formatForFirestore, getDefaultSettings } from './lib/settings';
+import { useWizardState } from './hooks/useWizardState';
+import { useCampaignStream } from './hooks/useCampaignStream';
+import { ChevronLeft, ChevronRight, AlertCircle, RefreshCw } from 'lucide-react';
 
 export default function App() {
+  const [user, setUser] = useState(undefined); // undefined = loading, null = unauthenticated, User = authenticated
+  const [offlineMode, setOfflineMode] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState(null);
+  const [authRetryCount, setAuthRetryCount] = useState(0);
   const [config, setConfig] = useState(null);
-  const [currentStep, setCurrentStep] = useState(1);
-  const [resumeData, setResumeData] = useState(null);
-  const [recipients, setRecipients] = useState([]);
-  const [jobDescription, setJobDescription] = useState('');
-  const [generatedEmails, setGeneratedEmails] = useState({});
 
-  // Modals state
+  // Wizard state hook (TICK-CYC3-08 / B2)
+  const {
+    currentStep,
+    direction,
+    resumeData,
+    recipients,
+    setRecipients,
+    jobDescription,
+    setJobDescription,
+    generatedEmails,
+    setGeneratedEmails,
+    goToStep,
+    handleResumeUploaded,
+    resetWizard,
+    resumeReady,
+    jdReady,
+    recipientsCount,
+    emailReady
+  } = useWizardState(1);
+
+  // Outbound campaign streaming hook (TICK-CYC3-08 / B2)
+  const {
+    sendModalOpen,
+    setSendModalOpen,
+    isSending,
+    progressData,
+    throttlingData,
+    campaignSendLogs,
+    campaignSummary,
+    triggerSend
+  } = useCampaignStream();
+
+  // Settings modal navigation state
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState('ai');
-  const [sendModalOpen, setSendModalOpen] = useState(false);
-  const [isSending, setIsSending] = useState(false);
-  const [progressData, setProgressData] = useState(null);
-  const [throttlingData, setThrottlingData] = useState(null);
-  const [campaignSendLogs, setCampaignSendLogs] = useState([]);
-  const [campaignSummary, setCampaignSummary] = useState(null);
 
   // Theme state
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('jdmail-theme') || 'dark';
-  });
+  const [theme, setTheme] = useState(() => localStorage.getItem('jdmail-theme') || 'dark');
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -57,35 +87,55 @@ export default function App() {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
-  // Initial config load
+  // Watch Firebase authentication state and load user settings from Firestore (TICK-CYC3-14 / C5)
   useEffect(() => {
-    fetchConfig()
-      .then(data => {
-        setConfig(data);
-      })
-      .catch(err => {
-        console.error('Failed to load initial config:', err);
-        addToast({
-          type: 'error',
-          title: 'Connection Issue',
-          message: 'Could not connect to JDMail backend. Please check server.'
-        });
-      });
-  }, []);
+    // Timeout: If Firebase fails to respond within 4s, offer explicit retry or local mode
+    const connectionTimer = setTimeout(() => {
+      setAuthLoading(false);
+      setAuthError('Unable to reach Firebase authentication.');
+    }, 4000);
 
-  const handleSelectStep = (stepId) => {
-    if (stepId === 6) {
-      handleOpenSettings('logs');
-      return;
-    }
-    setCurrentStep(stepId);
-  };
+    const unsubscribe = watchAuthState(async (currentUser) => {
+      clearTimeout(connectionTimer);
+      setAuthError(null);
+      setUser(currentUser);
+      if (currentUser) {
+        setAuthLoading(true);
+        try {
+          let userSettings = await loadSettings(currentUser.uid);
+          if (!userSettings) {
+            const legacy = await fetchMigrationConfig();
+            userSettings = formatForFirestore(legacy);
+            await saveSettings(currentUser.uid, userSettings);
+          }
+          setConfig(userSettings);
+        } catch (err) {
+          console.error('Failed to load user settings from Firestore:', err);
+          addToast({
+            type: 'error',
+            title: 'Settings Issue',
+            message: 'Unable to connect to Firestore settings. Using default profile.'
+          });
+          setConfig(getDefaultSettings());
+        } finally {
+          setAuthLoading(false);
+        }
+      } else {
+        setConfig(null);
+        setAuthLoading(false);
+      }
+    });
 
-  const handleResumeUploaded = (data) => {
-    setResumeData(data);
-    if (currentStep === 1) {
-      setCurrentStep(2);
-    }
+    return () => {
+      clearTimeout(connectionTimer);
+      unsubscribe();
+    };
+  }, [authRetryCount]);
+
+  const handleRetryAuth = () => {
+    setAuthLoading(true);
+    setAuthError(null);
+    setAuthRetryCount(prev => prev + 1);
   };
 
   const handleOpenSettings = (tab = 'ai') => {
@@ -98,125 +148,118 @@ export default function App() {
     setSettingsModalOpen(true);
   };
 
-  // Trigger outbound email campaign
   const handleTriggerSend = () => {
-    const activeSmtp = (config?.smtpProfiles || []).find(p => p.isDefault) || config?.smtpProfiles?.[0];
-    if (!activeSmtp || !activeSmtp.isConfigured) {
-      addToast({
-        type: 'error',
-        title: 'SMTP Profile Required',
-        message: 'Please add and configure your SMTP credentials in Settings before sending.'
-      });
-      handleOpenSettings('smtp');
-      return;
-    }
-
-    if (!resumeData) {
-      addToast({
-        type: 'error',
-        title: 'Resume Required',
-        message: 'Please upload candidate resume in Step 1.'
-      });
-      return;
-    }
-
-    // Build recipient payload with generated or edited subject/body
-    const readyRecipients = recipients
-      .filter(r => generatedEmails[r.id]?.body)
-      .map(r => ({
-        id: r.id,
-        email: r.email,
-        name: r.name,
-        company: r.company,
-        role: r.role,
-        subject: generatedEmails[r.id].subject,
-        body: generatedEmails[r.id].body
-      }));
-
-    if (readyRecipients.length === 0) {
-      addToast({
-        type: 'error',
-        title: 'No Drafts Ready',
-        message: 'Please click "Generate Tailored Cold Emails" in Step 4 before sending.'
-      });
-      return;
-    }
-
-    // Defensive check: Ensure all recipients have explicit approval
-    const unapproved = readyRecipients.filter(r => {
-      const rec = recipients.find(orig => orig.id === r.id);
-      return !rec || !rec.isApproved;
-    });
-
-    if (unapproved.length > 0) {
-      addToast({
-        type: 'error',
-        title: 'Approval Required',
-        message: `${unapproved.length} recipient(s) lack explicit approval. Please approve them before sending.`
-      });
-      return;
-    }
-
-    // Reset and open send progress modal
-    setProgressData({ current: 0, total: readyRecipients.length, recipientEmail: '', status: 'starting' });
-    setThrottlingData(null);
-    setCampaignSendLogs([]);
-    setCampaignSummary(null);
-    setIsSending(true);
-    setSendModalOpen(true);
-
-    const delay = config?.sendingPreferences?.delaySeconds || 3;
-    const attachResume = config?.sendingPreferences?.attachResume !== false;
-
-    streamEmailSending({
-      recipients: readyRecipients,
-      resumeFileId: attachResume ? resumeData.fileId : null,
-      smtpProfileId: activeSmtp.id,
-      delaySeconds: delay,
-      onEvent: (eventType, eventData) => {
-        if (eventType === 'start') {
-          setProgressData({ current: 0, total: eventData.total, status: 'started' });
-        } else if (eventType === 'progress') {
-          setThrottlingData(null);
-          setProgressData({
-            current: eventData.current,
-            total: eventData.total,
-            recipientEmail: eventData.recipientEmail,
-            recipientName: eventData.recipientName,
-            status: 'sending'
-          });
-        } else if (eventType === 'item_complete') {
-          setCampaignSendLogs(prev => [eventData.logItem, ...prev]);
-        } else if (eventType === 'throttling') {
-          setThrottlingData({
-            waitingSeconds: eventData.waitingSeconds,
-            nextIndex: eventData.nextIndex
-          });
-        } else if (eventType === 'finished') {
-          setIsSending(false);
-          setThrottlingData(null);
-          setCampaignSummary({
-            total: eventData.total,
-            sentCount: eventData.sentCount,
-            failedCount: eventData.failedCount
-          });
-          addToast({
-            type: 'success',
-            title: 'Campaign Complete',
-            message: `Finished sending ${eventData.sentCount} of ${eventData.total} emails.`
-          });
-        }
-      },
-      onError: (err) => {
-        setIsSending(false);
-        addToast({
-          type: 'error',
-          title: 'Sending Error',
-          message: err.message
-        });
-      }
+    return triggerSend({
+      config,
+      resumeData,
+      recipients,
+      generatedEmails,
+      onOpenSettings: handleOpenSettings,
+      addToast
     });
   };
+
+  const handleContinueOffline = async () => {
+    setOfflineMode(true);
+    setUser({ isOffline: true, displayName: 'Local Mode', email: 'offline@localhost' });
+    try {
+      const legacy = await fetchMigrationConfig();
+      if (legacy) {
+        setConfig(formatForFirestore(legacy));
+      } else {
+        setConfig(getDefaultSettings());
+      }
+      addToast({
+        type: 'info',
+        title: 'Local Mode Active',
+        message: 'Using local server configuration and credentials.'
+      });
+    } catch {
+      setConfig(getDefaultSettings());
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      if (!user?.isOffline) {
+        await signOutUser();
+      }
+      setOfflineMode(false);
+      setUser(null);
+      setConfig(null);
+      resetWizard();
+      addToast({
+        type: 'info',
+        title: 'Signed Out',
+        message: 'You have been signed out successfully.'
+      });
+    } catch (err) {
+      console.error('Sign out error:', err);
+    }
+  };
+
+  if (authLoading) {
+    return (
+      <div className="auth-loading-screen">
+        <div className="auth-loading-spinner" />
+        <span>Loading JDMail...</span>
+      </div>
+    );
+  }
+
+  // Explicit Error/Retry State on Firebase Timeout (TICK-CYC3-14 / C5)
+  if (authError && !offlineMode && !user) {
+    return (
+      <div className="auth-loading-screen" style={{ flexDirection: 'column' }}>
+        <div className="glass-card" style={{ maxWidth: 440, textAlign: 'center', padding: 32 }}>
+          <AlertCircle size={36} style={{ color: 'var(--accent-warning)', margin: '0 auto 16px' }} />
+          <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: 'var(--text-primary)' }}>
+            Unable to Reach Firebase Authentication
+          </h3>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 24, lineHeight: 1.5 }}>
+            Connection to Firebase services timed out or could not be established. You can retry connecting or continue immediately in local mode using your local encrypted configuration.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleRetryAuth}
+              style={{ justifyContent: 'center', gap: 8 }}
+            >
+              <RefreshCw size={14} />
+              Retry Connection
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={handleContinueOffline}
+              style={{ justifyContent: 'center' }}
+            >
+              Continue in Local Mode
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user && !offlineMode) {
+    return (
+      <>
+        <AuthGate
+          onContinueOffline={handleContinueOffline}
+          onSignInError={(err) =>
+            addToast({
+              type: 'error',
+              title: 'Sign-in Failed',
+              message: err.message
+            })
+          }
+        />
+        <Toast toasts={toasts} onDismiss={removeToast} />
+      </>
+    );
+  }
 
   return (
     <>
@@ -226,62 +269,138 @@ export default function App() {
         onOpenLogs={handleOpenLogs}
         theme={theme}
         onToggleTheme={toggleTheme}
+        user={user}
+        onSignOut={handleSignOut}
       />
 
       <main className="app-container">
-        {/* Step Progression Bar */}
+        {/* Step Progression Bar — Single Canonical Step Indicator */}
         <StepIndicator
           currentStep={currentStep}
-          onSelectStep={handleSelectStep}
-          resumeReady={Boolean(resumeData)}
-          aiReady={Boolean(config?.aiProviders?.[config?.activeProvider || 'gemini']?.isConfigured)}
-          recipientsCount={recipients.length}
-          jdReady={Boolean(jobDescription && jobDescription.trim())}
-          emailReady={Boolean(Object.keys(generatedEmails).length > 0)}
+          onSelectStep={goToStep}
+          resumeReady={resumeReady}
+          recipientsCount={recipientsCount}
+          jdReady={jdReady}
+          emailReady={emailReady}
         />
 
-        {/* Main 2-Column Dashboard Grid */}
-        <div className="dashboard-grid">
-          {/* Left Column: Setup Inputs (Resume, Recipients, JD) */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            {/* Step 1: Resume Upload */}
-            <ResumeUpload
-              resumeData={resumeData}
-              onResumeUploaded={handleResumeUploaded}
-              onShowToast={addToast}
-              config={config}
-              onOpenSettings={handleOpenSettings}
-            />
+        {/* Wizard Step Shell (TICK-CYC3-11: Stacked duplicate card stack removed) */}
+        <div className="wizard-container">
+          <div className="step-transition-wrapper">
+            <div
+              key={currentStep}
+              className={`step-content-animating ${direction === 'forward' ? 'step-slide-forward' : 'step-slide-backward'}`}
+            >
+              {currentStep === 1 && (
+                <div>
+                  <ResumeUpload
+                    resumeData={resumeData}
+                    onResumeUploaded={handleResumeUploaded}
+                    onShowToast={addToast}
+                  />
+                  <div className="wizard-nav-footer">
+                    <div />
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => goToStep(2)}
+                      disabled={!resumeReady}
+                    >
+                      Continue to Target Role
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
 
-            {/* Step 2: Recipients Manager */}
-            <RecipientManager
-              recipients={recipients}
-              onUpdateRecipients={setRecipients}
-              onShowToast={addToast}
-            />
+              {currentStep === 2 && (
+                <div>
+                  <JobDescriptionInput
+                    jobDescription={jobDescription}
+                    onChangeJd={setJobDescription}
+                    onShowToast={addToast}
+                  />
+                  <div className="wizard-nav-footer">
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => goToStep(1)}
+                    >
+                      <ChevronLeft size={16} />
+                      Back to Profile
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => goToStep(3)}
+                    >
+                      Continue to Recipients
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
 
-            {/* Step 3: Optional Job Description */}
-            <JobDescriptionInput
-              jobDescription={jobDescription}
-              onChangeJd={setJobDescription}
-              onShowToast={addToast}
-            />
-          </div>
+              {currentStep === 3 && (
+                <div>
+                  <RecipientManager
+                    recipients={recipients}
+                    onUpdateRecipients={setRecipients}
+                    onShowToast={addToast}
+                    generatedEmails={generatedEmails}
+                  />
+                  <div className="wizard-nav-footer">
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => goToStep(2)}
+                    >
+                      <ChevronLeft size={16} />
+                      Back to Target Role
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => goToStep(4)}
+                      disabled={recipientsCount === 0}
+                    >
+                      Continue to AI Drafts
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
 
-          {/* Right Column: AI Generation, Review & Send */}
-          <div>
-            <EmailPreview
-              config={config}
-              resumeData={resumeData}
-              jobDescription={jobDescription}
-              recipients={recipients}
-              onUpdateRecipients={setRecipients}
-              generatedEmails={generatedEmails}
-              onUpdateGeneratedEmails={setGeneratedEmails}
-              onOpenSettings={handleOpenSettings}
-              onShowToast={addToast}
-              onTriggerSend={handleTriggerSend}
-            />
+              {currentStep === 4 && (
+                <div>
+                  <EmailPreview
+                    config={config}
+                    resumeData={resumeData}
+                    jobDescription={jobDescription}
+                    recipients={recipients}
+                    onUpdateRecipients={setRecipients}
+                    generatedEmails={generatedEmails}
+                    onUpdateGeneratedEmails={setGeneratedEmails}
+                    onOpenSettings={handleOpenSettings}
+                    onShowToast={addToast}
+                    onTriggerSend={handleTriggerSend}
+                    onRefreshConfig={setConfig}
+                    user={user}
+                  />
+                  <div className="wizard-nav-footer">
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => goToStep(3)}
+                    >
+                      <ChevronLeft size={16} />
+                      Back to Recipients
+                    </button>
+                    <div />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </main>
@@ -295,6 +414,7 @@ export default function App() {
           config={config}
           onRefreshConfig={setConfig}
           onShowToast={addToast}
+          user={user}
         />
       )}
 

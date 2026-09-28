@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { HelpCircle, ExternalLink, Key, ShieldCheck, Check, Copy } from 'lucide-react';
+import { HelpCircle, ExternalLink } from 'lucide-react';
 
 const GUIDES = [
   {
@@ -68,17 +68,10 @@ const GUIDES = [
 
 export default function SmtpGuideModal({ isOpen, onClose, onApplyPreset }) {
   const [activeGuideId, setActiveGuideId] = useState('gmail');
-  const [copiedHost, setCopiedHost] = useState(false);
 
   if (!isOpen) return null;
 
   const currentGuide = GUIDES.find(g => g.id === activeGuideId) || GUIDES[0];
-
-  const handleCopy = (text) => {
-    navigator.clipboard.writeText(text);
-    setCopiedHost(true);
-    setTimeout(() => setCopiedHost(false), 2000);
-  };
 
   return (
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 60 }}>
@@ -126,7 +119,7 @@ export default function SmtpGuideModal({ isOpen, onClose, onApplyPreset }) {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
                 {currentGuide.name}
               </h3>
               <a
@@ -157,15 +150,15 @@ export default function SmtpGuideModal({ isOpen, onClose, onApplyPreset }) {
             >
               <div>
                 <span style={{ color: 'var(--text-muted)' }}>Host:</span>{' '}
-                <strong style={{ color: '#fff', fontFamily: 'var(--font-mono)' }}>{currentGuide.host}</strong>
+                <strong style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{currentGuide.host}</strong>
               </div>
               <div>
                 <span style={{ color: 'var(--text-muted)' }}>Port:</span>{' '}
-                <strong style={{ color: '#fff', fontFamily: 'var(--font-mono)' }}>{currentGuide.port}</strong>
+                <strong style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{currentGuide.port}</strong>
               </div>
               <div>
                 <span style={{ color: 'var(--text-muted)' }}>Security:</span>{' '}
-                <strong style={{ color: '#fff' }}>{currentGuide.encryption}</strong>
+                <strong style={{ color: 'var(--text-primary)' }}>{currentGuide.encryption}</strong>
               </div>
             </div>
 

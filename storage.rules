@@ -1,0 +1,13 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // JDMail Zero File Retention Policy:
+    // Only API keys, SMTP credentials, preferences, and outreach history logs are stored.
+    // Resumes and uploaded spreadsheets are strictly ephemeral session data and are NEVER
+    // stored in Firebase Storage or any cloud bucket.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
