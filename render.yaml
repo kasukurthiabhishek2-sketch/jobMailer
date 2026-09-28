@@ -2,15 +2,16 @@
 # https://render.com/docs/blueprint-spec
 #
 # Deploy: Connect your GitHub repo to Render and point to this file.
-# Render auto-detects the root directory from the service config below.
+# If Render doesn't auto-detect rootDir, the build/start commands
+# explicitly cd into server/ so it works from the repo root.
 
 services:
   - type: web
     name: jdmail-server
     runtime: node
     rootDir: server
-    buildCommand: npm install
-    startCommand: npm start
+    buildCommand: cd server && npm install
+    startCommand: cd server && npm start
     plan: free
     healthCheckPath: /api/health
     envVars:
