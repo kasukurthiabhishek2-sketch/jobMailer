@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { streamEmailSending } from '../services/api';
+import { streamEmailSending, saveOutreachLogs } from '../services/api';
 
 /**
  * useCampaignStream — Hook managing real-time outbound email dispatch over SSE.
@@ -162,6 +162,10 @@ export function useCampaignStream() {
               aborted: eventData.aborted,
               abortReason: eventData.abortReason
             });
+            // Persist logs to Firestore for cloud users
+            if (Array.isArray(eventData.logs) && eventData.logs.length > 0) {
+              saveOutreachLogs(eventData.logs).catch(() => {});
+            }
             addToast?.({
               type: eventData.failedCount > 0 && eventData.sentCount === 0 ? 'error' : 'success',
               title: eventData.aborted ? 'Campaign Stopped' : 'Campaign Complete',

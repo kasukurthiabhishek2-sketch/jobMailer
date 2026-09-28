@@ -1,6 +1,13 @@
 import { getIdToken } from '../lib/firebase';
 
 /**
+ * Base URL for backend API requests.
+ * Empty string in local dev (Vite proxy handles /api/*).
+ * Set to the Render backend URL in production (e.g. 'https://jdmail-server.onrender.com').
+ */
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
+/**
  * Authenticated fetch wrapper that automatically attaches Firebase ID token
  * to the Authorization header if the user is authenticated.
  */
@@ -17,7 +24,7 @@ async function authFetch(url, options = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  return fetch(url, {
+  return fetch(`${API_BASE}${url}`, {
     ...options,
     headers
   });
@@ -340,13 +347,58 @@ export async function listAiModels({ providerKey, apiKey, selectedKeyId }) {
 }
 
 export async function fetchOutreachLogs() {
+  // Firestore-first for authenticated cloud users
+  try {
+    const { getAuth } = await import('firebase/auth');
+    const user = getAuth().currentUser;
+    if (user) {
+      const { fetchLogsFromFirestore } = await import('../lib/logsService');
+      return fetchLogsFromFirestore(user.uid);
+    }
+  } catch {
+    // Firebase unavailable — fall back to backend
+  }
+
   const res = await authFetch('/api/logs');
   return res.json();
 }
 
 export async function clearOutreachLogs() {
+  // Firestore-first for authenticated cloud users
+  try {
+    const { getAuth } = await import('firebase/auth');
+    const user = getAuth().currentUser;
+    if (user) {
+      const { clearLogsFromFirestore } = await import('../lib/logsService');
+      await clearLogsFromFirestore(user.uid);
+      return { success: true };
+    }
+  } catch {
+    // Firebase unavailable — fall back to backend
+  }
+
   const res = await authFetch('/api/logs', { method: 'DELETE' });
   return res.json();
+}
+
+/**
+ * Persist campaign log entries after a successful send session.
+ * Uses Firestore for cloud users, backend for self-hosted.
+ */
+export async function saveOutreachLogs(logEntries) {
+  if (!Array.isArray(logEntries) || logEntries.length === 0) return;
+
+  try {
+    const { getAuth } = await import('firebase/auth');
+    const user = getAuth().currentUser;
+    if (user) {
+      const { saveLogsToFirestore } = await import('../lib/logsService');
+      await saveLogsToFirestore(user.uid, logEntries);
+      return;
+    }
+  } catch {
+    // Firebase unavailable — backend saves logs server-side during dispatch
+  }
 }
 
 export async function startCopilotAuth() {

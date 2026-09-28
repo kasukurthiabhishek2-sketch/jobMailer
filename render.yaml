@@ -1,0 +1,26 @@
+# Render.com Blueprint — JDMail Express Backend
+# https://render.com/docs/blueprint-spec
+#
+# Deploy: Connect your GitHub repo to Render and point to this file.
+# Render auto-detects the root directory from the service config below.
+
+services:
+  - type: web
+    name: jdmail-server
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DISABLE_AUTH
+        value: "false"
+      - key: FIREBASE_PROJECT_ID
+        value: outreach-d565d
+      - key: ALLOWED_ORIGINS
+        sync: false  # Set manually in Render dashboard (your Vercel domain)
+      - key: ENCRYPTION_MASTER_KEY
+        generateValue: true  # Render auto-generates a random value

@@ -28,7 +28,8 @@ const testSuites = [
   { name: 'End-to-End Outreach Pipeline & Invariants', file: 'test_e2e_pipeline.js' },
   { name: 'Comprehensive Opaque-Box E2E Suite (Tiers 1-4)', file: 'test_e2e_suite.js' },
   { name: 'Authenticated User Key Resolution for AI Routes', file: 'test_key_resolution.js' },
-  { name: 'GitHub Copilot OAuth Device Flow & No-Key Invariants', file: 'test_copilot_device_flow.js' }
+  { name: 'GitHub Copilot OAuth Device Flow & No-Key Invariants', file: 'test_copilot_device_flow.js' },
+  { name: 'Hybrid Deployment Wiring (Vercel + Render)', file: 'test_hybrid_deployment.js' }
 ];
 
 console.log('====================================================');
