@@ -48,6 +48,47 @@ describe('useWizardState Hook (TICK-CYC3-08 / B2)', () => {
     expect(result.current.canGoToStep(3)).toBe(true);
   });
 
+  it('updates resumeData without advancing currentStep when handleResumeChange is called', () => {
+    const { result } = renderHook(() => useWizardState());
+
+    expect(result.current.currentStep).toBe(1);
+
+    act(() => {
+      result.current.handleResumeChange({
+        fileId: 'res-456',
+        detectedName: 'Alice Smith',
+        detectedEmail: 'alice@example.com'
+      });
+    });
+
+    expect(result.current.resumeData?.fileId).toBe('res-456');
+    expect(result.current.resumeData?.detectedName).toBe('Alice Smith');
+    expect(result.current.resumeData?.detectedEmail).toBe('alice@example.com');
+    expect(result.current.currentStep).toBe(1);
+    expect(result.current.resumeReady).toBe(true);
+  });
+
+  it('updates resumeData without advancing currentStep when handleResumeUploaded is called with autoAdvance: false', () => {
+    const { result } = renderHook(() => useWizardState());
+
+    expect(result.current.currentStep).toBe(1);
+
+    act(() => {
+      result.current.handleResumeUploaded(
+        {
+          fileId: 'res-789',
+          detectedName: 'Bob Jones'
+        },
+        { autoAdvance: false }
+      );
+    });
+
+    expect(result.current.resumeData?.fileId).toBe('res-789');
+    expect(result.current.resumeData?.detectedName).toBe('Bob Jones');
+    expect(result.current.currentStep).toBe(1);
+    expect(result.current.resumeReady).toBe(true);
+  });
+
   it('prevents forward navigation to locked steps but permits backward navigation', () => {
     const { result } = renderHook(() => useWizardState());
 

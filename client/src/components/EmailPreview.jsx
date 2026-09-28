@@ -94,7 +94,7 @@ export default function EmailPreview({
   const configuredAiProviders = useMemo(() => {
     if (!config?.aiProviders) return [];
     return Object.entries(config.aiProviders)
-      .filter(([, p]) => Boolean(p?.isConfigured))
+      .filter(([key, p]) => Boolean(p?.isConfigured || (p?.apiKey && p.apiKey.trim().length > 0) || (key === 'copilot' && (p?.connected || p?.isConfigured))))
       .map(([key, p]) => ({
         key,
         name: p.name || key,
@@ -103,7 +103,13 @@ export default function EmailPreview({
   }, [config]);
 
   const effectiveAiKey = useMemo(() => {
-    if (config?.activeProvider && config?.aiProviders?.[config.activeProvider]?.isConfigured) {
+    const activeProviderObj = config?.activeProvider ? config?.aiProviders?.[config.activeProvider] : null;
+    const isActConfigured = Boolean(
+      activeProviderObj?.isConfigured ||
+      (activeProviderObj?.apiKey && activeProviderObj.apiKey.trim().length > 0) ||
+      (config?.activeProvider === 'copilot' && (activeProviderObj?.connected || activeProviderObj?.isConfigured))
+    );
+    if (activeProviderObj && isActConfigured) {
       return config.activeProvider;
     }
     if (configuredAiProviders.length > 0) {
@@ -113,7 +119,11 @@ export default function EmailPreview({
   }, [config, configuredAiProviders]);
 
   const activeAi = config?.aiProviders?.[effectiveAiKey];
-  const isAiConfigured = Boolean(activeAi?.isConfigured);
+  const isAiConfigured = Boolean(
+    activeAi?.isConfigured ||
+    (activeAi?.apiKey && activeAi.apiKey.trim().length > 0) ||
+    (effectiveAiKey === 'copilot' && (activeAi?.connected || activeAi?.isConfigured))
+  );
 
   const handleSwitchAiProvider = async (providerKey) => {
     if (!config || providerKey === effectiveAiKey) return;
@@ -274,10 +284,13 @@ export default function EmailPreview({
     }
 
     if (!isAiConfigured) {
+      const isCopilot = effectiveAiKey === 'copilot';
       onShowToast?.({
         type: 'error',
-        title: 'AI Provider Not Configured',
-        message: `Please configure an API key or authenticate ${activeAi?.name || 'your AI provider'} in Settings.`
+        title: isCopilot ? 'GitHub Copilot Not Connected' : 'AI Provider Not Configured',
+        message: isCopilot
+          ? 'GitHub Copilot requires GitHub verification. Please connect your GitHub account in Settings.'
+          : `Please configure an API key for ${activeAi?.name || 'your AI provider'} in Settings.`
       });
       onOpenSettings?.('ai');
       return;
@@ -340,10 +353,13 @@ export default function EmailPreview({
     if (!currentRecipient || !resumeData) return;
 
     if (!isAiConfigured) {
+      const isCopilot = effectiveAiKey === 'copilot';
       onShowToast?.({
         type: 'error',
-        title: 'AI Provider Not Configured',
-        message: `Please configure an API key or authenticate ${activeAi?.name || 'your AI provider'} in Settings.`
+        title: isCopilot ? 'GitHub Copilot Not Connected' : 'AI Provider Not Configured',
+        message: isCopilot
+          ? 'GitHub Copilot requires GitHub verification. Please connect your GitHub account in Settings.'
+          : `Please configure an API key for ${activeAi?.name || 'your AI provider'} in Settings.`
       });
       onOpenSettings?.('ai');
       return;

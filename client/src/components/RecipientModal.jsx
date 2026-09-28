@@ -1,14 +1,15 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X,
   AlertCircle,
   Search,
   Check,
-  ShieldCheck,
   CheckCircle,
   FileSpreadsheet,
   Edit2,
+  Info,
+  Columns3,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -55,6 +56,14 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTab, setFilterTab] = useState('all'); // 'all' | 'valid' | 'selected' | 'invalid'
   const [lastClickedIndex, setLastClickedIndex] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 25;
+
+  const [prevFilter, setPrevFilter] = useState({ searchTerm, filterTab });
+  if (prevFilter.searchTerm !== searchTerm || prevFilter.filterTab !== filterTab) {
+    setPrevFilter({ searchTerm, filterTab });
+    setCurrentPage(1);
+  }
 
   // Inline editing state for fixing email or name
   const [editingRowId, setEditingRowId] = useState(null);
@@ -66,9 +75,11 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
   const [isExplicitlyApproved, setIsExplicitlyApproved] = useState(false);
   const [highlightApproval, setHighlightApproval] = useState(false);
 
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50); // 50 | 100 | 250 | 'all'
+  // Column visibility
+  const [showRowCol, setShowRowCol] = useState(true);
+  const [showRoleCol, setShowRoleCol] = useState(true);
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const columnsRef = useRef(null);
 
   const [prevSheetData, setPrevSheetData] = useState(sheetData);
   if (sheetData !== prevSheetData) {
@@ -83,28 +94,33 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
     }
   }
 
-  const [prevFilterTab, setPrevFilterTab] = useState(filterTab);
-  const [prevSearchTerm, setPrevSearchTerm] = useState(searchTerm);
-  if (filterTab !== prevFilterTab || searchTerm !== prevSearchTerm) {
-    setPrevFilterTab(filterTab);
-    setPrevSearchTerm(searchTerm);
-    setCurrentPage(1);
-  }
-
   const totalCount = rows.length;
   const validCount = useMemo(() => rows.filter(r => r.isValidEmail).length, [rows]);
   const invalidCount = totalCount - validCount;
   const selectedCount = useMemo(() => rows.filter(r => r.isSelected).length, [rows]);
 
+  // Auto-hide Role column when every row's role is empty
+  const anyRolePresent = useMemo(() => rows.some(r => r.role && r.role.trim()), [rows]);
+
+  // Close columns popover on outside click
+  useEffect(() => {
+    if (!columnsOpen) return;
+    const handler = (e) => {
+      if (columnsRef.current && !columnsRef.current.contains(e.target)) {
+        setColumnsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [columnsOpen]);
+
   // Filter rows by search term and filter tab
   const filteredRows = useMemo(() => {
     return rows.filter(r => {
-      // Tab filter
       if (filterTab === 'valid' && !r.isValidEmail) return false;
       if (filterTab === 'selected' && !r.isSelected) return false;
       if (filterTab === 'invalid' && r.isValidEmail) return false;
 
-      // Search term filter
       if (!searchTerm) return true;
       const term = searchTerm.toLowerCase();
       return (
@@ -117,19 +133,18 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
     });
   }, [rows, filterTab, searchTerm]);
 
-  // Derived pagination calculations
-  const totalPages = useMemo(() => {
-    if (pageSize === 'all') return 1;
-    return Math.max(1, Math.ceil(filteredRows.length / pageSize));
-  }, [filteredRows.length, pageSize]);
-
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (safePage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, filteredRows.length);
   const paginatedRows = useMemo(() => {
-    if (pageSize === 'all') return filteredRows;
-    const start = (currentPage - 1) * pageSize;
-    return filteredRows.slice(start, start + pageSize);
-  }, [filteredRows, currentPage, pageSize]);
+    return filteredRows.slice(startIndex, endIndex);
+  }, [filteredRows, startIndex, endIndex]);
 
   if (!isOpen || !sheetData) return null;
+
+  const roleVisible = showRoleCol && anyRolePresent;
+  const colCount = 5 + (showRowCol ? 1 : 0) + (roleVisible ? 1 : 0);
 
   // Toggle individual row with Shift-click range support
   const handleToggleRow = (indexInFiltered, e) => {
@@ -213,7 +228,6 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
         setEditError(val.reason);
       }
     } else {
-      // Editing Name
       setRows(prev =>
         prev.map(r => {
           if (r.id !== rowId) return r;
@@ -254,20 +268,20 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
     filteredRows.filter(r => r.isValidEmail).length > 0 &&
     filteredRows.filter(r => r.isValidEmail).every(r => r.isSelected);
 
+  // Describe the name column heuristic in plain language
+  const nameColLabel = sheetData.columnMapping?.nameCol || null;
+  const nameColDesc = nameColLabel ? nameColLabel : 'No name column found — using generic name';
+
   const modalMarkup = (
     <div className="modal-overlay" onClick={onClose}>
       <div
-        className="modal-content"
+        className="modal-content modal-review"
         onClick={e => e.stopPropagation()}
-        style={{
-          maxWidth: 1040,
-          width: '95vw',
-          maxHeight: '92vh',
-          display: 'flex',
-          flexDirection: 'column'
-        }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Review contacts before importing"
       >
-        {/* Header */}
+        {/* 1. Header (fixed) */}
         <div className="modal-header">
           <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div
@@ -275,22 +289,29 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
                 width: 36,
                 height: 36,
                 borderRadius: 'var(--radius-md)',
-                background: 'linear-gradient(135deg, rgba(124, 92, 255, 0.25) 0%, rgba(52, 211, 153, 0.2) 100%)',
+                background: 'rgba(37, 99, 235, 0.12)',
                 color: 'var(--accent-primary)',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 2px 8px rgba(124, 92, 255, 0.2)'
+                justifyContent: 'center'
               }}
             >
               <FileSpreadsheet size={20} />
             </div>
             <div>
               <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)', letterSpacing: '-0.2px' }}>
-                Review & Explicitly Approve Extracted Contacts
+                Review contacts before importing
               </div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                Row-by-Row Isolation: Each email address is paired strictly with the HR contact from the same spreadsheet row.
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                Check the contacts found in {sheetData.filename}. Nothing is imported until you approve.
+                <button
+                  type="button"
+                  className="info-tooltip-btn"
+                  title="Each email is matched with the name and company from the same spreadsheet row."
+                  aria-label="Row pairing info"
+                >
+                  <Info size={13} />
+                </button>
               </div>
             </div>
           </div>
@@ -299,635 +320,542 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
           </button>
         </div>
 
-        {/* Body */}
-        <div className="modal-body" style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
-          {/* Isolation & Column Mapping Banner */}
-          <div
-            style={{
-              background: 'linear-gradient(135deg, rgba(124, 92, 255, 0.08) 0%, rgba(52, 211, 153, 0.05) 100%)',
-              border: '1px solid rgba(124, 92, 255, 0.22)',
-              borderRadius: 'var(--radius-md)',
-              padding: '12px 16px',
-              marginBottom: 14
-            }}
-          >
-            {/* Top row: File name & stats */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>
-                  📄 {sheetData.filename}
-                </span>
-                {sheetData.sheetName && (
-                  <span className="info-pill" style={{ background: 'rgba(255, 255, 255, 0.06)', fontSize: 11 }}>
-                    Sheet: <strong>{sheetData.sheetName}</strong>
-                  </span>
-                )}
-                <span className="info-pill" style={{ background: 'rgba(255, 255, 255, 0.06)', fontSize: 11 }}>
-                  Header: <strong>{sheetData.headerRowIndex >= 0 ? `Row ${sheetData.headerRowIndex + 1}` : 'First Row (Data)'}</strong>
-                </span>
-              </div>
+        {/* 2. Summary bar (fixed) */}
+        <div className="review-summary-bar">
+          <span><strong>{sheetData.filename}</strong></span>
+          {sheetData.sheetName && (
+            <>
+              <span className="review-summary-dot">·</span>
+              <span>Sheet: <strong>{sheetData.sheetName}</strong></span>
+            </>
+          )}
+          <span className="review-summary-dot">·</span>
+          <span>Header: <strong>{sheetData.headerRowIndex >= 0 ? `Row ${sheetData.headerRowIndex + 1}` : 'First row (data)'}</strong></span>
+          {sheetData.columnMapping?.emailCol && (
+            <>
+              <span className="review-summary-dot">·</span>
+              <span>Email: <strong>{sheetData.columnMapping.emailCol}</strong></span>
+            </>
+          )}
+          <span className="review-summary-dot">·</span>
+          <span>Name: <strong>{nameColDesc}</strong></span>
+          {sheetData.columnMapping?.companyCol && (
+            <>
+              <span className="review-summary-dot">·</span>
+              <span>Company: <strong>{sheetData.columnMapping.companyCol}</strong></span>
+            </>
+          )}
+          {/* TODO: Add "Edit mapping" action that returns to sheet/header/column step if one exists */}
+        </div>
 
-              {/* Status Counters */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <span className="info-pill" style={{ background: 'var(--bg-tertiary)', fontSize: 11 }}>
-                  <strong>{totalCount}</strong> Total Rows
-                </span>
-                <span className="info-pill" style={{ background: 'rgba(52, 211, 153, 0.12)', borderColor: 'rgba(52, 211, 153, 0.35)', color: 'var(--accent-success)', fontSize: 11 }}>
-                  ✓ <strong>{validCount}</strong> Valid
-                </span>
-                {invalidCount > 0 && (
-                  <span className="info-pill" style={{ background: 'rgba(248, 113, 113, 0.12)', borderColor: 'rgba(248, 113, 113, 0.35)', color: 'var(--accent-danger)', fontSize: 11 }}>
-                    ⚠️ <strong>{invalidCount}</strong> Need Fix
-                  </span>
-                )}
-                <span className="info-pill" style={{ background: 'rgba(124, 92, 255, 0.15)', borderColor: 'rgba(124, 92, 255, 0.4)', color: 'var(--accent-primary-hover)', fontSize: 11 }}>
-                  <strong>{selectedCount}</strong> Selected
-                </span>
-              </div>
-            </div>
-
-            {/* Column Mapping Strip */}
-            {sheetData.columnMapping && (
-              <div
+        {/* 3. Toolbar: search + segmented filter + actions (fixed) */}
+        <div className="review-toolbar">
+          {/* Search */}
+          <div style={{ position: 'relative', flex: 1, minWidth: 200, maxWidth: 340 }}>
+            <Search
+              size={14}
+              style={{
+                position: 'absolute',
+                left: 10,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: 'var(--text-muted)'
+              }}
+            />
+            <input
+              type="text"
+              placeholder="Search name, email or company"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="form-input"
+              style={{ paddingLeft: 30, fontSize: 12, height: 32 }}
+              aria-label="Search contacts"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
                 style={{
-                  marginTop: 8,
-                  paddingTop: 8,
-                  borderTop: '1px solid rgba(255, 255, 255, 0.07)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  fontSize: 11,
+                  position: 'absolute',
+                  right: 8,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'transparent',
+                  border: 'none',
                   color: 'var(--text-muted)',
-                  flexWrap: 'wrap'
+                  cursor: 'pointer',
+                  padding: 2
                 }}
+                aria-label="Clear search"
               >
-                <span>
-                  Email Column: <strong style={{ color: 'var(--text-primary)' }}>{sheetData.columnMapping.emailCol || 'Row Scan'}</strong>
-                </span>
-                <span>•</span>
-                <span>
-                  Name Column: <strong style={{ color: 'var(--text-primary)' }}>{sheetData.columnMapping.nameCol || 'Row Heuristic'}</strong>
-                </span>
-                {sheetData.columnMapping.companyCol && (
-                  <>
-                    <span>•</span>
-                    <span>Company: <strong style={{ color: 'var(--text-primary)' }}>{sheetData.columnMapping.companyCol}</strong></span>
-                  </>
-                )}
-                {sheetData.columnMapping.roleCol && (
-                  <>
-                    <span>•</span>
-                    <span>Role: <strong style={{ color: 'var(--text-primary)' }}>{sheetData.columnMapping.roleCol}</strong></span>
-                  </>
-                )}
-                <span style={{ marginLeft: 'auto', color: 'var(--accent-success)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <ShieldCheck size={12} /> Row-by-Row Isolation Verified
-                </span>
-              </div>
+                <X size={12} />
+              </button>
             )}
           </div>
 
-          {/* Search & Filter Toolbar */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: 10,
-              gap: 12,
-              flexWrap: 'wrap'
-            }}
-          >
-            {/* Search Box */}
-            <div style={{ position: 'relative', flex: 1, minWidth: 220, maxWidth: 380 }}>
-              <Search
-                size={14}
-                style={{
-                  position: 'absolute',
-                  left: 10,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: 'var(--text-muted)'
-                }}
-              />
-              <input
-                type="text"
-                placeholder="Search extracted names, emails, companies..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="form-input"
-                style={{ paddingLeft: 30, fontSize: 12, height: 32 }}
-              />
-              {searchTerm && (
-                <button
-                  type="button"
-                  onClick={() => setSearchTerm('')}
-                  style={{
-                    position: 'absolute',
-                    right: 8,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--text-muted)',
-                    cursor: 'pointer',
-                    padding: 2
-                  }}
-                >
-                  <X size={12} />
-                </button>
-              )}
-            </div>
-
-            {/* Filter Tabs & Bulk Select Buttons */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-sm)', padding: 2, border: '1px solid var(--border-subtle)' }}>
-                <button
-                  type="button"
-                  onClick={() => setFilterTab('all')}
-                  style={{
-                    padding: '3px 8px',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    borderRadius: 4,
-                    border: 'none',
-                    cursor: 'pointer',
-                    background: filterTab === 'all' ? 'var(--accent-primary)' : 'transparent',
-                    color: filterTab === 'all' ? '#fff' : 'var(--text-muted)'
-                  }}
-                >
-                  All ({totalCount})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterTab('valid')}
-                  style={{
-                    padding: '3px 8px',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    borderRadius: 4,
-                    border: 'none',
-                    cursor: 'pointer',
-                    background: filterTab === 'valid' ? 'var(--accent-primary)' : 'transparent',
-                    color: filterTab === 'valid' ? '#fff' : 'var(--accent-success)'
-                  }}
-                >
-                  Valid ({validCount})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterTab('selected')}
-                  style={{
-                    padding: '3px 8px',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    borderRadius: 4,
-                    border: 'none',
-                    cursor: 'pointer',
-                    background: filterTab === 'selected' ? 'var(--accent-primary)' : 'transparent',
-                    color: filterTab === 'selected' ? '#fff' : 'var(--text-muted)'
-                  }}
-                >
-                  Selected ({selectedCount})
-                </button>
-                {invalidCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setFilterTab('invalid')}
-                    style={{
-                      padding: '3px 8px',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      borderRadius: 4,
-                      border: 'none',
-                      cursor: 'pointer',
-                      background: filterTab === 'invalid' ? 'var(--accent-danger)' : 'transparent',
-                      color: filterTab === 'invalid' ? '#fff' : 'var(--accent-danger)'
-                    }}
-                  >
-                    Need Fix ({invalidCount})
-                  </button>
-                )}
-              </div>
-
-              {/* Quick Select All / Deselect All */}
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => handleSelectFilteredValid(true)}
-                style={{ fontSize: 11, height: 26, padding: '2px 8px' }}
-                title="Select all visible valid contacts"
-              >
-                Select All
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => handleSelectFilteredValid(false)}
-                style={{ fontSize: 11, height: 26, padding: '2px 8px' }}
-                title="Deselect all visible contacts"
-              >
-                Clear
-              </button>
-            </div>
+          {/* Search result count for screen readers */}
+          <div aria-live="polite" className="sr-only" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)' }}>
+            {searchTerm ? `${filteredRows.length} contacts found` : ''}
           </div>
 
-          {/* Extracted Data Table */}
-          <div className="data-table-wrapper" style={{ maxHeight: 380 }}>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 44, textAlign: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {/* Segmented control: All · Ready · Needs attention · Selected */}
+            <div className="segmented-control" role="radiogroup" aria-label="Filter contacts">
+              <button
+                type="button"
+                className={`segmented-btn ${filterTab === 'all' ? 'active' : ''}`}
+                onClick={() => setFilterTab('all')}
+                role="radio"
+                aria-checked={filterTab === 'all'}
+              >
+                All {totalCount}
+              </button>
+              <button
+                type="button"
+                className={`segmented-btn ${filterTab === 'valid' ? 'active' : ''}`}
+                onClick={() => setFilterTab('valid')}
+                role="radio"
+                aria-checked={filterTab === 'valid'}
+              >
+                Ready {validCount}
+              </button>
+              {invalidCount > 0 && (
+                <button
+                  type="button"
+                  className={`segmented-btn ${filterTab === 'invalid' ? 'active' : ''}`}
+                  onClick={() => setFilterTab('invalid')}
+                  role="radio"
+                  aria-checked={filterTab === 'invalid'}
+                >
+                  <AlertCircle size={12} />
+                  Needs attention {invalidCount}
+                </button>
+              )}
+              <button
+                type="button"
+                className={`segmented-btn ${filterTab === 'selected' ? 'active' : ''}`}
+                onClick={() => setFilterTab('selected')}
+                role="radio"
+                aria-checked={filterTab === 'selected'}
+              >
+                Selected {selectedCount}
+              </button>
+            </div>
+
+            {/* Select All / Clear */}
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => handleSelectFilteredValid(true)}
+              style={{ fontSize: 11, height: 28 }}
+              title="Select all visible valid contacts"
+            >
+              Select All
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => handleSelectFilteredValid(false)}
+              style={{ fontSize: 11, height: 28 }}
+              title="Deselect all visible contacts"
+            >
+              Clear
+            </button>
+
+            {/* Columns toggle */}
+            <div style={{ position: 'relative' }} ref={columnsRef}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setColumnsOpen(v => !v)}
+                style={{ fontSize: 11, height: 28, gap: 4 }}
+                title="Toggle columns"
+                aria-expanded={columnsOpen}
+              >
+                <Columns3 size={13} />
+                Columns
+              </button>
+              {columnsOpen && (
+                <div className="columns-popover">
+                  <label>
                     <input
                       type="checkbox"
-                      checked={allFilteredValidSelected}
-                      onChange={e => handleSelectAll(e.target.checked)}
-                      style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
-                      title="Select / Deselect all valid rows"
-                      aria-label="Select all valid rows"
+                      checked={showRowCol}
+                      onChange={e => setShowRowCol(e.target.checked)}
                     />
-                  </th>
-                  <th style={{ width: 85, textAlign: 'center' }}>Excel Row</th>
-                  <th style={{ minWidth: 170 }}>Extracted HR Name</th>
-                  <th style={{ minWidth: 230 }}>Extracted HR Email</th>
-                  <th style={{ minWidth: 140 }}>Company / Firm</th>
-                  <th style={{ minWidth: 130 }}>Target Role</th>
-                  <th style={{ minWidth: 150 }}>Validation Status</th>
+                    Row #
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={showRoleCol && anyRolePresent}
+                      disabled={!anyRolePresent}
+                      onChange={e => setShowRoleCol(e.target.checked)}
+                    />
+                    Role {!anyRolePresent && <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>(empty)</span>}
+                  </label>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 4. Warning notice (only when needs-attention > 0) */}
+        {invalidCount > 0 && filterTab !== 'invalid' && (
+          <div className="review-notice">
+            <AlertCircle size={14} style={{ flexShrink: 0 }} />
+            <span>
+              {invalidCount} {invalidCount === 1 ? 'row has' : 'rows have'} a missing or invalid email and will be skipped.
+            </span>
+            <button
+              type="button"
+              className="review-notice-link"
+              onClick={() => setFilterTab('invalid')}
+            >
+              Review them
+            </button>
+          </div>
+        )}
+
+        {/* 5. Table (flex-1, own scroll, sticky header) */}
+        <div className="review-table-region">
+          <table className="data-table review-table">
+            <thead>
+              <tr>
+                <th style={{ width: 44, textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={allFilteredValidSelected}
+                    onChange={e => handleSelectAll(e.target.checked)}
+                    style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
+                    title="Select / Deselect all valid rows"
+                    aria-label="Select all valid rows"
+                  />
+                </th>
+                <th style={{ width: 100 }}>Status</th>
+                {showRowCol && <th style={{ width: 60, textAlign: 'center' }}>Row</th>}
+                <th style={{ minWidth: 150 }}>Name</th>
+                <th style={{ minWidth: 200 }}>Email</th>
+                <th style={{ minWidth: 130 }}>Company</th>
+                {roleVisible && <th style={{ minWidth: 120 }}>Role</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredRows.length === 0 ? (
+                <tr>
+                  <td colSpan={colCount} style={{ textAlign: 'center', padding: 36, color: 'var(--text-muted)' }}>
+                    No contacts matching your search/filter criteria.
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filteredRows.length === 0 ? (
-                  <tr>
-                    <td colSpan="7" style={{ textAlign: 'center', padding: 36, color: 'var(--text-muted)' }}>
-                      No contacts matching your search/filter criteria.
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedRows.map((row, idxInPage) => {
-                    const realFilteredIdx = pageSize === 'all' ? idxInPage : (currentPage - 1) * pageSize + idxInPage;
-                    const isInvalid = !row.isValidEmail;
-                    const isEditing = editingRowId === row.id;
+              ) : (
+                paginatedRows.map((row, idx) => {
+                  const isInvalid = !row.isValidEmail;
+                  const isEditing = editingRowId === row.id;
+                  const globalFilteredIdx = startIndex + idx;
 
-                    return (
-                      <tr
-                        key={row.id}
-                        className={`${isInvalid ? 'row-invalid' : ''} ${row.isSelected ? 'row-selected' : ''}`}
-                        onClick={e => {
-                          if (!isInvalid && !isEditing) handleToggleRow(realFilteredIdx, e);
-                        }}
-                        style={{
-                          cursor: isInvalid || isEditing ? 'default' : 'pointer',
-                          background: row.isSelected ? 'rgba(124, 92, 255, 0.07)' : undefined
-                        }}
-                      >
-                        {/* Checkbox */}
-                        <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={row.isSelected}
-                            disabled={isInvalid}
-                            onChange={e => handleToggleRow(realFilteredIdx, e)}
-                            style={{ cursor: isInvalid ? 'not-allowed' : 'pointer', transform: 'scale(1.15)' }}
-                            aria-label={`Select row ${row.rowIndex}`}
-                          />
+                  return (
+                    <tr
+                      key={row.id}
+                      className={`${isInvalid ? 'row-invalid' : ''} ${row.isSelected ? 'row-selected' : ''}`}
+                      onClick={e => {
+                        if (!isInvalid && !isEditing) handleToggleRow(globalFilteredIdx, e);
+                      }}
+                      style={{ cursor: isInvalid || isEditing ? 'default' : 'pointer' }}
+                    >
+                      {/* Checkbox */}
+                      <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={row.isSelected}
+                          disabled={isInvalid}
+                          onChange={e => handleToggleRow(globalFilteredIdx, e)}
+                          style={{ cursor: isInvalid ? 'not-allowed' : 'pointer', transform: 'scale(1.15)' }}
+                          aria-label={`Select row ${row.excelRowNum || row.rowIndex}`}
+                        />
+                      </td>
+
+                      {/* Status */}
+                      <td>
+                        {isInvalid ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span className="email-invalid-tag" title={row.errorReason || 'Invalid email format'}>
+                              <AlertCircle size={11} /> {row.errorReason ? 'Invalid' : 'Invalid'}
+                            </span>
+                            {!isEditing && (
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                style={{ padding: '2px 6px', fontSize: 10, height: 22 }}
+                                onClick={e => handleStartEdit(row.id, 'email', row.email || row.rawEmail || '', e)}
+                              >
+                                Fix
+                              </button>
+                            )}
+                          </div>
+                        ) : row.isPreviouslyContacted ? (
+                          <span
+                            className="status-badge status-badge-attention"
+                            title={`Previously contacted on ${row.lastContactedDate || 'previous campaign'}`}
+                          >
+                            Contacted
+                          </span>
+                        ) : (
+                          <span className="status-badge status-badge-ready">
+                            <Check size={11} /> Ready
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Row # */}
+                      {showRowCol && (
+                        <td className="cell-row-num">
+                          {row.excelRowNum || row.rowIndex}
                         </td>
+                      )}
 
-                        {/* Excel Row # */}
-                        <td style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
-                          Row {row.excelRowNum || row.rowIndex}
-                        </td>
+                      {/* Name */}
+                      <td>
+                        {isEditing && editingField === 'name' ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={e => e.stopPropagation()}>
+                            <input
+                              type="text"
+                              value={editingValue}
+                              onChange={e => setEditingValue(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') handleSaveEdit(row.id);
+                                if (e.key === 'Escape') setEditingRowId(null);
+                              }}
+                              autoFocus
+                              className="form-input"
+                              placeholder="Contact name"
+                              style={{ fontSize: 12, padding: '2px 8px', height: 26, width: 140 }}
+                            />
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              style={{ padding: '2px 6px', fontSize: 10, height: 26 }}
+                              onClick={() => handleSaveEdit(row.id)}
+                            >
+                              Save
+                            </button>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span
+                              className="cell-truncate"
+                              style={{ fontWeight: 600, color: row.name ? 'var(--text-primary)' : 'var(--text-muted)' }}
+                              title={row.name || ''}
+                            >
+                              {row.name || 'Hiring Lead'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={e => handleStartEdit(row.id, 'name', row.name, e)}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: 'var(--text-muted)',
+                                cursor: 'pointer',
+                                padding: 2,
+                                opacity: 0.5,
+                                flexShrink: 0
+                              }}
+                              title="Edit name"
+                            >
+                              <Edit2 size={11} />
+                            </button>
+                          </div>
+                        )}
+                      </td>
 
-                        {/* Extracted HR Name */}
-                        <td>
-                          {isEditing && editingField === 'name' ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={e => e.stopPropagation()}>
+                      {/* Email */}
+                      <td className="cell-mono">
+                        {isEditing && editingField === 'email' ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }} onClick={e => e.stopPropagation()}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               <input
-                                type="text"
+                                type="email"
                                 value={editingValue}
-                                onChange={e => setEditingValue(e.target.value)}
+                                onChange={e => {
+                                  setEditingValue(e.target.value);
+                                  setEditError('');
+                                }}
                                 onKeyDown={e => {
                                   if (e.key === 'Enter') handleSaveEdit(row.id);
                                   if (e.key === 'Escape') setEditingRowId(null);
                                 }}
                                 autoFocus
                                 className="form-input"
-                                placeholder="HR Contact Name"
-                                style={{ fontSize: 12, padding: '2px 8px', height: 26, width: 140 }}
+                                placeholder="user@example.com"
+                                style={{ fontSize: 12, padding: '3px 8px', height: 28, width: 190, fontFamily: 'var(--font-mono)' }}
                               />
                               <button
                                 type="button"
                                 className="btn btn-primary btn-sm"
-                                style={{ padding: '2px 6px', fontSize: 10, height: 26 }}
+                                style={{ padding: '2px 8px', fontSize: 11, height: 28 }}
                                 onClick={() => handleSaveEdit(row.id)}
                               >
                                 Save
                               </button>
-                            </div>
-                          ) : (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ fontWeight: 600, color: row.name ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                                {row.name || 'Hiring Lead'}
-                              </span>
                               <button
                                 type="button"
-                                onClick={e => handleStartEdit(row.id, 'name', row.name, e)}
-                                style={{
-                                  background: 'transparent',
-                                  border: 'none',
-                                  color: 'var(--text-muted)',
-                                  cursor: 'pointer',
-                                  padding: 2,
-                                  opacity: 0.6
-                                }}
-                                title="Click to edit extracted name"
+                                className="btn btn-secondary btn-sm"
+                                style={{ padding: '2px 8px', fontSize: 11, height: 28 }}
+                                onClick={() => setEditingRowId(null)}
                               >
-                                <Edit2 size={11} />
+                                Cancel
                               </button>
                             </div>
-                          )}
-                        </td>
-
-                        {/* Extracted HR Email */}
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
-                          {isEditing && editingField === 'email' ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }} onClick={e => e.stopPropagation()}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <input
-                                  type="email"
-                                  value={editingValue}
-                                  onChange={e => {
-                                    setEditingValue(e.target.value);
-                                    setEditError('');
-                                  }}
-                                  onKeyDown={e => {
-                                    if (e.key === 'Enter') handleSaveEdit(row.id);
-                                    if (e.key === 'Escape') setEditingRowId(null);
-                                  }}
-                                  autoFocus
-                                  className="form-input"
-                                  placeholder="user@example.com"
-                                  style={{ fontSize: 12, padding: '3px 8px', height: 28, width: 190, fontFamily: 'var(--font-mono)' }}
-                                />
-                                <button
-                                  type="button"
-                                  className="btn btn-primary btn-sm"
-                                  style={{ padding: '2px 8px', fontSize: 11, height: 28 }}
-                                  onClick={() => handleSaveEdit(row.id)}
-                                >
-                                  Save
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary btn-sm"
-                                  style={{ padding: '2px 8px', fontSize: 11, height: 28 }}
-                                  onClick={() => setEditingRowId(null)}
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                              {editError && (
-                                <span style={{ fontSize: 11, color: 'var(--accent-danger)' }}>
-                                  {editError}
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ color: isInvalid ? 'var(--accent-danger)' : 'var(--text-primary)' }}>
-                                {row.email || <span style={{ color: 'var(--text-muted)' }}>[Empty Cell]</span>}
+                            {editError && (
+                              <span style={{ fontSize: 11, color: 'var(--accent-danger)' }}>
+                                {editError}
                               </span>
-                              {row.rawEmail && row.rawEmail !== row.email && (
-                                <span
-                                  className="badge-counter"
-                                  style={{ fontSize: 9, padding: '1px 5px', color: 'var(--text-muted)' }}
-                                  title={`Original cell text: "${row.rawEmail}"`}
-                                >
-                                  Cleaned
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </td>
-
-                        {/* Company */}
-                        <td>{row.company || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
-
-                        {/* Role */}
-                        <td style={{ fontSize: 12 }}>{row.role || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
-
-                        {/* Status & Fix Button */}
-                        <td>
-                          {isInvalid ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              <span className="email-invalid-tag" title={row.errorReason || 'Invalid email format'}>
-                                <AlertCircle size={11} /> {row.errorReason || 'Invalid format'}
-                              </span>
-                              {!isEditing && (
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary btn-sm"
-                                  style={{
-                                    padding: '2px 6px',
-                                    fontSize: 10,
-                                    height: 22,
-                                    color: 'var(--text-primary)'
-                                  }}
-                                  onClick={e => handleStartEdit(row.id, 'email', row.email || row.rawEmail || '', e)}
-                                >
-                                  Fix
-                                </button>
-                              )}
-                            </div>
-                          ) : row.isPreviouslyContacted ? (
+                            )}
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <span
-                              className="info-pill"
-                              style={{
-                                color: 'var(--accent-warning)',
-                                background: 'rgba(251, 191, 36, 0.12)',
-                                border: '1px solid rgba(251, 191, 36, 0.3)',
-                                fontSize: 11,
-                                padding: '2px 6px',
-                                borderRadius: 4,
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 4
-                              }}
-                              title={`Previously contacted on ${row.lastContactedDate || 'previous campaign'}`}
+                              className="cell-truncate"
+                              style={{ color: isInvalid ? 'var(--accent-danger)' : 'var(--text-primary)' }}
+                              title={row.email || ''}
                             >
-                              Previously Contacted
+                              {row.email || <span style={{ color: 'var(--text-muted)' }}>[Empty]</span>}
                             </span>
-                          ) : (
-                            <span style={{ color: 'var(--accent-success)', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                              <Check size={13} /> Verified
-                            </span>
-                          )}
+                            {row.rawEmail && row.rawEmail !== row.email && (
+                              <span
+                                className="badge-counter"
+                                style={{ fontSize: 9, padding: '1px 5px', color: 'var(--text-muted)' }}
+                                title={`Original cell: "${row.rawEmail}"`}
+                              >
+                                Cleaned
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Company */}
+                      <td>
+                        <span className="cell-truncate" title={row.company || ''}>
+                          {row.company || <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                        </span>
+                      </td>
+
+                      {/* Role */}
+                      {roleVisible && (
+                        <td className="cell-muted">
+                          <span className="cell-truncate" title={row.role || ''}>
+                            {row.role || <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                          </span>
                         </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination Controls */}
-          {filteredRows.length > 0 && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '8px 12px',
-                marginTop: 8,
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-sm)',
-                fontSize: 12,
-                color: 'var(--text-secondary)',
-                flexWrap: 'wrap',
-                gap: 8
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span>
-                  Showing{' '}
-                  <strong style={{ color: 'var(--text-primary)' }}>
-                    {pageSize === 'all'
-                      ? `1 - ${filteredRows.length}`
-                      : `${(currentPage - 1) * pageSize + 1} - ${Math.min(currentPage * pageSize, filteredRows.length)}`}
-                  </strong>{' '}
-                  of <strong style={{ color: 'var(--text-primary)' }}>{filteredRows.length}</strong> contacts
-                </span>
-                <span style={{ color: 'var(--border-strong)' }}>|</span>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span>Per page:</span>
-                  <select
-                    value={pageSize}
-                    onChange={e => {
-                      const val = e.target.value === 'all' ? 'all' : Number(e.target.value);
-                      setPageSize(val);
-                      setCurrentPage(1);
-                    }}
-                    className="form-select"
-                    style={{ padding: '2px 6px', fontSize: 11, height: 24, width: 'auto' }}
-                  >
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                    <option value={250}>250</option>
-                    <option value="all">All</option>
-                  </select>
-                </label>
-              </div>
-
-              {pageSize !== 'all' && totalPages > 1 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    disabled={currentPage <= 1}
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    style={{ padding: '2px 6px', height: 26, fontSize: 11 }}
-                    aria-label="Previous Page"
-                  >
-                    <ChevronLeft size={13} />
-                  </button>
-                  <span style={{ fontSize: 11, fontWeight: 500, minWidth: 70, textAlign: 'center' }}>
-                    Page {currentPage} of {totalPages}
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    disabled={currentPage >= totalPages}
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    style={{ padding: '2px 6px', height: 26, fontSize: 11 }}
-                    aria-label="Next Page"
-                  >
-                    <ChevronRight size={13} />
-                  </button>
-                </div>
+                      )}
+                    </tr>
+                  );
+                })
               )}
-            </div>
-          )}
+            </tbody>
+          </table>
+        </div>
 
-          {/* Tip row */}
-          <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between' }}>
-            <span>💡 Tip: Hold <kbd style={{ padding: '1px 4px', background: 'var(--bg-tertiary)', borderRadius: 3 }}>Shift</kbd> to range-select multiple rows.</span>
-            <span>Click the pencil icon next to any contact name to rename.</span>
+        {/* Table pagination & range-select tip */}
+        <div className="table-pagination" style={{ padding: '8px 20px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span>
+              Showing <strong style={{ color: 'var(--text-secondary)' }}>
+                {filteredRows.length === 0 ? 0 : `${startIndex + 1}–${endIndex}`}
+              </strong> of {filteredRows.length} rows
+              {filteredRows.length !== totalCount && ` (filtered from ${totalCount})`}
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Hold <kbd style={{ padding: '1px 4px', background: 'var(--bg-tertiary)', borderRadius: 3, fontSize: 10 }}>Shift</kbd> to range-select
+            </span>
           </div>
 
-          {/* EXPLICIT APPROVAL CHECKBOX SECTION (TICK-CYC3-17 / C8) */}
-          <div
-            style={{
-              marginTop: 14,
-              padding: '12px 16px',
-              background: highlightApproval
-                ? 'rgba(245, 158, 11, 0.18)'
-                : isExplicitlyApproved
-                ? 'rgba(52, 211, 153, 0.08)'
-                : 'rgba(251, 191, 36, 0.08)',
-              border: highlightApproval ? '2px solid var(--accent-warning)' : '1px solid',
-              borderColor: highlightApproval
-                ? 'var(--accent-warning)'
-                : isExplicitlyApproved
-                ? 'rgba(52, 211, 153, 0.45)'
-                : 'rgba(251, 191, 36, 0.4)',
-              borderRadius: 'var(--radius-md)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              transition: 'all 0.2s ease',
-              boxShadow: highlightApproval ? '0 0 18px rgba(245, 158, 11, 0.4)' : 'none',
-              animation: highlightApproval ? 'shake 0.4s ease' : 'none'
-            }}
-          >
-            <input
-              type="checkbox"
-              id="explicitApprovalCheckbox"
-              checked={isExplicitlyApproved}
-              onChange={e => {
-                setIsExplicitlyApproved(e.target.checked);
-                if (highlightApproval) setHighlightApproval(false);
-              }}
-              style={{
-                width: 18,
-                height: 18,
-                cursor: 'pointer',
-                accentColor: 'var(--accent-success)',
-                flexShrink: 0
-              }}
-            />
-            <label
-              htmlFor="explicitApprovalCheckbox"
-              style={{
-                fontSize: 12,
-                cursor: 'pointer',
-                color: 'var(--text-primary)',
-                fontWeight: 600,
-                lineHeight: 1.4,
-                userSelect: 'none'
-              }}
-            >
-              <span>I have reviewed the row-by-row extracted contacts and <strong>explicitly approve</strong> sending cold outreach to these {selectedCount} verified HR contacts.</span>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: highlightApproval ? 'var(--accent-warning)' : 'var(--text-muted)',
-                  fontWeight: highlightApproval ? 700 : 400,
-                  marginTop: 2
-                }}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Page <strong>{safePage}</strong> of <strong>{totalPages}</strong>
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={safePage <= 1}
+                aria-label="Previous Page"
+                title="Previous Page"
+                style={{ padding: '2px 8px', height: 26, display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11 }}
               >
-                {highlightApproval
-                  ? '⚠️ Checkbox confirmation is mandatory before contacts can be imported.'
-                  : 'Explicit user approval is strictly mandatory before any emails can be generated or sent.'}
-              </div>
-            </label>
+                <ChevronLeft size={13} />
+                <span>Prev</span>
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={safePage >= totalPages}
+                aria-label="Next Page"
+                title="Next Page"
+                style={{ padding: '2px 8px', height: 26, display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11 }}
+              >
+                <span>Next</span>
+                <ChevronRight size={13} />
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Footer */}
+        {/* 6. Consent section (fixed) */}
+        <div
+          className={`review-consent ${highlightApproval ? 'highlight' : isExplicitlyApproved ? 'approved' : 'pending'}`}
+          data-testid="consent-section"
+        >
+          <input
+            type="checkbox"
+            id="explicitApprovalCheckbox"
+            checked={isExplicitlyApproved}
+            onChange={e => {
+              setIsExplicitlyApproved(e.target.checked);
+              if (highlightApproval) setHighlightApproval(false);
+            }}
+            style={{
+              width: 18,
+              height: 18,
+              cursor: 'pointer',
+              accentColor: 'var(--accent-success)',
+              flexShrink: 0
+            }}
+          />
+          <label
+            htmlFor="explicitApprovalCheckbox"
+            style={{
+              fontSize: 12,
+              cursor: 'pointer',
+              color: 'var(--text-primary)',
+              fontWeight: 600,
+              lineHeight: 1.4,
+              userSelect: 'none'
+            }}
+          >
+            <span>I have reviewed the extracted contacts and <strong>explicitly approve</strong> importing these {selectedCount} contacts for outreach.</span>
+            <div
+              style={{
+                fontSize: 11,
+                color: highlightApproval ? 'var(--accent-warning)' : 'var(--text-muted)',
+                fontWeight: highlightApproval ? 700 : 400,
+                marginTop: 2
+              }}
+            >
+              {highlightApproval
+                ? '⚠️ You must check this box before contacts can be imported.'
+                : 'No emails are generated or sent until you approve.'}
+            </div>
+          </label>
+        </div>
+
+        {/* 7. Footer (fixed) */}
         <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-            Selected: <strong style={{ color: selectedCount > 0 ? 'var(--accent-success)' : 'var(--text-muted)' }}>{selectedCount}</strong> of {validCount} verified contacts
+            Selected: <strong style={{ color: selectedCount > 0 ? 'var(--accent-success)' : 'var(--text-muted)' }}>{selectedCount}</strong> of {validCount} ready contacts
           </div>
 
           <div style={{ display: 'flex', gap: 10 }}>
@@ -959,7 +887,7 @@ export default function RecipientModal({ isOpen, onClose, sheetData, onConfirmSe
               }}
             >
               <CheckCircle size={16} />
-              Approve & Import {selectedCount} Verified Contacts
+              Approve & Import {selectedCount} Contacts
             </button>
           </div>
         </div>

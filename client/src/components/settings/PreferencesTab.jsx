@@ -6,17 +6,18 @@ import { saveSettings } from '../../lib/settings';
 /**
  * PreferencesTab — Candidate profile defaults, outreach voice tone, and delivery rate-limiting.
  */
-export default function PreferencesTab({ config, onRefreshConfig, user, onShowToast }) {
+export default function PreferencesTab({ config = {}, onRefreshConfig, user, onShowToast }) {
+  const currentConfig = config || {};
   const handleUpdatePreferences = async (partial) => {
     const updatedPreferences = {
-      ...(config.preferences || {}),
+      ...(currentConfig.preferences || {}),
       ...partial
     };
     const updated = {
-      ...config,
+      ...currentConfig,
       preferences: updatedPreferences,
       sendingPreferences: {
-        ...(config.sendingPreferences || {}),
+        ...(currentConfig.sendingPreferences || {}),
         ...partial
       }
     };
@@ -28,7 +29,7 @@ export default function PreferencesTab({ config, onRefreshConfig, user, onShowTo
     if (user?.uid) {
       await saveSettings(user.uid, updated);
     }
-    onRefreshConfig(updated);
+    onRefreshConfig?.(updated);
   };
 
   return (
@@ -60,17 +61,17 @@ export default function PreferencesTab({ config, onRefreshConfig, user, onShowTo
               type="text"
               className="form-input"
               placeholder="e.g. Alex Mercer"
-              value={config.candidateProfile?.fullName || ''}
+              value={currentConfig.candidateProfile?.fullName || ''}
               onChange={async (e) => {
                 const updated = {
-                  ...config,
+                  ...currentConfig,
                   candidateProfile: {
-                    ...(config.candidateProfile || {}),
+                    ...(currentConfig.candidateProfile || {}),
                     fullName: e.target.value
                   }
                 };
                 if (user?.uid) await saveSettings(user.uid, updated);
-                onRefreshConfig(updated);
+                onRefreshConfig?.(updated);
               }}
             />
           </div>
@@ -82,17 +83,17 @@ export default function PreferencesTab({ config, onRefreshConfig, user, onShowTo
                 type="email"
                 className="form-input"
                 placeholder="alex.mercer@gmail.com"
-                value={config.candidateProfile?.email || ''}
+                value={currentConfig.candidateProfile?.email || ''}
                 onChange={async (e) => {
                   const updated = {
-                    ...config,
+                    ...currentConfig,
                     candidateProfile: {
-                      ...(config.candidateProfile || {}),
+                      ...(currentConfig.candidateProfile || {}),
                       email: e.target.value
                     }
                   };
                   if (user?.uid) await saveSettings(user.uid, updated);
-                  onRefreshConfig(updated);
+                  onRefreshConfig?.(updated);
                 }}
               />
             </div>
@@ -102,17 +103,17 @@ export default function PreferencesTab({ config, onRefreshConfig, user, onShowTo
                 type="tel"
                 className="form-input"
                 placeholder="+1 (555) 019-2834"
-                value={config.candidateProfile?.phone || ''}
+                value={currentConfig.candidateProfile?.phone || ''}
                 onChange={async (e) => {
                   const updated = {
-                    ...config,
+                    ...currentConfig,
                     candidateProfile: {
-                      ...(config.candidateProfile || {}),
+                      ...(currentConfig.candidateProfile || {}),
                       phone: e.target.value
                     }
                   };
                   if (user?.uid) await saveSettings(user.uid, updated);
-                  onRefreshConfig(updated);
+                  onRefreshConfig?.(updated);
                 }}
               />
             </div>
@@ -141,7 +142,7 @@ export default function PreferencesTab({ config, onRefreshConfig, user, onShowTo
             <label className="form-label">Outreach Style Tone</label>
             <select
               className="form-input"
-              value={config.preferences?.outreachTone || 'direct'}
+              value={currentConfig.preferences?.outreachTone || 'direct'}
               onChange={async (e) => {
                 await handleUpdatePreferences({ outreachTone: e.target.value });
                 onShowToast?.({ type: 'success', title: 'Tone Saved', message: 'Outreach tone updated.' });
@@ -175,14 +176,14 @@ export default function PreferencesTab({ config, onRefreshConfig, user, onShowTo
         >
           <div>
             <label className="form-label">
-              Delay Between Outgoing Sends (Seconds): <strong>{config.preferences?.delaySeconds || config.sendingPreferences?.delaySeconds || 3}s</strong>
+              Delay Between Outgoing Sends (Seconds): <strong>{currentConfig.preferences?.delaySeconds || currentConfig.sendingPreferences?.delaySeconds || 3}s</strong>
             </label>
             <input
               type="range"
               min="1"
               max="10"
               step="1"
-              value={config.preferences?.delaySeconds || config.sendingPreferences?.delaySeconds || 3}
+              value={currentConfig.preferences?.delaySeconds || currentConfig.sendingPreferences?.delaySeconds || 3}
               onChange={(e) => {
                 handleUpdatePreferences({ delaySeconds: Number(e.target.value) });
               }}
@@ -197,7 +198,7 @@ export default function PreferencesTab({ config, onRefreshConfig, user, onShowTo
 
           <div>
             <label className="form-label">
-              Dispatch Concurrency: <strong>{config.preferences?.concurrency || config.sendingPreferences?.concurrency || 1} {((config.preferences?.concurrency || config.sendingPreferences?.concurrency || 1) === 1) ? '(Sequential / Safest)' : '(Concurrent Workers)'}</strong>
+              Dispatch Concurrency: <strong>{currentConfig.preferences?.concurrency || currentConfig.sendingPreferences?.concurrency || 1} {((currentConfig.preferences?.concurrency || currentConfig.sendingPreferences?.concurrency || 1) === 1) ? '(Sequential / Safest)' : '(Concurrent Workers)'}</strong>
             </label>
             <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
               {[
@@ -205,7 +206,7 @@ export default function PreferencesTab({ config, onRefreshConfig, user, onShowTo
                 { val: 2, label: '2 Workers', desc: 'Controlled parallel delivery' },
                 { val: 3, label: '3 Workers', desc: 'Maximum concurrent throughput' }
               ].map(opt => {
-                const currentVal = config.preferences?.concurrency || config.sendingPreferences?.concurrency || 1;
+                const currentVal = currentConfig.preferences?.concurrency || currentConfig.sendingPreferences?.concurrency || 1;
                 const isSelected = currentVal === opt.val;
                 return (
                   <button
@@ -234,7 +235,7 @@ export default function PreferencesTab({ config, onRefreshConfig, user, onShowTo
             </div>
             <input
               type="checkbox"
-              checked={config.preferences?.attachResume ?? config.sendingPreferences?.attachResume ?? true}
+              checked={currentConfig.preferences?.attachResume ?? currentConfig.sendingPreferences?.attachResume ?? true}
               onChange={(e) => {
                 handleUpdatePreferences({ attachResume: e.target.checked });
               }}

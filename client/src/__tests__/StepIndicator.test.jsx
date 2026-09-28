@@ -22,9 +22,11 @@ describe('StepIndicator Component (TICK-CYC3-10)', () => {
     expect(buttons[1]).toHaveAttribute('aria-current', 'step');
     expect(buttons[0]).not.toHaveAttribute('aria-current');
 
-    // Locked step (Step 4 without recipients) has aria-disabled="true"
+    // Locked step (Step 4 without recipients) has aria-disabled="true" and is keyboard focusable
     expect(buttons[3]).toHaveAttribute('aria-disabled', 'true');
-    expect(buttons[3]).toBeDisabled();
+    expect(buttons[3]).not.toBeDisabled();
+    buttons[3].focus();
+    expect(buttons[3]).toHaveFocus();
   });
 
   it('allows clicking unlocked step and ignores locked step', () => {
@@ -49,5 +51,30 @@ describe('StepIndicator Component (TICK-CYC3-10)', () => {
     );
     const buttons = screen.getAllByRole('button');
     expect(buttons[1].getAttribute('title')).toContain('Step 1');
+  });
+
+  it('displays dynamic recipient count on Step 2 (not Step 3) when recipients exist', () => {
+    render(
+      <StepIndicator
+        currentStep={2}
+        onSelectStep={() => {}}
+        resumeReady={true}
+        recipientsCount={5}
+      />
+    );
+    const buttons = screen.getAllByRole('button');
+    expect(buttons[1]).toHaveTextContent('Recipients (5)');
+    expect(buttons[2]).toHaveTextContent('Target Role');
+  });
+
+  it('allows keyboard tab navigation across all steps including locked steps', () => {
+    render(
+      <StepIndicator currentStep={1} onSelectStep={() => {}} resumeReady={false} />
+    );
+    const buttons = screen.getAllByRole('button');
+    buttons.forEach(button => {
+      button.focus();
+      expect(button).toHaveFocus();
+    });
   });
 });

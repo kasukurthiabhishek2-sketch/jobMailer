@@ -179,6 +179,28 @@ async function runTests() {
     console.log('✓ AiProvidersTab declares replacingKey state and properly resolves effective API keys.');
   }
 
+  // ---- Test 6: uid guard removed from /api/config/smtp/test ----
+  {
+    const smtpTestStart = indexContent.indexOf("app.post('/api/config/smtp/test'");
+    assert.ok(smtpTestStart > 0, '/api/config/smtp/test route must exist');
+
+    const smtpPrefStart = indexContent.indexOf("app.post('/api/config/preferences'");
+    assert.ok(smtpPrefStart > smtpTestStart, '/api/config/preferences must come after /api/config/smtp/test');
+
+    const smtpTestBody = indexContent.substring(smtpTestStart, smtpPrefStart);
+
+    assert.ok(
+      !smtpTestBody.includes("req.uid === 'test_user_offline'"),
+      '/api/config/smtp/test must not restrict storage fallback to offline users only'
+    );
+    assert.ok(
+      !smtpTestBody.includes('!req.uid'),
+      '/api/config/smtp/test must not check !req.uid before falling back to storage'
+    );
+
+    console.log('✓ /api/config/smtp/test resolves passwords from storage for authenticated users.');
+  }
+
   console.log('\n--- All Authenticated Key Resolution Tests PASSED ---');
 }
 

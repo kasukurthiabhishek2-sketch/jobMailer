@@ -41,7 +41,7 @@ export default function StepIndicator({
 
         // Dynamic title for recipients step
         let displayTitle = step.shortLabel || step.label;
-        if (step.id === 3 && activeRecipients.length > 0) {
+        if (step.id === 2 && activeRecipients.length > 0) {
           displayTitle = `Recipients (${activeRecipients.length})`;
         }
 
@@ -63,7 +63,6 @@ export default function StepIndicator({
                   onLockedClick(lockReason);
                 }
               }}
-              disabled={!isUnlocked}
               title={tooltip}
               aria-current={isActive ? 'step' : undefined}
               aria-disabled={!isUnlocked ? 'true' : undefined}

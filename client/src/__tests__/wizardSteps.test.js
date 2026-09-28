@@ -35,7 +35,7 @@ describe('WIZARD_STEPS Canonical Configuration', () => {
   it('verifies Step 4 requires both resume and at least 1 recipient', () => {
     const onlyResume = { resumeData: { text: 'Resume' }, recipients: [] };
     expect(isStepUnlocked(4, onlyResume)).toBe(false);
-    expect(getStepLockReason(4, onlyResume)).toContain('Step 3');
+    expect(getStepLockReason(4, onlyResume)).toContain('Step 2');
 
     const readyForStep4 = {
       resumeData: { text: 'Resume' },

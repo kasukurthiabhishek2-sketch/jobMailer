@@ -67,7 +67,53 @@ function runTests() {
     assert.strictEqual(typeof stats.remaining, 'number');
     assert.ok(stats.sentToday >= 1, 'sentToday must count the recently added sent log');
     assert.strictEqual(stats.remaining, Math.max(0, stats.dailyLimit - stats.sentToday));
-    console.log('✓ getDailySendingStats calculation verified.');
+    // Test 5: Multiple named savedKeys and active key selection
+    storage.updateAiProvider('groq', { apiKey: '' });
+    const configBeforeTest5 = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    if (configBeforeTest5.aiProviders?.groq) {
+      configBeforeTest5.aiProviders.groq.savedKeys = [];
+      configBeforeTest5.aiProviders.groq.apiKey = '';
+      fs.writeFileSync(configPath, JSON.stringify(configBeforeTest5, null, 2), 'utf8');
+    }
+
+    const testKey1 = 'gsk_primary_key_abc1234567890';
+    const testKey2 = 'gsk_backup_key_xyz9876543210';
+    
+    // Add primary key with name
+    storage.updateAiProvider('groq', {
+      apiKey: testKey1,
+      keyName: 'Production Groq',
+      model: 'openai/gpt-oss-20b'
+    });
+
+    // Add second key with name
+    storage.updateAiProvider('groq', {
+      apiKey: testKey2,
+      keyName: 'Backup Groq'
+    });
+
+    const publicGroqConfig = storage.getPublicConfig();
+    const groqProvider = publicGroqConfig.aiProviders.groq;
+    assert.strictEqual(groqProvider.isConfigured, true, 'Groq must be marked configured');
+    assert.strictEqual(groqProvider.apiKey, undefined, 'Public config must mask apiKey');
+    assert.ok(Array.isArray(groqProvider.savedKeys), 'savedKeys must be an array');
+    assert.strictEqual(groqProvider.savedKeys.length, 2, 'Must have 2 saved keys');
+    
+    // Check that neither saved key leaks raw apiKey
+    for (const k of groqProvider.savedKeys) {
+      assert.strictEqual(k.apiKey, undefined, 'Saved key in public config must NEVER contain raw apiKey');
+      assert.ok(k.maskedKey && k.maskedKey.startsWith('gsk_'), 'Saved key must have valid maskedKey');
+      assert.ok(k.name, 'Saved key must have name');
+    }
+
+    // Switch active key to first key
+    const firstKeyId = groqProvider.savedKeys[0].id;
+    storage.updateAiProvider('groq', { selectedKeyId: firstKeyId });
+    const decryptedGroq = storage.getDecryptedConfig().aiProviders.groq;
+    assert.strictEqual(decryptedGroq.selectedKeyId, firstKeyId);
+    assert.strictEqual(decryptedGroq.apiKey, testKey1, 'Active key must be switched to testKey1');
+
+    console.log('✓ Named savedKeys storage, encryption at rest, and active selection verified.');
 
     console.log('ALL STORAGE SUBSYSTEM TESTS PASSED!');
   } finally {

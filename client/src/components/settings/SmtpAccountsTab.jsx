@@ -6,7 +6,8 @@ import {
   HelpCircle,
   Trash2,
   RefreshCw,
-  Plus
+  Plus,
+  Edit2
 } from 'lucide-react';
 import {
   saveSmtpProfile,
@@ -45,6 +46,22 @@ export default function SmtpAccountsTab({ config, onRefreshConfig, onShowToast, 
       encryption: preset.encryption,
       name: preset.name
     }));
+  };
+
+  const handleEditSmtp = (profile) => {
+    setSmtpForm({
+      id: profile.id,
+      name: profile.name || 'Personal Gmail',
+      host: profile.host || 'smtp.gmail.com',
+      port: profile.port || 465,
+      encryption: profile.encryption || 'SSL',
+      username: profile.username || '',
+      password: '',
+      fromName: profile.fromName || '',
+      fromEmail: profile.fromEmail || profile.username || '',
+      isDefault: profile.isDefault ?? false
+    });
+    setShowAddSmtpForm(true);
   };
 
   const handleSaveSmtp = async (e) => {
@@ -268,7 +285,7 @@ export default function SmtpAccountsTab({ config, onRefreshConfig, onShowToast, 
           }}
         >
           <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 14 }}>
-            New SMTP Profile
+            {smtpForm.id ? 'Edit SMTP Profile' : 'New SMTP Profile'}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -346,14 +363,16 @@ export default function SmtpAccountsTab({ config, onRefreshConfig, onShowToast, 
               />
             </div>
             <div className="form-group" style={{ marginBottom: 12 }}>
-              <label className="form-label">App Password *</label>
+              <label className="form-label">
+                App Password * {smtpForm.id ? '(Leave blank to keep existing)' : ''}
+              </label>
               <input
                 type="password"
-                placeholder="16-character App Password"
+                placeholder={smtpForm.id ? 'Leave blank to keep existing password' : '16-character App Password'}
                 value={smtpForm.password}
                 onChange={e => setSmtpForm({ ...smtpForm, password: e.target.value })}
                 className="form-input"
-                required
+                required={!smtpForm.id}
               />
             </div>
           </div>
@@ -388,7 +407,7 @@ export default function SmtpAccountsTab({ config, onRefreshConfig, onShowToast, 
               {smtpTestStatus['form']?.loading ? 'Testing...' : 'Test Connection'}
             </button>
             <button type="submit" className="btn btn-primary btn-sm">
-              Save SMTP Account
+              {smtpForm.id ? 'Update SMTP Profile' : 'Save SMTP Account'}
             </button>
           </div>
         </form>
@@ -439,6 +458,14 @@ export default function SmtpAccountsTab({ config, onRefreshConfig, onShowToast, 
                     >
                       {testRes?.loading ? <RefreshCw size={13} className="spin-icon" /> : 'Test Connection'}
                     </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => handleEditSmtp(p)}
+                      title="Edit Profile & Password"
+                    >
+                      <Edit2 size={13} /> Edit
+                    </button>
                     {!p.isDefault && (
                       <button
                         type="button"
@@ -473,7 +500,11 @@ export default function SmtpAccountsTab({ config, onRefreshConfig, onShowToast, 
                     }}
                   >
                     {testRes.success ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
-                    <span>{testRes.message || testRes.error}</span>
+                    <span>
+                      {testRes.error && testRes.error.includes('Host, username, and password')
+                        ? 'App Password missing or invalid. Click "Edit" to enter your 16-character Google App Password.'
+                        : (testRes.message || testRes.error)}
+                    </span>
                   </div>
                 )}
               </div>

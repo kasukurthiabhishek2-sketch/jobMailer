@@ -25,7 +25,7 @@ export function getDefaultSettings() {
         model: 'gemini-1.5-flash',
         active: true,
         enabled: true,
-        supportedModels: ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash-exp']
+        supportedModels: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash-exp']
       },
       openai: {
         name: 'ChatGPT / OpenAI',
@@ -102,69 +102,76 @@ export function getDefaultSettings() {
 }
 
 /**
- * Strips all sensitive credentials (API keys, SMTP passwords) so they are
- * NEVER persisted in plaintext to cloud Firestore documents. (TICK-CYC3-01 / Option 1)
+ * Returns settings without stripping credentials.
+ * All settings including API keys and SMTP credentials are stored directly
+ * in the user's Firestore document (users/{uid}/app/settings) with owner-only security.
  */
 export function stripSecrets(settings) {
   if (!settings || typeof settings !== 'object') return settings;
-  const clone = JSON.parse(JSON.stringify(settings));
-  if (clone.aiProviders) {
-    for (const key of Object.keys(clone.aiProviders)) {
-      delete clone.aiProviders[key].apiKey;
-    }
-  }
-  if (clone.smtp) {
-    delete clone.smtp.appPassword;
-    delete clone.smtp.password;
-  }
-  if (Array.isArray(clone.smtpProfiles)) {
-    clone.smtpProfiles = clone.smtpProfiles.map(p => {
-      const { password: _password, appPassword: _appPassword, ...rest } = p;
-      return rest;
-    });
-  }
-  return clone;
+  return settings;
 }
 
 /**
  * Format legacy config (from server config.json) for the Firestore schema.
- * Enforces Option 1: metadata and preferences are migrated, secrets remain local.
+ * Preserves metadata, preferences, and credentials in Firestore.
  */
 export function formatForFirestore(legacyConfig) {
   const defaults = getDefaultSettings();
-  if (!legacyConfig) return stripSecrets(defaults);
+  if (!legacyConfig) return defaults;
 
   const activeKey = legacyConfig.activeProvider || 'gemini';
   const aiProviders = { ...defaults.aiProviders };
 
   if (legacyConfig.aiProviders) {
     for (const [key, val] of Object.entries(legacyConfig.aiProviders)) {
+      const hasSingleKey = Boolean(val.apiKey || val.maskedKey);
+      let savedKeys = Array.isArray(val.savedKeys) ? val.savedKeys : undefined;
+      let selectedKeyId = val.selectedKeyId;
+      if (!savedKeys && hasSingleKey) {
+        selectedKeyId = selectedKeyId || 'default';
+        const masked = val.maskedKey || (val.apiKey ? (val.apiKey.length > 8 ? `${val.apiKey.slice(0, 4)}...${val.apiKey.slice(-4)}` : '••••••••') : '');
+        savedKeys = [{
+          id: selectedKeyId,
+          name: 'Primary Key',
+          apiKey: val.apiKey || '',
+          maskedKey: masked,
+          createdAt: new Date().toISOString()
+        }];
+      }
       aiProviders[key] = {
         ...aiProviders[key],
         name: val.name || aiProviders[key]?.name,
+        apiKey: val.apiKey || '',
+        maskedKey: val.maskedKey || '',
         model: val.model || aiProviders[key]?.model,
         active: key === activeKey,
         enabled: val.enabled !== false,
-        isConfigured: Boolean(val.isConfigured || val.apiKey)
+        isConfigured: Boolean(val.isConfigured || hasSingleKey || (savedKeys && savedKeys.length > 0) || (key === 'copilot' && (val.isConfigured || val.connected || hasSingleKey))),
+        selectedKeyId,
+        savedKeys
       };
-      delete aiProviders[key].apiKey; // Secrets stay local
     }
   }
 
   const smtpProfiles = Array.isArray(legacyConfig.smtpProfiles)
     ? legacyConfig.smtpProfiles.map(p => {
-        const { password, appPassword, ...rest } = p;
+        const password = p.password || p.appPassword || '';
         return {
-          ...rest,
-          isConfigured: Boolean(p.isConfigured || password || appPassword)
+          ...p,
+          password,
+          appPassword: password,
+          isConfigured: Boolean(p.isConfigured || password)
         };
       })
     : [];
 
   const defaultSmtp = smtpProfiles.find(p => p.isDefault) || smtpProfiles[0] || {};
+  const defaultPassword = defaultSmtp.password || defaultSmtp.appPassword || '';
   const smtp = {
     provider: 'gmail',
     email: defaultSmtp.username || defaultSmtp.fromEmail || '',
+    appPassword: defaultPassword,
+    password: defaultPassword,
     host: defaultSmtp.host || 'smtp.gmail.com',
     port: defaultSmtp.port || 465,
     encryption: defaultSmtp.encryption || 'SSL',
@@ -176,14 +183,14 @@ export function formatForFirestore(legacyConfig) {
     ...(legacyConfig.sendingPreferences || {})
   };
 
-  return stripUndefined(stripSecrets({
+  return stripUndefined({
     activeProvider: activeKey,
     aiProviders,
     smtp,
     smtpProfiles,
     candidateProfile: legacyConfig.candidateProfile || defaults.candidateProfile,
     preferences
-  }));
+  });
 }
 
 /**
@@ -191,19 +198,53 @@ export function formatForFirestore(legacyConfig) {
  * Returns null if no settings exist yet (first-time user).
  */
 export async function loadSettings(uid) {
+  if (typeof window !== 'undefined' && window.__E2E_MOCK_SETTINGS__) {
+    return window.__E2E_MOCK_SETTINGS__;
+  }
   const snap = await getDoc(settingsRef(uid));
   if (!snap.exists()) return null;
   const data = stripSecrets(snap.data());
   const defaults = stripSecrets(getDefaultSettings());
   
-  // Merge defaults to ensure newly added keys are always present
+  // Merge defaults per-provider to ensure newly added keys & supportedModels are always preserved
+  const mergedAiProviders = {};
+
+  for (const [key, defaultProv] of Object.entries(defaults.aiProviders)) {
+    const p = data.aiProviders?.[key] || {};
+    const hasKeys = Array.isArray(p.savedKeys) && p.savedKeys.length > 0;
+    const hasSingleKey = Boolean((p.apiKey && p.apiKey.trim().length > 0) || (p.maskedKey && p.maskedKey.trim().length > 0));
+    let savedKeys = p.savedKeys;
+    let selectedKeyId = p.selectedKeyId;
+    if (!hasKeys && hasSingleKey) {
+      selectedKeyId = selectedKeyId || 'default';
+      const masked = p.maskedKey || (p.apiKey ? (p.apiKey.length > 8 ? `${p.apiKey.slice(0, 4)}...${p.apiKey.slice(-4)}` : '••••••••') : '');
+      savedKeys = [{
+        id: selectedKeyId,
+        name: 'Primary Key',
+        apiKey: p.apiKey || '',
+        maskedKey: masked,
+        createdAt: new Date().toISOString()
+      }];
+    }
+    const isConfigured = Boolean(p.isConfigured || hasKeys || hasSingleKey);
+    const supportedModels = (Array.isArray(p.supportedModels) && p.supportedModels.length > 0)
+      ? p.supportedModels
+      : defaultProv.supportedModels;
+
+    mergedAiProviders[key] = {
+      ...defaultProv,
+      ...p,
+      supportedModels,
+      savedKeys: savedKeys || [],
+      selectedKeyId: selectedKeyId || (savedKeys?.[0]?.id || ''),
+      isConfigured
+    };
+  }
+
   return {
     ...defaults,
     ...data,
-    aiProviders: {
-      ...defaults.aiProviders,
-      ...(data.aiProviders || {})
-    },
+    aiProviders: mergedAiProviders,
     smtp: {
       ...defaults.smtp,
       ...(data.smtp || {})
@@ -237,12 +278,16 @@ export function stripUndefined(value) {
 }
 
 /**
- * Save (merge) partial settings for a user.
+ * Save (merge) partial settings for a user in Firestore.
  * Uses Firestore merge to avoid overwriting unrelated fields.
- * Guarantees zero secret leakage into Firestore.
+ * Scoped per-user with owner-only access rules.
  */
 export async function saveSettings(uid, partial) {
-  const sanitized = stripUndefined(stripSecrets(partial));
+  if (typeof window !== 'undefined' && window.__E2E_MOCK_SETTINGS__) {
+    window.__E2E_MOCK_SETTINGS__ = { ...window.__E2E_MOCK_SETTINGS__, ...partial };
+    return;
+  }
+  const sanitized = stripUndefined(partial);
   await setDoc(settingsRef(uid), { ...sanitized, updatedAt: serverTimestamp() }, { merge: true });
 }
 

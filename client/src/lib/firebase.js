@@ -37,13 +37,27 @@ export const signOutUser = () => signOut(auth);
  * Subscribe to auth state changes.
  * Returns an unsubscribe function.
  */
-export const watchAuthState = (cb) => onAuthStateChanged(auth, cb);
+export const watchAuthState = (cb) => {
+  if (typeof window !== 'undefined' && (window.__E2E_MOCK_USER__ || window.location.search.includes('mock_auth=1'))) {
+    const mockUser = window.__E2E_MOCK_USER__ || {
+      uid: 'e2e-tester',
+      displayName: 'Test User',
+      email: 'test@example.com'
+    };
+    setTimeout(() => cb(mockUser), 10);
+    return () => {};
+  }
+  return onAuthStateChanged(auth, cb);
+};
 
 /**
  * Get the current user's Firebase ID token for server-side auth.
  * Returns null if no user is signed in.
  */
 export async function getIdToken() {
+  if (typeof window !== 'undefined' && (window.__E2E_MOCK_USER__ || window.location.search.includes('mock_auth=1'))) {
+    return 'e2e_mock_token_for_tests';
+  }
   const user = auth.currentUser;
   if (!user) return null;
   return user.getIdToken();

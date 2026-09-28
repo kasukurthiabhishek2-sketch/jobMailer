@@ -6,7 +6,7 @@ import { Send } from 'lucide-react';
  * AuthGate — Full-screen sign-in screen shown when no user is authenticated.
  * Matches the app's existing visual system (glassmorphic dark theme, accent colors).
  */
-export default function AuthGate({ onSignInError, onContinueOffline }) {
+export default function AuthGate({ onSignInError }) {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
 
@@ -72,16 +72,6 @@ export default function AuthGate({ onSignInError, onContinueOffline }) {
           <span>{loading ? 'Signing in…' : 'Continue with Google'}</span>
         </button>
 
-        {onContinueOffline && (
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={onContinueOffline}
-            style={{ width: '100%', marginTop: 12, justifyContent: 'center' }}
-          >
-            Continue in Local / Offline Mode
-          </button>
-        )}
 
         <p className="auth-gate-footer">
           Your settings are encrypted and stored per-account in Firestore.

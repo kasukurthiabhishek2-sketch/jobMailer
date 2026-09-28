@@ -24,17 +24,6 @@ export const WIZARD_STEPS = [
   {
     id: 2,
     stepNumber: 2,
-    label: 'Target Role & Strategy',
-    shortLabel: 'Target Role',
-    description: 'Paste a specific job description to spotlight relevant skills and metrics, or skip to generate a direct value intro pitch.',
-    optional: true,
-    isUnlocked: (state) => Boolean(state?.resumeData),
-    getLockReason: (state) => (!state?.resumeData ? 'Upload candidate resume in Step 1 to unlock' : null),
-    isCompleted: (state) => Boolean(state?.jobDescription && state.jobDescription.trim())
-  },
-  {
-    id: 3,
-    stepNumber: 3,
     label: 'Recipient Management',
     shortLabel: 'Recipients',
     description: 'Import recruiters and hiring managers from Excel/CSV or add them manually. RFC-standard validation highlights formatting errors automatically.',
@@ -42,6 +31,17 @@ export const WIZARD_STEPS = [
     isUnlocked: (state) => Boolean(state?.resumeData),
     getLockReason: (state) => (!state?.resumeData ? 'Upload candidate resume in Step 1 to unlock' : null),
     isCompleted: (state) => Boolean(state?.recipients && state.recipients.length > 0)
+  },
+  {
+    id: 3,
+    stepNumber: 3,
+    label: 'Target Role & Strategy',
+    shortLabel: 'Target Role',
+    description: 'Paste a specific job description to spotlight relevant skills and metrics, or skip to generate a direct value intro pitch.',
+    optional: true,
+    isUnlocked: (state) => Boolean(state?.resumeData),
+    getLockReason: (state) => (!state?.resumeData ? 'Upload candidate resume in Step 1 to unlock' : null),
+    isCompleted: (state) => Boolean(state?.jobDescription && state.jobDescription.trim())
   },
   {
     id: 4,
@@ -53,7 +53,7 @@ export const WIZARD_STEPS = [
     isUnlocked: (state) => Boolean(state?.resumeData && state?.recipients && state.recipients.length > 0),
     getLockReason: (state) => {
       if (!state?.resumeData) return 'Upload candidate resume in Step 1 to unlock';
-      if (!state?.recipients || state.recipients.length === 0) return 'Add at least one recipient in Step 3 to unlock';
+      if (!state?.recipients || state.recipients.length === 0) return 'Add at least one recipient in Step 2 to unlock';
       return null;
     },
     isCompleted: (state) => Boolean(

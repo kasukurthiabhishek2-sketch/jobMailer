@@ -11,49 +11,12 @@ import {
   X,
   Check,
   CheckCircle2,
-  Users
+  Users,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { uploadRecipientsSheet, fetchOutreachLogs } from '../services/api';
 import RecipientModal from './RecipientModal';
-
-const SAMPLE_RECIPIENTS = [
-  {
-    id: 'sample_rec_1',
-    name: 'Sarah Jenkins',
-    email: 'sarah.jenkins@techcorp.io',
-    company: 'TechCorp Labs',
-    role: 'Senior Engineering Recruiter',
-    jobDescription: 'Seeking Senior Full Stack Engineers with expertise in React, Node.js, and cloud systems to scale our distributed streaming infrastructure.',
-    isValidEmail: true,
-    isSelected: true,
-    isApproved: true,
-    status: 'pending'
-  },
-  {
-    id: 'sample_rec_2',
-    name: 'David Zhao',
-    email: 'david.zhao@finscale.ai',
-    company: 'FinScale AI',
-    role: 'VP of Engineering',
-    jobDescription: '',
-    isValidEmail: true,
-    isSelected: true,
-    isApproved: true,
-    status: 'pending'
-  },
-  {
-    id: 'sample_rec_3',
-    name: 'Elena Rostova',
-    email: 'elena@hypergrowth.ventures',
-    company: 'HyperGrowth Talent',
-    role: 'Head of Technical Recruiting',
-    jobDescription: 'Leading hiring for portfolio companies. Looking for lead engineers with distributed backend experience.',
-    isValidEmail: true,
-    isSelected: true,
-    isApproved: true,
-    status: 'pending'
-  }
-];
 
 export default function RecipientManager({
   recipients = [],
@@ -90,7 +53,8 @@ export default function RecipientManager({
             const time = item.timestamp ? new Date(item.timestamp).getTime() : 0;
             if (time >= cutoff) {
               const email = item.recipientEmail.trim().toLowerCase();
-              if (!map.has(email) || time > map.get(email).timestamp) {
+              const existingTime = map.get(email)?.timestamp ? new Date(map.get(email).timestamp).getTime() : 0;
+              if (!map.has(email) || time > existingTime) {
                 map.set(email, item);
               }
             }
@@ -106,8 +70,7 @@ export default function RecipientManager({
 
   // Search & Selection state
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedIds, setSelectedIds] = useState(new Set());
-  const [destructiveModal, setDestructiveModal] = useState(null); // { type: 'bulk' | 'all', count: number }
+  const [destructiveModal, setDestructiveModal] = useState(null); // { type: 'all', count: number }
 
   const approvedCount = useMemo(() => recipients.filter(r => r.isApproved).length, [recipients]);
   const unapprovedCount = recipients.length - approvedCount;
@@ -150,6 +113,9 @@ export default function RecipientManager({
       return;
     }
 
+    const isPrevContacted = Boolean(previousContact || recentContactWarning);
+    const lastContactDate = (previousContact || recentContactWarning)?.timestamp || null;
+
     const newRecipient = {
       id: 'rec_single_' + Date.now(),
       name: singleName.trim(),
@@ -160,6 +126,8 @@ export default function RecipientManager({
       isValidEmail: true,
       isSelected: true,
       isApproved: true,
+      isPreviouslyContacted: isPrevContacted,
+      lastContactedDate: lastContactDate,
       status: 'pending'
     };
 
@@ -212,10 +180,6 @@ export default function RecipientManager({
     });
   };
 
-  const handleLoadSampleRecipients = () => {
-    onUpdateRecipients(SAMPLE_RECIPIENTS);
-  };
-
   const handleToggleApproval = (id) => {
     onUpdateRecipients(
       recipients.map(r => (r.id === id ? { ...r, isApproved: !r.isApproved } : r))
@@ -224,17 +188,8 @@ export default function RecipientManager({
 
   const handleRemoveSingle = (id) => {
     onUpdateRecipients(recipients.filter(r => r.id !== id));
-    setSelectedIds(prev => {
-      if (prev.has(id)) {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      }
-      return prev;
-    });
   };
 
-  // Filtered recipients by search term
   const filteredRecipients = useMemo(() => {
     if (!searchTerm.trim()) return recipients;
     const term = searchTerm.toLowerCase().trim();
@@ -247,50 +202,29 @@ export default function RecipientManager({
     ));
   }, [recipients, searchTerm]);
 
-  // Selection logic
-  const allFilteredSelected =
-    filteredRecipients.length > 0 &&
-    filteredRecipients.every(r => selectedIds.has(r.id));
+  const [queuePage, setQueuePage] = useState(1);
+  const queuePageSize = 10;
 
-  const handleToggleSelectAll = () => {
-    const allFilteredIds = filteredRecipients.map(r => r.id);
-    if (allFilteredSelected) {
-      setSelectedIds(prev => {
-        const next = new Set(prev);
-        allFilteredIds.forEach(id => next.delete(id));
-        return next;
-      });
-    } else {
-      setSelectedIds(prev => {
-        const next = new Set(prev);
-        allFilteredIds.forEach(id => next.add(id));
-        return next;
-      });
-    }
-  };
+  const [prevSearchTerm, setPrevSearchTerm] = useState(searchTerm);
+  if (prevSearchTerm !== searchTerm) {
+    setPrevSearchTerm(searchTerm);
+    setQueuePage(1);
+  }
 
-  const handleToggleSelectRow = (id) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
+  const totalQueuePages = Math.max(1, Math.ceil(filteredRecipients.length / queuePageSize));
+  const safeQueuePage = Math.min(Math.max(1, queuePage), totalQueuePages);
+
+  const queueStartIndex = (safeQueuePage - 1) * queuePageSize;
+  const queueEndIndex = Math.min(queueStartIndex + queuePageSize, filteredRecipients.length);
+  const paginatedRecipients = useMemo(() => {
+    return filteredRecipients.slice(queueStartIndex, queueEndIndex);
+  }, [filteredRecipients, queueStartIndex, queueEndIndex]);
 
   const handleBulkDeleteConfirm = () => {
     if (destructiveModal?.type === 'all') {
       onUpdateRecipients([]);
-      setSelectedIds(new Set());
       setDestructiveModal(null);
       onShowToast({ type: 'info', title: 'Queue Cleared', message: 'All recipients removed.' });
-    } else if (destructiveModal?.type === 'bulk') {
-      onUpdateRecipients(recipients.filter(r => !selectedIds.has(r.id)));
-      setSelectedIds(new Set());
-      setDestructiveModal(null);
     }
   };
 
@@ -377,16 +311,6 @@ export default function RecipientManager({
               </div>
 
               <div style={{ marginTop: 'var(--sp-4)', display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={handleLoadSampleRecipients}
-                  style={{ width: '100%', justifyContent: 'center', gap: 6 }}
-                >
-                  <Sparkles size={14} style={{ color: 'var(--accent-primary)' }} />
-                  Or Load 3 Sample HR Contacts
-                </button>
-
                 <div
                   style={{
                     padding: '12px 14px',
@@ -543,15 +467,6 @@ export default function RecipientManager({
                   <UserPlus size={16} />
                   Add Recipient to Queue
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={handleLoadSampleRecipients}
-                  title="Load demo sample contacts"
-                >
-                  <Sparkles size={15} style={{ color: 'var(--accent-primary)' }} />
-                  Demo Contacts
-                </button>
               </div>
             </form>
           )}
@@ -577,18 +492,9 @@ export default function RecipientManager({
               </span>
             </div>
 
-            {/* Bulk Action Buttons: Select All, Clear All */}
+            {/* Bulk Action Buttons: Clear All */}
             {recipients.length > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={handleToggleSelectAll}
-                  style={{ fontSize: 11, height: 26, padding: '0 8px' }}
-                  title={allFilteredSelected ? 'Deselect all visible contacts' : 'Select all visible contacts'}
-                >
-                  {allFilteredSelected ? 'Deselect All' : 'Select All'}
-                </button>
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
@@ -646,35 +552,6 @@ export default function RecipientManager({
             </div>
           )}
 
-          {/* Bulk Selected Toolbar (when 1+ selected) */}
-          {selectedIds.size > 0 && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '6px 10px',
-                background: 'rgba(99, 102, 241, 0.08)',
-                border: '1px solid rgba(99, 102, 241, 0.25)',
-                borderRadius: 'var(--radius-sm)',
-                marginBottom: 'var(--sp-2)',
-                fontSize: 11
-              }}
-            >
-              <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-                {selectedIds.size} recipient(s) selected
-              </span>
-              <button
-                type="button"
-                className="btn btn-danger btn-sm"
-                onClick={() => setDestructiveModal({ type: 'bulk', count: selectedIds.size })}
-                style={{ fontSize: 10, height: 22, padding: '0 6px' }}
-              >
-                <Trash2 size={11} /> Delete Selected
-              </button>
-            </div>
-          )}
-
           {/* Queue Content: Empty state or List of recipients */}
           {recipients.length === 0 ? (
             <div
@@ -717,30 +594,22 @@ export default function RecipientManager({
             </div>
           ) : (
             <div className="recipient-queue-scrollable" style={{ flex: 1 }}>
-              {filteredRecipients.map(r => {
-                const isChecked = selectedIds.has(r.id);
+              {paginatedRecipients.map(r => {
                 const isRfcValid = r.isValidEmail !== false && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((r.email || '').trim());
                 const hasJd = Boolean(r.jobDescription && typeof r.jobDescription === 'string' && r.jobDescription.trim().length > 0);
+                const emailLower = (r.email || '').trim().toLowerCase();
+                const loggedContact = emailLower ? contactedLogsMap.get(emailLower) : null;
+                const isPreviouslyContacted = Boolean(r.isPreviouslyContacted || loggedContact);
+                const contactedDate = r.lastContactedDate || loggedContact?.timestamp;
 
                 return (
                   <div
                     key={r.id}
-                    className={`recipient-card-item ${isChecked ? 'selected' : ''}`}
+                    className="recipient-card-item"
                   >
-                    {/* Selection Checkbox */}
-                    <div style={{ paddingTop: 2 }}>
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => handleToggleSelectRow(r.id)}
-                        style={{ cursor: 'pointer' }}
-                        aria-label={`Select ${r.name || r.email}`}
-                      />
-                    </div>
-
                     {/* Main Details */}
                     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                      {/* Name & Email with RFC indicator */}
+                      {/* Name & Email with RFC indicator & 30-Day Dedup Badge */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>
                           {r.name || 'Hiring Lead'}
@@ -761,6 +630,15 @@ export default function RecipientManager({
                             title="Invalid RFC Email Format"
                           >
                             <AlertTriangle size={10} /> Invalid RFC
+                          </span>
+                        )}
+                        {isPreviouslyContacted && (
+                          <span
+                            className="status-badge status-badge-attention"
+                            style={{ fontSize: 10, padding: '1px 6px', height: 18, gap: 3 }}
+                            title={contactedDate ? `Previously contacted on ${new Date(contactedDate).toLocaleDateString()}` : 'Previously contacted within the last 30 days'}
+                          >
+                            <AlertTriangle size={10} /> Previously Contacted
                           </span>
                         )}
                       </div>
@@ -857,6 +735,55 @@ export default function RecipientManager({
               })}
             </div>
           )}
+
+          {/* Queue Pagination Footer */}
+          {filteredRecipients.length > 0 && (
+            <div
+              className="table-pagination"
+              style={{
+                marginTop: 'var(--sp-2)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '6px 12px',
+                fontSize: 11
+              }}
+            >
+              <span>
+                Showing <strong style={{ color: 'var(--text-secondary)' }}>
+                  {queueStartIndex + 1}–{queueEndIndex}
+                </strong> of {filteredRecipients.length}
+              </span>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  Page {safeQueuePage} of {totalQueuePages}
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setQueuePage(p => Math.max(1, p - 1))}
+                    disabled={safeQueuePage <= 1}
+                    aria-label="Previous queue page"
+                    title="Previous page"
+                    style={{ padding: '2px 6px', height: 22 }}
+                  >
+                    <ChevronLeft size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setQueuePage(p => Math.min(totalQueuePages, p + 1))}
+                    disabled={safeQueuePage >= totalQueuePages}
+                    aria-label="Next queue page"
+                    title="Next page"
+                    style={{ padding: '2px 6px', height: 22 }}
+                  >
+                    <ChevronRight size={12} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -875,9 +802,7 @@ export default function RecipientManager({
             </div>
             <div className="modal-body">
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                {destructiveModal.type === 'all'
-                  ? `Are you sure you want to remove all ${destructiveModal.count} recipients from your outreach list? This action cannot be undone.`
-                  : `Are you sure you want to remove the ${destructiveModal.count} selected recipient(s)?`}
+                {`Are you sure you want to remove all ${destructiveModal.count} recipients from your outreach list? This action cannot be undone.`}
               </p>
             </div>
             <div className="modal-footer">

@@ -9,6 +9,7 @@ let defaultCache = {
   expiresAt: 0
 };
 const tokenCaches = new Map();
+let pendingDeviceFlow = null;
 
 /**
  * Initiate Device Code Authorization
@@ -33,13 +34,16 @@ async function startDeviceFlow() {
   }
 
   const data = await response.json();
-  return {
+  const flow = {
     deviceCode: data.device_code,
     userCode: data.user_code,
     verificationUri: data.verification_uri || 'https://github.com/login/device',
     expiresIn: data.expires_in,
+    expiresAt: Date.now() + ((data.expires_in || 900) * 1000),
     interval: data.interval || 5
   };
+  pendingDeviceFlow = flow;
+  return flow;
 }
 
 /**
@@ -70,15 +74,18 @@ async function checkDeviceStatus(deviceCode) {
       return { status: 'slow_down', interval: data.interval || 5 };
     }
     if (data.error === 'expired_token') {
+      clearPendingDeviceFlow();
       return { status: 'expired', error: 'Verification code expired. Please try again.' };
     }
     if (data.error === 'access_denied') {
+      clearPendingDeviceFlow();
       return { status: 'denied', error: 'User canceled the authorization request.' };
     }
     return { status: 'error', error: data.error_description || data.error };
   }
 
   if (data.access_token) {
+    clearPendingDeviceFlow();
     return {
       status: 'authorized',
       accessToken: data.access_token,
@@ -139,7 +146,7 @@ async function getCopilotSessionToken(githubAccessToken) {
  */
 async function testCopilotConnection(githubAccessToken) {
   if (!githubAccessToken) {
-    return { success: false, error: 'No GitHub Copilot authorization found. Click "Login to GitHub" to verify.' };
+    return { success: false, error: 'No GitHub Copilot authorization found. Click "Connect GitHub Copilot" to verify via GitHub.' };
   }
 
   try {
@@ -166,7 +173,7 @@ async function callCopilotChat({ githubAccessToken, model = 'gpt-4o', systemProm
       { role: 'user', content: userPrompt }
     ],
     temperature: 0.7,
-    max_tokens: 550
+    max_tokens: 1200
   };
 
   const response = await fetch('https://api.githubcopilot.com/chat/completions', {
@@ -206,28 +213,33 @@ async function callCopilotChat({ githubAccessToken, model = 'gpt-4o', systemProm
     throw new Error('Copilot returned an empty response.');
   }
 
-  // Parse JSON
-  let cleaned = rawText.trim();
-  if (cleaned.startsWith('```json')) {
-    cleaned = cleaned.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-  } else if (cleaned.startsWith('```')) {
-    cleaned = cleaned.replace(/^```\s*/, '').replace(/\s*```$/, '');
-  }
-
-  try {
-    return JSON.parse(cleaned);
-  } catch (err) {
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (match) {
-      try {
-        return JSON.parse(match[0]);
-      } catch (e) {}
-    }
+  const { cleanJsonOutput } = require('./aiService');
+  const parsed = cleanJsonOutput(rawText);
+  if (!parsed || !parsed.body) {
     return {
       subject: 'Inquiry & Introduction',
-      body: rawText
+      body: (rawText || '').replace(/^```(?:json)?\s*/gi, '').replace(/\s*```\s*$/gi, '').trim()
     };
   }
+  return parsed;
+}
+
+/**
+ * Get current pending device flow if active and unexpired
+ */
+function getPendingDeviceFlow() {
+  if (pendingDeviceFlow && pendingDeviceFlow.expiresAt > Date.now()) {
+    return pendingDeviceFlow;
+  }
+  pendingDeviceFlow = null;
+  return null;
+}
+
+/**
+ * Clear pending device flow
+ */
+function clearPendingDeviceFlow() {
+  pendingDeviceFlow = null;
 }
 
 /**
@@ -237,6 +249,7 @@ function clearSessionCache() {
   defaultCache.copilotToken = null;
   defaultCache.expiresAt = 0;
   tokenCaches.clear();
+  clearPendingDeviceFlow();
 }
 
 function getSessionCache(userKey) {
@@ -256,5 +269,7 @@ module.exports = {
   testCopilotConnection,
   callCopilotChat,
   clearSessionCache,
-  getSessionCache
+  getSessionCache,
+  getPendingDeviceFlow,
+  clearPendingDeviceFlow
 };

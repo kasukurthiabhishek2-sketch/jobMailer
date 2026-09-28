@@ -54,13 +54,18 @@ export function useWizardState(initialStep = 1) {
     return true;
   }, [currentStep, canGoToStep]);
 
-  const handleResumeUploaded = useCallback((data) => {
+  const handleResumeUploaded = useCallback((data, options = {}) => {
+    const autoAdvance = typeof options === 'boolean' ? options : (options.autoAdvance ?? true);
     setResumeData(data);
-    if (data && currentStep === 1) {
+    if (autoAdvance && data && currentStep === 1) {
       setDirection('forward');
       setCurrentStep(2);
     }
   }, [currentStep]);
+
+  const handleResumeChange = useCallback((data) => {
+    setResumeData(data);
+  }, []);
 
   const resetWizard = useCallback(() => {
     setCurrentStep(1);
@@ -89,6 +94,7 @@ export function useWizardState(initialStep = 1) {
     canGoToStep,
     getLockReason,
     handleResumeUploaded,
+    handleResumeChange,
     resetWizard,
     // Computed / derived properties
     resumeReady: Boolean(resumeData),

@@ -12,7 +12,8 @@ import {
   EyeOff,
   Trash2,
   Plus,
-  Edit2
+  Edit2,
+  KeyRound
 } from 'lucide-react';
 import {
   saveAiProviderConfig,
@@ -27,6 +28,49 @@ import {
 import { saveSettings, stripUndefined } from '../../lib/settings';
 
 /* ── Constants ───────────────────────────────────────────────────────────── */
+
+const PROVIDER_DEFAULT_MODELS = {
+  gemini: [
+    'gemini-2.5-flash',
+    'gemini-2.5-pro',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro'
+  ],
+  openai: [
+    'gpt-4o',
+    'gpt-4o-mini',
+    'gpt-4-turbo',
+    'gpt-3.5-turbo'
+  ],
+  groq: [
+    'llama-3.3-70b-versatile',
+    'llama-3.1-8b-instant',
+    'qwen/qwen3.8-27b',
+    'openai/gpt-oss-20b',
+    'openai/gpt-oss-120b'
+  ],
+  grok: [
+    'grok-2-1212',
+    'grok-2-vision-1212',
+    'grok-beta'
+  ],
+  nvidia: [
+    'meta/llama-3.1-70b-instruct',
+    'meta/llama-3.1-8b-instruct',
+    'mistralai/mixtral-8x22b-instruct-v0.1'
+  ],
+  copilot: [
+    'gpt-4o',
+    'gpt-4o-mini'
+  ],
+  custom: [
+    'gpt-4o',
+    'gpt-4o-mini',
+    'custom-model'
+  ]
+};
 
 const PROVIDER_CONFIG = {
   gemini:  { name: 'Google Gemini',   monogram: 'G', keyPrefix: 'AIza', keyPage: 'https://aistudio.google.com/apikey' },
@@ -174,7 +218,7 @@ function ModelSelect({ value, options, onChange }) {
 
   useEffect(() => {
     if (open && focusIndex >= 0 && listRef.current?.children[focusIndex]) {
-      listRef.current.children[focusIndex].scrollIntoView({ block: 'nearest' });
+      listRef.current.children[focusIndex]?.scrollIntoView?.({ block: 'nearest' });
     }
   }, [focusIndex, open]);
 
@@ -318,7 +362,7 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
   const [editingKeyName, setEditingKeyName] = useState({});
   const [providerStates, setProviderStates] = useState({});
   const [modelLists, setModelLists] = useState({});
-  const [_replacingKey, setReplacingKey] = useState({});
+  const [replacingKey, setReplacingKey] = useState({});
 
   const [showManualCopilotInput, setShowManualCopilotInput] = useState(false);
   const [showCopilotToken, setShowCopilotToken] = useState(false);
@@ -725,18 +769,36 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
       const currentProvider = config?.aiProviders?.[providerKey] || {};
       const existingKeys = getProviderSavedKeys(currentProvider);
       const masked = trimmed.length > 8 ? `${trimmed.slice(0, 4)}...${trimmed.slice(-4)}` : '••••••••';
-      const keyId = `key_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      const keyName = customKeyName?.trim() || (existingKeys.length === 0 ? 'Primary Key' : `Key ${existingKeys.length + 1}`);
+      const replaceId = replacingKey[providerKey];
+      let updatedSavedKeys;
+      let keyId;
 
-      const newKeyObj = {
-        id: keyId,
-        name: keyName,
-        apiKey: trimmed,
-        maskedKey: masked,
-        createdAt: new Date().toISOString()
-      };
+      if (replaceId && existingKeys.some(k => k.id === replaceId)) {
+        keyId = replaceId;
+        const targetExisting = existingKeys.find(k => k.id === replaceId);
+        const resolvedName = customKeyName?.trim() || targetExisting?.name || 'Primary Key';
+        updatedSavedKeys = existingKeys.map(k => k.id === replaceId ? {
+          ...k,
+          name: resolvedName,
+          apiKey: trimmed,
+          maskedKey: masked,
+          createdAt: k.createdAt || new Date().toISOString()
+        } : k);
+      } else {
+        keyId = `key_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const keyName = customKeyName?.trim() || (existingKeys.length === 0 ? 'Primary Key' : `Key ${existingKeys.length + 1}`);
+        const newKeyObj = {
+          id: keyId,
+          name: keyName,
+          apiKey: trimmed,
+          maskedKey: masked,
+          createdAt: new Date().toISOString()
+        };
+        updatedSavedKeys = [...existingKeys, newKeyObj];
+      }
 
-      const updatedSavedKeys = [...existingKeys, newKeyObj];
+      const activeKeyObj = updatedSavedKeys.find(k => k.id === keyId) || updatedSavedKeys[0];
+      const keyName = activeKeyObj?.name || 'Primary Key';
 
       const updatedAiProvider = {
         ...currentProvider,
@@ -782,17 +844,18 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
 
       onRefreshConfig(updatedConfig);
       setEditingKeys(prev => ({ ...prev, [providerKey]: '' }));
-      setReplacingKey(prev => ({ ...prev, [providerKey]: false }));
+      setReplacingKey(prev => ({ ...prev, [providerKey]: null }));
       setAddingKey(prev => ({ ...prev, [providerKey]: false }));
       setNewKeyName(prev => ({ ...prev, [providerKey]: '' }));
 
       onShowToast?.({
         type: 'success',
-        title: 'API key saved',
-        message: `Saved "${keyName}" for ${PROVIDER_CONFIG[providerKey]?.name || providerKey}`
+        title: replaceId ? 'API key updated' : 'API key saved',
+        message: `${replaceId ? 'Updated' : 'Saved'} "${keyName}" for ${PROVIDER_CONFIG[providerKey]?.name || providerKey}`
       });
 
-      handleTestConnection(providerKey, trimmed);
+      handleTestConnection(providerKey, trimmed, keyId);
+      handleFetchModels(providerKey, trimmed, keyId);
     } catch (err) {
       onShowToast?.({ type: 'error', title: 'Save failed', message: err.message });
       setProviderStates(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], saving: false, status: 'error', error: err.message } }));
@@ -805,10 +868,14 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
     const targetKey = keys.find(k => k.id === keyId);
     if (!targetKey) return;
 
+    const rawKey = (targetKey.apiKey && !targetKey.apiKey.includes('...') && !targetKey.apiKey.includes('••'))
+      ? targetKey.apiKey.trim()
+      : '';
+
     const updatedAiProvider = {
       ...currentProvider,
-      apiKey: targetKey.apiKey || '',
-      maskedKey: targetKey.maskedKey || '',
+      apiKey: rawKey || targetKey.maskedKey || currentProvider.apiKey || '',
+      maskedKey: targetKey.maskedKey || currentProvider.maskedKey || '',
       selectedKeyId: keyId,
       isConfigured: true
     };
@@ -833,7 +900,7 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
       await saveAiProviderConfig({
         providerKey,
         selectedKeyId: keyId,
-        apiKey: (targetKey.apiKey && !targetKey.apiKey.includes('...') && !targetKey.apiKey.includes('••')) ? targetKey.apiKey : undefined,
+        apiKey: rawKey || undefined,
         model: currentProvider.model || '',
         enabled: true
       });
@@ -846,8 +913,8 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
       message: `Switched to "${targetKey.name}" for ${PROVIDER_CONFIG[providerKey]?.name || providerKey}`
     });
 
-    handleTestConnection(providerKey, targetKey.apiKey);
-    handleFetchModels(providerKey, targetKey.apiKey);
+    handleTestConnection(providerKey, rawKey, keyId);
+    handleFetchModels(providerKey, rawKey, keyId);
   };
 
   const handleRenameKey = async (providerKey, keyId, newName) => {
@@ -978,23 +1045,29 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
     });
   };
 
-  const handleTestConnection = async (providerKey, overrideKey) => {
+  const handleTestConnection = async (providerKey, overrideKey, overrideKeyId) => {
     setProviderStates(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], status: 'verifying', error: null } }));
     try {
       const currentProvider = config?.aiProviders?.[providerKey] || {};
       const savedKeys = getProviderSavedKeys(currentProvider);
-      const activeKeyId = currentProvider.selectedKeyId || savedKeys[0]?.id;
+      const activeKeyId = overrideKeyId || currentProvider.selectedKeyId || savedKeys[0]?.id;
+      const activeKeyObj = savedKeys.find(k => k.id === activeKeyId) || savedKeys[0];
 
-      const keyToTest = (overrideKey && !overrideKey.includes('...') && !overrideKey.includes('••'))
-        ? overrideKey.trim()
-        : getEffectiveApiKey(providerKey);
+      let keyToTest = '';
+      if (overrideKey && typeof overrideKey === 'string' && !overrideKey.includes('...') && !overrideKey.includes('••')) {
+        keyToTest = overrideKey.trim();
+      } else if (activeKeyObj?.apiKey && typeof activeKeyObj.apiKey === 'string' && !activeKeyObj.apiKey.includes('...') && !activeKeyObj.apiKey.includes('••')) {
+        keyToTest = activeKeyObj.apiKey.trim();
+      } else {
+        keyToTest = getEffectiveApiKey(providerKey);
+      }
 
       const model = editingModels[providerKey] || currentProvider.model;
       const baseURL = editingBaseUrls[providerKey] || currentProvider.baseURL || '';
 
       const res = await testAiConnection({
         providerKey,
-        apiKey: keyToTest,
+        apiKey: keyToTest || undefined,
         model,
         baseURL,
         selectedKeyId: activeKeyId || undefined
@@ -1013,43 +1086,57 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
           }
         }));
       } else {
+        const errorMsg = res?.error || 'Connection test failed';
+        const userFriendlyError = (errorMsg.includes('API key is required') && activeKeyObj)
+          ? `Secret key not found in storage. Click "Replace" on "${activeKeyObj.name || 'Saved Key'}" to enter your API key.`
+          : errorMsg;
         setProviderStates(prev => ({
           ...prev,
           [providerKey]: {
             ...prev[providerKey],
             status: 'error',
-            error: res?.error || 'Connection test failed',
+            error: userFriendlyError,
             saving: false
           }
         }));
       }
     } catch (err) {
+      const errorMsg = err.message || 'Connection test failed';
+      const userFriendlyError = (errorMsg.includes('API key is required') && activeKeyObj)
+        ? `Secret key not found in storage. Click "Replace" on "${activeKeyObj.name || 'Saved Key'}" to enter your API key.`
+        : errorMsg;
       setProviderStates(prev => ({
         ...prev,
         [providerKey]: {
           ...prev[providerKey],
           status: 'error',
-          error: err.message,
+          error: userFriendlyError,
           saving: false
         }
       }));
     }
   };
 
-  const handleFetchModels = async (providerKey, overrideKey) => {
+  const handleFetchModels = async (providerKey, overrideKey, overrideKeyId) => {
     setModelLists(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], loading: true, error: null } }));
     try {
       const currentProvider = config?.aiProviders?.[providerKey] || {};
       const savedKeys = getProviderSavedKeys(currentProvider);
-      const activeKeyId = currentProvider.selectedKeyId || savedKeys[0]?.id;
+      const activeKeyId = overrideKeyId || currentProvider.selectedKeyId || savedKeys[0]?.id;
+      const activeKeyObj = savedKeys.find(k => k.id === activeKeyId) || savedKeys[0];
 
-      const keyToUse = (overrideKey && !overrideKey.includes('...') && !overrideKey.includes('••'))
-        ? overrideKey.trim()
-        : getEffectiveApiKey(providerKey);
+      let keyToUse = '';
+      if (overrideKey && typeof overrideKey === 'string' && !overrideKey.includes('...') && !overrideKey.includes('••')) {
+        keyToUse = overrideKey.trim();
+      } else if (activeKeyObj?.apiKey && typeof activeKeyObj.apiKey === 'string' && !activeKeyObj.apiKey.includes('...') && !activeKeyObj.apiKey.includes('••')) {
+        keyToUse = activeKeyObj.apiKey.trim();
+      } else {
+        keyToUse = getEffectiveApiKey(providerKey);
+      }
 
       const res = await listAiModels({
         providerKey,
-        apiKey: keyToUse,
+        apiKey: keyToUse || undefined,
         selectedKeyId: activeKeyId || undefined
       });
 
@@ -1064,22 +1151,30 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
           }
         }));
       } else {
+        const errorMsg = res?.error || 'Failed to load models';
+        const userFriendlyError = (errorMsg.includes('API key is required') && activeKeyObj)
+          ? `Secret key not found in storage. Click "Replace" to enter your API key.`
+          : errorMsg;
         setModelLists(prev => ({
           ...prev,
           [providerKey]: {
             ...prev[providerKey],
             loading: false,
-            error: res?.error || 'Failed to load models'
+            error: userFriendlyError
           }
         }));
       }
     } catch (err) {
+      const errorMsg = err.message || 'Failed to load models';
+      const userFriendlyError = (errorMsg.includes('API key is required') && activeKeyObj)
+        ? `Secret key not found in storage. Click "Replace" to enter your API key.`
+        : errorMsg;
       setModelLists(prev => ({
         ...prev,
         [providerKey]: {
           ...prev[providerKey],
           loading: false,
-          error: err.message
+          error: userFriendlyError
         }
       }));
     }
@@ -1189,6 +1284,7 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
       await saveAiProviderConfig({
         providerKey,
         model: newModel,
+        selectedKeyId: currentProvider.selectedKeyId || undefined,
         apiKey: activeRawKey || undefined,
         baseURL: providerKey === 'custom' ? (editingBaseUrls[providerKey] || currentProvider.baseURL) : undefined,
         enabled: true
@@ -1231,56 +1327,44 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
   }, [expandedKey]);
 
   const renderModelPicker = (key, provider) => {
-    const status = getEffectiveStatus(key);
-    const isConfigured = isProviderConfigured(key, provider);
-    
-    if (status !== 'connected' && status !== 'key-saved' && !isConfigured) {
-      return (
-        <div>
-          <input
-            type="text"
-            className="form-input"
-            disabled
-            value={key === 'copilot' ? "Connect GitHub Copilot first" : "Verify your API key first"}
-          />
-        </div>
-      );
-    }
-
     const ml = modelLists[key];
     const hasFetched = ml?.models?.length > 0;
-    const fallbackModels = provider.supportedModels || [];
-    // Normalize: live models are {id, name} objects, fallback are strings
-    const modelIds = hasFetched ? ml.models.map(m => m.id) : fallbackModels;
-    const current = editingModels[key] || provider.model;
+    const defaultModels = PROVIDER_DEFAULT_MODELS[key] || [];
+    const fallbackModels = (Array.isArray(provider?.supportedModels) && provider.supportedModels.length > 0)
+      ? provider.supportedModels
+      : defaultModels;
 
-    // If the saved model isn't in the list, add it at the top to avoid silent failure
-    if (current && !modelIds.includes(current)) {
-      modelIds.unshift(current);
-    }
+    // Normalize: live models are {id, name} objects, fallback are strings
+    const baseList = hasFetched ? ml.models.map(m => m.id) : fallbackModels;
+    const current = editingModels[key] || provider?.model || defaultModels[0] || '';
+
+    // Deduplicated list ensuring current model, base list, and all standard default models are selectable
+    const modelIds = Array.from(new Set([
+      ...(current ? [current] : []),
+      ...baseList,
+      ...defaultModels
+    ])).filter(Boolean);
 
     return (
       <div className="model-picker-container">
-        {ml?.loading ? (
+        {modelIds.length > 0 ? (
+          <ModelSelect value={current} options={modelIds} onChange={val => handleModelChange(key, val)} />
+        ) : ml?.loading ? (
           <div className="skeleton-loader" style={{ height: '36px', borderRadius: '4px' }}></div>
         ) : (
-          modelIds.length > 0 ? (
-            <ModelSelect value={current} options={modelIds} onChange={val => handleModelChange(key, val)} />
-          ) : (
-            <input
-              type="text"
-              value={editingModels[key] !== undefined ? editingModels[key] : (provider.model || '')}
-              onChange={e => setEditingModels(prev => ({ ...prev, [key]: e.target.value }))}
-              onBlur={e => handleModelChange(key, e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleModelChange(key, e.target.value); }}
-              className="form-input"
-              placeholder="Model name"
-            />
-          )
+          <input
+            type="text"
+            value={editingModels[key] !== undefined ? editingModels[key] : (provider.model || '')}
+            onChange={e => setEditingModels(prev => ({ ...prev, [key]: e.target.value }))}
+            onBlur={e => handleModelChange(key, e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleModelChange(key, e.target.value); }}
+            className="form-input"
+            placeholder="Model name"
+          />
         )}
         <div className="model-refresh-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px' }}>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-            {hasFetched ? `${modelIds.length} models from ${PROVIDER_CONFIG[key]?.name || key}` : (fallbackModels.length > 0 ? '(cached list)' : '')}
+            {hasFetched ? `${ml.models.length} models from ${PROVIDER_CONFIG[key]?.name || key}` : (modelIds.length > 0 ? '(default list)' : '')}
           </span>
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleFetchModels(key)} disabled={ml?.loading}>
             <RefreshCw size={12} className={ml?.loading ? 'spin-icon' : ''} /> Refresh models
@@ -1386,17 +1470,31 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
                         </button>
                       )}
                       {!isRenaming && (
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-xs"
-                          title="Rename key"
-                          onClick={() => {
-                            setEditingKeyId(prev => ({ ...prev, [key]: k.id }));
-                            setEditingKeyName(prev => ({ ...prev, [key]: k.name }));
-                          }}
-                        >
-                          <Edit2 size={12} /> Rename
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-xs"
+                            title="Replace key value"
+                            onClick={() => {
+                              setAddingKey(prev => ({ ...prev, [key]: true }));
+                              setNewKeyName(prev => ({ ...prev, [key]: k.name }));
+                              setReplacingKey(prev => ({ ...prev, [key]: k.id }));
+                            }}
+                          >
+                            <KeyRound size={12} /> Replace
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-xs"
+                            title="Rename key"
+                            onClick={() => {
+                              setEditingKeyId(prev => ({ ...prev, [key]: k.id }));
+                              setEditingKeyName(prev => ({ ...prev, [key]: k.name }));
+                            }}
+                          >
+                            <Edit2 size={12} /> Rename
+                          </button>
+                        </>
                       )}
                       <button
                         type="button"
@@ -1420,6 +1518,7 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
                   className="btn btn-secondary btn-sm"
                   onClick={() => {
                     setAddingKey(prev => ({ ...prev, [key]: true }));
+                    setReplacingKey(prev => ({ ...prev, [key]: null }));
                     setNewKeyName(prev => ({ ...prev, [key]: `Key ${savedKeys.length + 1}` }));
                   }}
                   style={{ gap: '6px' }}
@@ -1434,7 +1533,7 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
         {isAdding && (
           <div className="provider-section" style={{ marginTop: hasSavedKeys ? 'var(--sp-3)' : 0 }}>
             <div className="provider-section-title">
-              {hasSavedKeys ? 'Add New Key' : 'Connection'}
+              {replacingKey[key] ? `Update Key: ${newKeyName[key] || 'Selected Key'}` : (hasSavedKeys ? 'Add New Key' : 'Connection')}
             </div>
             <div className="apikey-input-area">
               <label className="form-label" htmlFor={`keyname-${key}`}>
@@ -1496,7 +1595,7 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
                   onClick={() => handleSaveAndVerify(key, editingKeys[key], newKeyName[key])}
                   disabled={!editingKeys[key] || isSaving}
                 >
-                  {isSaving ? <><RefreshCw size={13} className="spin-icon" /> Saving...</> : (hasSavedKeys ? 'Save & add key' : 'Save & verify')}
+                  {isSaving ? <><RefreshCw size={13} className="spin-icon" /> Saving...</> : (replacingKey[key] ? 'Update key' : (hasSavedKeys ? 'Save & add key' : 'Save & verify'))}
                 </button>
                 {hasSavedKeys && (
                   <button
@@ -1504,6 +1603,7 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
                     className="btn btn-secondary btn-sm"
                     onClick={() => {
                       setAddingKey(prev => ({ ...prev, [key]: false }));
+                      setReplacingKey(prev => ({ ...prev, [key]: null }));
                       setEditingKeys(prev => ({ ...prev, [key]: '' }));
                     }}
                   >
@@ -1516,44 +1616,6 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
                   </a>
                 )}
               </div>
-            </div>
-          </div>
-        )}
-
-        {hasSavedKeys && (
-          <div className="provider-section">
-            <div className="provider-section-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span>Active Key</span>
-              <span style={{ fontSize: '0.8rem', fontWeight: 'normal', color: 'var(--text-secondary)' }}>
-                {savedKeys.length} {savedKeys.length === 1 ? 'key configured' : 'keys configured'}
-              </span>
-            </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <select
-                className="form-input"
-                value={activeKeyId}
-                onChange={e => handleSelectKey(key, e.target.value)}
-                style={{ flex: 1 }}
-                aria-label="Select active API key from previously added keys"
-              >
-                {savedKeys.map(k => (
-                  <option key={k.id} value={k.id}>
-                    {k.name} ({k.maskedKey})
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => {
-                  setAddingKey(prev => ({ ...prev, [key]: true }));
-                  setNewKeyName(prev => ({ ...prev, [key]: `Key ${savedKeys.length + 1}` }));
-                }}
-                title="Add another API key"
-                style={{ whiteSpace: 'nowrap' }}
-              >
-                <Plus size={13} /> Add Key
-              </button>
             </div>
           </div>
         )}

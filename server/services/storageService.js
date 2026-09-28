@@ -19,7 +19,14 @@ const DEFAULT_CONFIG = {
       apiKey: '', // encrypted
       model: 'gemini-1.5-flash',
       enabled: true,
-      supportedModels: ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash-exp']
+      supportedModels: [
+        'gemini-2.5-flash',
+        'gemini-2.5-pro',
+        'gemini-2.0-flash',
+        'gemini-1.5-flash',
+        'gemini-1.5-pro',
+        'gemini-2.0-flash-exp'
+      ]
     },
     openai: {
       name: 'ChatGPT / OpenAI',
@@ -293,12 +300,18 @@ function updateAiProvider(providerKey, { apiKey, model, baseURL, enabled, keyNam
     if (typeof apiKey === 'string' && (apiKey.includes('...') || apiKey.includes('••'))) {
       // Ignore masked keys passed inadvertently; do not overwrite real key with masked string
     } else if (apiKey === '') {
-      prov.apiKey = '';
-      prov.isConfigured = false;
-      if (selectedKeyId) {
-        prov.savedKeys = prov.savedKeys.filter(k => k.id !== selectedKeyId);
+      if (deleteKeyId) {
+        prov.savedKeys = prov.savedKeys.filter(k => k.id !== deleteKeyId);
+      }
+      if (prov.savedKeys.length > 0) {
+        const activeKey = prov.savedKeys.find(k => k.id === prov.selectedKeyId) || prov.savedKeys[0];
+        prov.selectedKeyId = activeKey.id;
+        prov.apiKey = activeKey.apiKey || '';
+        prov.isConfigured = Boolean(prov.apiKey || prov.savedKeys.some(k => Boolean(k.apiKey)));
       } else {
-        prov.savedKeys = [];
+        prov.apiKey = '';
+        prov.isConfigured = false;
+        prov.selectedKeyId = '';
       }
     } else {
       const encrypted = encrypt(apiKey.trim());
@@ -323,11 +336,21 @@ function updateAiProvider(providerKey, { apiKey, model, baseURL, enabled, keyNam
   }
 
   // Handle selecting an existing saved key
-  if (selectedKeyId && apiKey === undefined) {
+  if (selectedKeyId && (apiKey === undefined || apiKey === '' || (typeof apiKey === 'string' && (apiKey.includes('...') || apiKey.includes('••'))))) {
     prov.selectedKeyId = selectedKeyId;
     const match = prov.savedKeys.find(k => k.id === selectedKeyId);
     if (match && match.apiKey) {
       prov.apiKey = match.apiKey;
+      prov.isConfigured = true;
+    }
+  }
+
+  // Ensure active key is selected if savedKeys exist but no active key is selected
+  if (!prov.apiKey && prov.savedKeys.length > 0) {
+    const active = prov.savedKeys.find(k => k.id === prov.selectedKeyId) || prov.savedKeys[0];
+    if (active?.apiKey) {
+      prov.apiKey = active.apiKey;
+      prov.selectedKeyId = active.id;
       prov.isConfigured = true;
     }
   }

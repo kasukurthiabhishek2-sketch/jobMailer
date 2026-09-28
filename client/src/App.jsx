@@ -9,22 +9,19 @@ import SendProgressModal from './components/SendProgressModal';
 import SettingsModal from './components/SettingsModal';
 import AuthGate from './components/AuthGate';
 import Toast from './components/Toast';
-import { fetchMigrationConfig } from './services/api';
 import { watchAuthState, signOutUser } from './lib/firebase';
-import { loadSettings, saveSettings, formatForFirestore, getDefaultSettings } from './lib/settings';
+import { loadSettings, saveSettings, getDefaultSettings } from './lib/settings';
 import { useWizardState } from './hooks/useWizardState';
 import { useCampaignStream } from './hooks/useCampaignStream';
 import { ChevronLeft, ChevronRight, AlertCircle, RefreshCw } from 'lucide-react';
 
 export default function App() {
-  const [user, setUser] = useState(undefined); // undefined = loading, null = unauthenticated, User = authenticated
-  const [offlineMode, setOfflineMode] = useState(false);
+  const [user, setUser] = useState(undefined);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
   const [authRetryCount, setAuthRetryCount] = useState(0);
   const [config, setConfig] = useState(null);
 
-  // Wizard state hook (TICK-CYC3-08 / B2)
   const {
     currentStep,
     direction,
@@ -37,6 +34,7 @@ export default function App() {
     setGeneratedEmails,
     goToStep,
     handleResumeUploaded,
+    handleResumeChange,
     resetWizard,
     resumeReady,
     jdReady,
@@ -44,7 +42,6 @@ export default function App() {
     emailReady
   } = useWizardState(1);
 
-  // Outbound campaign streaming hook (TICK-CYC3-08 / B2)
   const {
     sendModalOpen,
     setSendModalOpen,
@@ -56,11 +53,9 @@ export default function App() {
     triggerSend
   } = useCampaignStream();
 
-  // Settings modal navigation state
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState('ai');
 
-  // Theme state
   const [theme, setTheme] = useState(() => localStorage.getItem('jdmail-theme') || 'dark');
 
   useEffect(() => {
@@ -72,7 +67,6 @@ export default function App() {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  // Toast notifications
   const [toasts, setToasts] = useState([]);
 
   const addToast = ({ type = 'info', title, message }) => {
@@ -87,9 +81,7 @@ export default function App() {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
-  // Watch Firebase authentication state and load user settings from Firestore (TICK-CYC3-14 / C5)
   useEffect(() => {
-    // Timeout: If Firebase fails to respond within 4s, offer explicit retry or local mode
     const connectionTimer = setTimeout(() => {
       setAuthLoading(false);
       setAuthError('Unable to reach Firebase authentication.');
@@ -104,8 +96,7 @@ export default function App() {
         try {
           let userSettings = await loadSettings(currentUser.uid);
           if (!userSettings) {
-            const legacy = await fetchMigrationConfig();
-            userSettings = formatForFirestore(legacy);
+            userSettings = getDefaultSettings();
             await saveSettings(currentUser.uid, userSettings);
           }
           setConfig(userSettings);
@@ -159,32 +150,9 @@ export default function App() {
     });
   };
 
-  const handleContinueOffline = async () => {
-    setOfflineMode(true);
-    setUser({ isOffline: true, displayName: 'Local Mode', email: 'offline@localhost' });
-    try {
-      const legacy = await fetchMigrationConfig();
-      if (legacy) {
-        setConfig(formatForFirestore(legacy));
-      } else {
-        setConfig(getDefaultSettings());
-      }
-      addToast({
-        type: 'info',
-        title: 'Local Mode Active',
-        message: 'Using local server configuration and credentials.'
-      });
-    } catch {
-      setConfig(getDefaultSettings());
-    }
-  };
-
   const handleSignOut = async () => {
     try {
-      if (!user?.isOffline) {
-        await signOutUser();
-      }
-      setOfflineMode(false);
+      await signOutUser();
       setUser(null);
       setConfig(null);
       resetWizard();
@@ -207,8 +175,7 @@ export default function App() {
     );
   }
 
-  // Explicit Error/Retry State on Firebase Timeout (TICK-CYC3-14 / C5)
-  if (authError && !offlineMode && !user) {
+  if (authError && !user) {
     return (
       <div className="auth-loading-screen" style={{ flexDirection: 'column' }}>
         <div className="glass-card" style={{ maxWidth: 440, textAlign: 'center', padding: 32 }}>
@@ -217,37 +184,26 @@ export default function App() {
             Unable to Reach Firebase Authentication
           </h3>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 24, lineHeight: 1.5 }}>
-            Connection to Firebase services timed out or could not be established. You can retry connecting or continue immediately in local mode using your local encrypted configuration.
+            Connection to Firebase services timed out or could not be established. Please retry connecting.
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={handleRetryAuth}
-              style={{ justifyContent: 'center', gap: 8 }}
-            >
-              <RefreshCw size={14} />
-              Retry Connection
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={handleContinueOffline}
-              style={{ justifyContent: 'center' }}
-            >
-              Continue in Local Mode
-            </button>
-          </div>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={handleRetryAuth}
+            style={{ justifyContent: 'center', gap: 8, width: '100%' }}
+          >
+            <RefreshCw size={14} />
+            Retry Connection
+          </button>
         </div>
       </div>
     );
   }
 
-  if (!user && !offlineMode) {
+  if (!user) {
     return (
       <>
         <AuthGate
-          onContinueOffline={handleContinueOffline}
           onSignInError={(err) =>
             addToast({
               type: 'error',
@@ -262,7 +218,7 @@ export default function App() {
   }
 
   return (
-    <>
+    <div className="app-layout">
       <Header
         config={config}
         onOpenSettings={handleOpenSettings}
@@ -274,7 +230,6 @@ export default function App() {
       />
 
       <main className="app-container">
-        {/* Step Progression Bar — Single Canonical Step Indicator */}
         <StepIndicator
           currentStep={currentStep}
           onSelectStep={goToStep}
@@ -284,7 +239,6 @@ export default function App() {
           emailReady={emailReady}
         />
 
-        {/* Wizard Step Shell (TICK-CYC3-11: Stacked duplicate card stack removed) */}
         <div className="wizard-container">
           <div className="step-transition-wrapper">
             <div
@@ -296,6 +250,7 @@ export default function App() {
                   <ResumeUpload
                     resumeData={resumeData}
                     onResumeUploaded={handleResumeUploaded}
+                    onResumeChange={handleResumeChange}
                     onShowToast={addToast}
                   />
                   <div className="wizard-nav-footer">
@@ -306,7 +261,7 @@ export default function App() {
                       onClick={() => goToStep(2)}
                       disabled={!resumeReady}
                     >
-                      Continue to Target Role
+                      Continue to Recipients
                       <ChevronRight size={16} />
                     </button>
                   </div>
@@ -315,10 +270,11 @@ export default function App() {
 
               {currentStep === 2 && (
                 <div>
-                  <JobDescriptionInput
-                    jobDescription={jobDescription}
-                    onChangeJd={setJobDescription}
+                  <RecipientManager
+                    recipients={recipients}
+                    onUpdateRecipients={setRecipients}
                     onShowToast={addToast}
+                    generatedEmails={generatedEmails}
                   />
                   <div className="wizard-nav-footer">
                     <button
@@ -334,7 +290,7 @@ export default function App() {
                       className="btn btn-primary"
                       onClick={() => goToStep(3)}
                     >
-                      Continue to Recipients
+                      Continue to Target Role
                       <ChevronRight size={16} />
                     </button>
                   </div>
@@ -343,11 +299,10 @@ export default function App() {
 
               {currentStep === 3 && (
                 <div>
-                  <RecipientManager
-                    recipients={recipients}
-                    onUpdateRecipients={setRecipients}
+                  <JobDescriptionInput
+                    jobDescription={jobDescription}
+                    onChangeJd={setJobDescription}
                     onShowToast={addToast}
-                    generatedEmails={generatedEmails}
                   />
                   <div className="wizard-nav-footer">
                     <button
@@ -356,7 +311,7 @@ export default function App() {
                       onClick={() => goToStep(2)}
                     >
                       <ChevronLeft size={16} />
-                      Back to Target Role
+                      Back to Recipients
                     </button>
                     <button
                       type="button"
@@ -394,7 +349,7 @@ export default function App() {
                       onClick={() => goToStep(3)}
                     >
                       <ChevronLeft size={16} />
-                      Back to Recipients
+                      Back to Target Role
                     </button>
                     <div />
                   </div>
@@ -405,7 +360,6 @@ export default function App() {
         </div>
       </main>
 
-      {/* Settings Modal */}
       {config && (
         <SettingsModal
           isOpen={settingsModalOpen}
@@ -418,7 +372,6 @@ export default function App() {
         />
       )}
 
-      {/* Send Progress Modal */}
       <SendProgressModal
         isOpen={sendModalOpen}
         onClose={() => setSendModalOpen(false)}
@@ -429,8 +382,7 @@ export default function App() {
         summaryData={campaignSummary}
       />
 
-      {/* Toast System */}
       <Toast toasts={toasts} onDismiss={removeToast} />
-    </>
+    </div>
   );
 }

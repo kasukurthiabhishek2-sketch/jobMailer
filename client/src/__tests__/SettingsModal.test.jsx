@@ -186,4 +186,110 @@ describe('SettingsModal Component (TICK-CYC3-09 / B3)', () => {
     const geminiButton = screen.getByRole('button', { name: /Google Gemini/i });
     expect(geminiButton).toHaveAttribute('aria-expanded');
   });
+
+  it('shows configured provider with selected model in In use section and renders saved keys list with names', () => {
+    const configWithGroq = {
+      activeProvider: 'groq',
+      aiProviders: {
+        groq: {
+          name: 'Groq',
+          maskedKey: 'gsk_...Uc79',
+          model: 'openai/gpt-oss-20b',
+          savedKeys: [
+            { id: 'k1', name: 'Work Account', maskedKey: 'gsk_...Uc79' },
+            { id: 'k2', name: 'Backup Groq', maskedKey: 'gsk_...8888' }
+          ],
+          selectedKeyId: 'k1'
+        },
+        openai: {
+          name: 'OpenAI',
+          maskedKey: '',
+          isConfigured: false
+        }
+      },
+      smtpProfiles: [],
+      preferences: {}
+    };
+
+    render(
+      <SettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        initialTab="ai"
+        config={configWithGroq}
+        onRefreshConfig={vi.fn()}
+        onShowToast={vi.fn()}
+      />
+    );
+
+    // In use section should contain Groq with selected model friendly name
+    expect(screen.getByText('In use')).toBeInTheDocument();
+    expect(screen.getByText('GPT-OSS 20B')).toBeInTheDocument();
+
+    // Expand Groq accordion
+    const groqButton = screen.getByRole('button', { name: /Groq/i });
+    fireEvent.click(groqButton);
+
+    // Should display the saved keys list with custom names
+    expect(screen.getByText(/Saved API Keys \(2\)/i)).toBeInTheDocument();
+    expect(screen.getByText('Work Account')).toBeInTheDocument();
+    expect(screen.getByText('Backup Groq')).toBeInTheDocument();
+    expect(screen.getByText('Use key')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Add another key/i })).toBeInTheDocument();
+
+    // Redundant active key dropdown must NOT be present
+    expect(screen.queryByRole('combobox', { name: /Select active API key from previously added keys/i })).toBeNull();
+
+    // Replace button should be present on saved key cards
+    const replaceButtons = screen.getAllByRole('button', { name: /Replace/i });
+    expect(replaceButtons.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders standard default models in model dropdown when expanded', () => {
+    const configWithGemini = {
+      activeProvider: 'gemini',
+      aiProviders: {
+        gemini: {
+          name: 'Google Gemini',
+          maskedKey: 'AIza...4kQQ',
+          model: 'gemini-2.5-flash',
+          isConfigured: true,
+          savedKeys: [
+            { id: 'gem_1', name: 'Primary Key', maskedKey: 'AIza...4kQQ' }
+          ],
+          selectedKeyId: 'gem_1'
+        }
+      },
+      smtpProfiles: [],
+      preferences: {}
+    };
+
+    render(
+      <SettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        initialTab="ai"
+        config={configWithGemini}
+        onRefreshConfig={vi.fn()}
+        onShowToast={vi.fn()}
+      />
+    );
+
+    // Expand Gemini accordion
+    const geminiButton = screen.getByRole('button', { name: /Google Gemini/i });
+    fireEvent.click(geminiButton);
+
+    // Model combobox trigger should display friendly name
+    const modelTrigger = screen.getByRole('combobox', { name: '' });
+    expect(modelTrigger).toBeInTheDocument();
+    expect(modelTrigger).toHaveTextContent(/Gemini 2.5 Flash/i);
+
+    // Clicking trigger opens dropdown
+    fireEvent.click(modelTrigger);
+
+    // Standard default models should be present and selectable
+    expect(screen.getByText('Gemini 1.5 Flash')).toBeInTheDocument();
+    expect(screen.getByText('Gemini 1.5 Pro')).toBeInTheDocument();
+    expect(screen.getByText('Gemini 2.0 Flash')).toBeInTheDocument();
+  });
 });

@@ -45,7 +45,7 @@ assert(decrypted, 'storage.getDecryptedConfig() must return active configuration
 assert(typeof decrypted.aiProviders === 'object', 'Configuration must contain aiProviders');
 assert(Array.isArray(decrypted.smtpProfiles), 'Configuration must contain smtpProfiles');
 
-// Simulate client-side formatForFirestore transformation enforcing Option 1
+// Simulate client-side formatForFirestore transformation saving all settings to Firebase
 function formatForFirestore(legacyConfig) {
   const activeKey = legacyConfig.activeProvider || 'gemini';
   const aiProviders = {};
@@ -54,30 +54,34 @@ function formatForFirestore(legacyConfig) {
     for (const [key, val] of Object.entries(legacyConfig.aiProviders)) {
       aiProviders[key] = {
         name: val.name || key,
+        apiKey: val.apiKey || '',
         model: val.model || '',
         active: key === activeKey,
         enabled: val.enabled !== false,
         isConfigured: Boolean(val.isConfigured || val.apiKey)
       };
-      // Option 1: Secrets are NEVER written to Firestore
     }
   }
 
   const smtpProfiles = Array.isArray(legacyConfig.smtpProfiles)
     ? legacyConfig.smtpProfiles.map(p => {
-        const { password, appPassword, ...rest } = p;
+        const password = p.password || p.appPassword || '';
         return {
-          ...rest,
-          isConfigured: Boolean(p.isConfigured || password || appPassword)
+          ...p,
+          password,
+          appPassword: password,
+          isConfigured: Boolean(p.isConfigured || password)
         };
       })
     : [];
 
   const defaultSmtp = smtpProfiles.find(p => p.isDefault) || smtpProfiles[0] || {};
+  const defaultPassword = defaultSmtp.password || defaultSmtp.appPassword || '';
   const smtp = {
     provider: 'gmail',
     email: defaultSmtp.username || defaultSmtp.fromEmail || '',
-    appPassword: '', // Option 1: Secrets are NEVER written to Firestore
+    appPassword: defaultPassword,
+    password: defaultPassword,
     host: defaultSmtp.host || 'smtp.gmail.com',
     port: defaultSmtp.port || 465,
     encryption: defaultSmtp.encryption || 'SSL',
@@ -117,27 +121,17 @@ assert(firestoreDoc.candidateProfile, 'Doc must have candidateProfile');
 assert(firestoreDoc.preferences, 'Doc must have preferences');
 assert(firestoreDoc.preferences.outreachTone, 'Doc must specify outreachTone');
 
-// Verify Option 1: Secrets are never persisted to Firestore; configuration state is preserved
-for (const [key, provider] of Object.entries(firestoreDoc.aiProviders)) {
-  assert.strictEqual(
-    provider.apiKey,
-    undefined,
-    `Provider ${key} must NOT contain plaintext apiKey in Firestore`
-  );
-}
-assert.strictEqual(
-  firestoreDoc.smtp.appPassword,
-  '',
-  'SMTP appPassword must NOT be stored in Firestore'
-);
+// Verify Firebase storage: All API keys and settings are saved in Firebase Firestore per-user
 if (decrypted.aiProviders?.openai?.apiKey) {
   assert(firestoreDoc.aiProviders.openai.isConfigured, 'OpenAI must be marked configured');
+  assert.strictEqual(firestoreDoc.aiProviders.openai.apiKey, decrypted.aiProviders.openai.apiKey, 'OpenAI apiKey must be preserved in Firestore');
 }
 if (decrypted.aiProviders?.groq?.apiKey) {
   assert(firestoreDoc.aiProviders.groq.isConfigured, 'Groq must be marked configured');
+  assert.strictEqual(firestoreDoc.aiProviders.groq.apiKey, decrypted.aiProviders.groq.apiKey, 'Groq apiKey must be preserved in Firestore');
 }
 
-console.log('✓ Option 1 verified: Zero plaintext secrets stored in Firestore; configuration flags preserved.');
+console.log('✓ Firebase storage verified: All settings and credentials preserved in Firestore without local safeguards.');
 
 // 3. Verify Candidate Profile and Preferences Invariants
 console.log('3. Checking candidateProfile & preferences schema...');

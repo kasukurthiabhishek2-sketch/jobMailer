@@ -13,3 +13,5 @@ client/.env*
 *.local
 *serviceAccount*.json
 server/serviceAccountKey.json
+.agents/
+test_screenshots/

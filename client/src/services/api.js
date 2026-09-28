@@ -364,6 +364,15 @@ export async function getCurrentCopilotFlow() {
   }
 }
 
+export async function cancelCopilotAuth() {
+  try {
+    const res = await authFetch('/api/copilot/cancel-flow', { method: 'POST' });
+    return res.json();
+  } catch {
+    return { success: false };
+  }
+}
+
 export async function checkCopilotStatus(deviceCode, autoActivate = true) {
   const res = await authFetch('/api/copilot/check-status', {
     method: 'POST',

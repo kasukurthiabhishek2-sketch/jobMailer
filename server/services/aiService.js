@@ -4,31 +4,263 @@
 
 const copilotService = require('./copilotService');
 
+const CONNECTION_TIMEOUT_MS = process.env.TEST_FAST_TIMEOUT === 'true' ? 100 : 15000;
+
 /**
- * Clean and parse JSON from model output (handles markdown code blocks like ```json ... ```)
+ * Scans string literals and escapes raw control characters (RFC 8259 compliance).
+ */
+function normalizeControlCharacters(str) {
+  let inString = false;
+  let escaped = false;
+  let out = '';
+
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+
+    if (char === '"' && !escaped) {
+      inString = !inString;
+      out += char;
+    } else if (inString) {
+      if (char === '\n') {
+        out += '\\n';
+      } else if (char === '\r') {
+        // Drop carriage return
+      } else if (char === '\t') {
+        out += '\\t';
+      } else if (char.charCodeAt(0) < 32) {
+        // Strip unprintable control characters
+      } else {
+        out += char;
+      }
+      escaped = (char === '\\' && !escaped);
+    } else {
+      out += char;
+      escaped = false;
+    }
+  }
+  return out;
+}
+
+/**
+ * Unescapes JSON escape sequences in extracted string fields.
+ */
+function unescapeJsonString(str) {
+  if (!str || typeof str !== 'string') return '';
+  return str
+    .replace(/\\"/g, '"')
+    .replace(/\\'/g, "'")
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '')
+    .replace(/\\t/g, '\t')
+    .replace(/\\\\/g, '\\')
+    .trim();
+}
+
+/**
+ * Extracts "subject" and "body" fields using regex when JSON syntax is corrupted.
+ */
+function extractFieldsViaRegex(text) {
+  let subject = '';
+  let body = '';
+
+  // Extract subject
+  const subjectMatch = text.match(/(?:"subject"|'subject')\s*:\s*["']((?:[^"'\\]|\\.)*?)["']/i);
+  if (subjectMatch) {
+    subject = subjectMatch[1];
+  } else {
+    const truncatedSubject = text.match(/(?:"subject"|'subject')\s*:\s*["']([^\r\n"']+)/i);
+    if (truncatedSubject) {
+      subject = truncatedSubject[1];
+    }
+  }
+
+  // Extract body
+  const bodyStartMatch = text.match(/(?:"body"|'body')\s*:\s*["']/i);
+  if (bodyStartMatch) {
+    const startIndex = bodyStartMatch.index + bodyStartMatch[0].length;
+    const remaining = text.slice(startIndex);
+
+    // Look for terminal boundary: quote followed by optional closing brace/fence or end of string
+    const endMatch = remaining.match(/["']\s*(?:\}\s*```?|\}\s*$|,\s*["']|\s*$)/);
+    let rawBody = endMatch ? remaining.slice(0, endMatch.index) : remaining;
+    rawBody = rawBody.replace(/\s*```\s*$/, '').replace(/\s*\}\s*$/, '');
+    body = rawBody;
+  }
+
+  if (subject || body) {
+    return {
+      subject: unescapeJsonString(subject),
+      body: unescapeJsonString(body)
+    };
+  }
+  return null;
+}
+
+/**
+ * Extracts subject and body from non-JSON plain text model output.
+ * Guaranteed to never dump raw JSON or { "subject": ... } into body.
+ */
+function extractPlainTextFallback(text) {
+  if (!text || typeof text !== 'string') return null;
+
+  let cleaned = text
+    .replace(/^```(?:json)?\s*/gim, '')
+    .replace(/\s*```\s*$/gim, '')
+    .trim();
+
+  // If text starts with { and contains "body":, extract fields rather than treating as raw text
+  if (cleaned.startsWith('{') && cleaned.includes('"body"')) {
+    const recovered = extractFieldsViaRegex(cleaned);
+    if (recovered && (recovered.subject || recovered.body)) {
+      return sanitizeParsedEmail(recovered);
+    }
+  }
+
+  // Check for explicit "Subject: ..." header line
+  const subjectLineMatch = cleaned.match(/^Subject:\s*(.*?)(?:\r?\n|$)/i);
+  let subject = '';
+  let body = cleaned;
+
+  if (subjectLineMatch) {
+    subject = subjectLineMatch[1].trim();
+    body = cleaned.slice(subjectLineMatch[0].length).trim();
+  } else {
+    // If no explicit Subject:, check if first line can serve as subject
+    const lines = cleaned.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length > 1 && lines[0].length <= 80 && !/^(?:hi|hello|dear|hey)\b/i.test(lines[0])) {
+      subject = lines[0];
+      body = cleaned.slice(cleaned.indexOf(lines[1])).trim();
+    } else {
+      subject = 'Inquiry & Introduction';
+      body = cleaned;
+    }
+  }
+
+  return sanitizeParsedEmail({ subject, body });
+}
+
+/**
+ * Sanitizes parsed subject and body fields to guarantee clean plain text.
+ */
+function sanitizeParsedEmail(parsed) {
+  let subject = typeof parsed.subject === 'string' ? parsed.subject.trim() : '';
+  let body = typeof parsed.body === 'string' ? parsed.body.trim() : '';
+
+  // Sanitize subject: strip leading "Subject:" and outer quotes
+  subject = subject.replace(/^subject:\s*/i, '').trim();
+  subject = subject.replace(/^["']+|["']+$/g, '').trim();
+
+  // Sanitize body: strip any residual code fences
+  body = body.replace(/^```(?:json)?\s*/gim, '').replace(/\s*```\s*$/gim, '').trim();
+
+  // Defense against recursive JSON leakage: if body itself starts with { and contains "body", extract inner
+  if (body.startsWith('{') && body.includes('"body"')) {
+    const inner = extractFieldsViaRegex(body);
+    if (inner && inner.body) {
+      body = inner.body;
+      if (!subject && inner.subject) subject = inner.subject;
+    }
+  }
+
+  return { subject, body };
+}
+
+/**
+ * Multi-stage resilient JSON extractor and schema recovery for AI outputs.
+ * Guarantees that returned object has clean string properties `subject` and `body`.
+ * Under NO circumstances does `body` contain raw JSON, markdown fences, or unescaped JSON keys.
  */
 function cleanJsonOutput(text) {
-  if (!text) return null;
-  let cleaned = text.trim();
-  if (cleaned.startsWith('```json')) {
-    cleaned = cleaned.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-  } else if (cleaned.startsWith('```')) {
-    cleaned = cleaned.replace(/^```\s*/, '').replace(/\s*```$/, '');
+  if (!text || typeof text !== 'string') return null;
+
+  const raw = text.trim();
+  if (!raw) return null;
+
+  // -------------------------------------------------------------------------
+  // STAGE 1: Code Fence & Commentary Stripper
+  // -------------------------------------------------------------------------
+  let candidate = raw;
+
+  // Extract from markdown code fences if present (```json ... ``` or ``` ... ```)
+  const fenceMatch = candidate.match(/```(?:json|JSON)?\s*([\s\S]*?)\s*```/);
+  if (fenceMatch && fenceMatch[1]) {
+    candidate = fenceMatch[1].trim();
+  } else {
+    // Strip leading or trailing unclosed fence markers
+    candidate = candidate.replace(/^```[a-zA-Z]*\s*/m, '').replace(/\s*```\s*$/m, '').trim();
   }
+
+  // Fast path: attempt direct JSON.parse if already valid
   try {
-    return JSON.parse(cleaned);
-  } catch {
-    // Attempt to extract JSON substring between { and }
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (match) {
-      try {
-        return JSON.parse(match[0]);
-      } catch {
-        // Fallback to text parsing
-      }
+    const direct = JSON.parse(candidate);
+    if (direct && typeof direct === 'object' && (direct.subject || direct.body)) {
+      return sanitizeParsedEmail(direct);
     }
-    return null;
+  } catch {}
+
+  // If surrounded by conversational chatter, extract between outermost { and }
+  const firstBrace = candidate.indexOf('{');
+  const lastBrace = candidate.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    const braceExtracted = candidate.slice(firstBrace, lastBrace + 1).trim();
+    try {
+      const parsed = JSON.parse(braceExtracted);
+      if (parsed && typeof parsed === 'object' && (parsed.subject || parsed.body)) {
+        return sanitizeParsedEmail(parsed);
+      }
+    } catch {}
+    candidate = braceExtracted;
+  } else if (firstBrace !== -1 && lastBrace === -1) {
+    // Truncated JSON starting with { but missing closing }
+    candidate = candidate.slice(firstBrace).trim();
   }
+
+  // -------------------------------------------------------------------------
+  // STAGE 2: Control Character & Unescaped Newline Normalization
+  // -------------------------------------------------------------------------
+  // RFC 8259 forbids unescaped literal newlines (0x0A, 0x0D) and control chars (0x00-0x1F) inside string literals.
+  const normalized = normalizeControlCharacters(candidate);
+  try {
+    const parsed = JSON.parse(normalized);
+    if (parsed && typeof parsed === 'object' && (parsed.subject || parsed.body)) {
+      return sanitizeParsedEmail(parsed);
+    }
+  } catch {}
+
+  // -------------------------------------------------------------------------
+  // STAGE 3: Trailing Comma & Quote Repair
+  // -------------------------------------------------------------------------
+  let repaired = normalized.replace(/,\s*([\}\]])/g, '$1');
+
+  // If truncated, repair unclosed quotes and missing closing brace
+  if (repaired.startsWith('{')) {
+    const quoteMatches = repaired.match(/(?<!\\)"/g) || [];
+    if (quoteMatches.length % 2 !== 0) {
+      repaired += '"';
+    }
+    if (!repaired.trim().endsWith('}')) {
+      repaired += '\n}';
+    }
+    try {
+      const parsed = JSON.parse(repaired);
+      if (parsed && typeof parsed === 'object' && (parsed.subject || parsed.body)) {
+        return sanitizeParsedEmail(parsed);
+      }
+    } catch {}
+  }
+
+  // -------------------------------------------------------------------------
+  // STAGE 4: Field-Level Regex Fallback for "subject" and "body"
+  // -------------------------------------------------------------------------
+  const regexResult = extractFieldsViaRegex(raw);
+  if (regexResult && (regexResult.subject || regexResult.body)) {
+    return sanitizeParsedEmail(regexResult);
+  }
+
+  // -------------------------------------------------------------------------
+  // STAGE 5: Clean Plain-Text Heuristic Fallback
+  // -------------------------------------------------------------------------
+  return extractPlainTextFallback(raw);
 }
 
 /**
@@ -142,10 +374,9 @@ async function callGemini({ apiKey, model = 'gemini-1.5-flash', systemPrompt, us
 
   const parsed = cleanJsonOutput(textOutput);
   if (!parsed || !parsed.body) {
-    // If not valid JSON, treat raw text as body
     return {
       subject: `Introduction & Interest in Opportunities at ${userPrompt.match(/Company:\s*(.*)/)?.[1] || 'your team'}`,
-      body: textOutput
+      body: (textOutput || '').replace(/^```(?:json)?\s*/gi, '').replace(/\s*```\s*$/gi, '').trim()
     };
   }
   return parsed;
@@ -231,7 +462,7 @@ async function callOpenAiCompatible({ apiKey, baseURL, model, systemPrompt, user
       { role: 'user', content: userPrompt }
     ],
     temperature: 0.7,
-    max_tokens: 550
+    max_tokens: 1200
   };
 
   const RETRY_DELAYS = [2000, 4000, 8000];
@@ -280,7 +511,7 @@ async function callOpenAiCompatible({ apiKey, baseURL, model, systemPrompt, user
   if (!parsed || !parsed.body) {
     return {
       subject: `Inquiry: Value & Opportunities`,
-      body: rawText
+      body: (rawText || '').replace(/^```(?:json)?\s*/gi, '').replace(/\s*```\s*$/gi, '').trim()
     };
   }
   return parsed;
@@ -383,7 +614,9 @@ async function generateColdEmail({ providerKey, providerConfig, resumeText, jobD
     const demoResult = {
       subject: `Inquiry: ${role} at ${comp} — ${sender}`,
       body: demoBody,
-      isDemoNotice: 'Generated via Demo Mode. Add your API key in Settings to enable live LLM synthesis.'
+      isDemoNotice: providerKey === 'copilot'
+        ? 'Generated via Demo Mode. Connect your GitHub account in Settings to enable live LLM synthesis.'
+        : 'Generated via Demo Mode. Add your API key in Settings to enable live LLM synthesis.'
     };
 
     return {
@@ -483,7 +716,12 @@ async function generateColdEmail({ providerKey, providerConfig, resumeText, jobD
 async function testAiConnection(providerKey, config) {
   const apiKey = config.apiKey;
   if (!apiKey || apiKey.trim() === '') {
-    return { success: false, error: 'API key is required to test connection.' };
+    return {
+      success: false,
+      error: providerKey === 'copilot'
+        ? 'GitHub authorization required. Please connect your GitHub account via "Connect GitHub Copilot".'
+        : 'API key is required to test connection.'
+    };
   }
 
   const trimmedKey = apiKey.trim();
@@ -516,7 +754,14 @@ async function testAiConnection(providerKey, config) {
     if (providerKey === 'gemini') {
       const model = config.model || 'gemini-1.5-flash';
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}?key=${apiKey}`;
-      const res = await fetch(url);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), CONNECTION_TIMEOUT_MS);
+      let res;
+      try {
+        res = await fetch(url, { signal: controller.signal });
+      } finally {
+        clearTimeout(timeout);
+      }
       if (!res.ok) {
         const text = await res.text();
         let msg = `Gemini connection failed (${res.status})`;
@@ -549,18 +794,26 @@ async function testAiConnection(providerKey, config) {
 
     const safeBaseUrl = (baseURL && typeof baseURL === 'string') ? baseURL.trim() : 'https://api.openai.com/v1';
     const endpoint = `${safeBaseUrl.replace(/\/+$/, '')}/chat/completions`;
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: [{ role: 'user', content: 'Ping' }],
-        max_tokens: 3
-      })
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), CONNECTION_TIMEOUT_MS);
+    let res;
+    try {
+      res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: [{ role: 'user', content: 'Ping' }],
+          max_tokens: 3
+        }),
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!res.ok) {
       const text = await res.text();
@@ -574,6 +827,9 @@ async function testAiConnection(providerKey, config) {
 
     return { success: true, message: `Connected to ${providerKey.toUpperCase()} (${model}) successfully!` };
   } catch (err) {
+    if (err.name === 'AbortError') {
+      return { success: false, error: 'Connection timed out after 15 seconds. The provider may be unreachable or the model may not exist.' };
+    }
     console.error(`[testAiConnection] Error testing ${providerKey}:`, err);
     return { success: false, error: err.message || 'Network request failed' };
   }
@@ -584,6 +840,14 @@ async function testAiConnection(providerKey, config) {
  * Returns { success, models: [{ id, name, created? }], provider } or { success: false, error }.
  */
 async function listProviderModels(providerKey, apiKey) {
+  if (providerKey === 'copilot') {
+    const models = [
+      { id: 'gpt-4o', name: 'GPT-4o', created: null },
+      { id: 'gpt-4o-mini', name: 'GPT-4o Mini', created: null }
+    ];
+    return { success: true, models, provider: providerKey };
+  }
+
   if (!apiKey || !apiKey.trim()) {
     return { success: false, error: 'API key is required to list models.' };
   }
@@ -592,7 +856,14 @@ async function listProviderModels(providerKey, apiKey) {
   try {
     if (providerKey === 'gemini') {
       const url = 'https://generativelanguage.googleapis.com/v1beta/models';
-      const res = await fetch(`${url}?key=${trimmedKey}&pageSize=100`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), CONNECTION_TIMEOUT_MS);
+      let res;
+      try {
+        res = await fetch(`${url}?key=${trimmedKey}&pageSize=100`, { signal: controller.signal });
+      } finally {
+        clearTimeout(timeout);
+      }
       if (!res.ok) {
         const text = await res.text();
         let msg = `Gemini models API error (${res.status})`;
@@ -611,14 +882,6 @@ async function listProviderModels(providerKey, apiKey) {
       return { success: true, models, provider: providerKey };
     }
 
-    if (providerKey === 'copilot') {
-      const models = [
-        { id: 'gpt-4o', name: 'GPT-4o', created: null },
-        { id: 'gpt-4o-mini', name: 'GPT-4o Mini', created: null }
-      ];
-      return { success: true, models, provider: providerKey };
-    }
-
     // OpenAI-compatible providers
     const BASE_URLS = {
       openai: 'https://api.openai.com/v1',
@@ -630,9 +893,17 @@ async function listProviderModels(providerKey, apiKey) {
     const baseURL = BASE_URLS[providerKey] || BASE_URLS.openai;
     const endpoint = `${baseURL.replace(/\/+$/, '')}/models`;
 
-    const res = await fetch(endpoint, {
-      headers: { 'Authorization': `Bearer ${trimmedKey}` }
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), CONNECTION_TIMEOUT_MS);
+    let res;
+    try {
+      res = await fetch(endpoint, {
+        headers: { 'Authorization': `Bearer ${trimmedKey}` },
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
     if (!res.ok) {
       const text = await res.text();
       let msg = `Models API error (${res.status})`;
@@ -673,6 +944,9 @@ async function listProviderModels(providerKey, apiKey) {
 
     return { success: true, models, provider: providerKey };
   } catch (err) {
+    if (err.name === 'AbortError') {
+      return { success: false, error: 'Request timed out after 15 seconds. The provider may be unreachable.' };
+    }
     return { success: false, error: err.message || 'Failed to fetch models' };
   }
 }

@@ -43,6 +43,7 @@ AWS Certified Solutions Architect (Associate)`;
 export default function ResumeUpload({
   resumeData,
   onResumeUploaded,
+  onResumeChange,
   onShowToast
 }) {
   const fileInputRef = useRef(null);
@@ -138,20 +139,21 @@ export default function ResumeUpload({
 
   const handleFieldChange = (field, value) => {
     if (!resumeData) return;
-    onResumeUploaded({
+    const updated = {
       ...resumeData,
       [field]: value
-    });
+    };
+    if (onResumeChange) {
+      onResumeChange(updated);
+    } else if (onResumeUploaded) {
+      onResumeUploaded(updated, { autoAdvance: false });
+    }
   };
 
-  const handleRemoveResume = async () => {
+  const handleRemoveResume = () => {
     const fileId = resumeData?.fileId;
     if (fileId) {
-      try {
-        await deleteEphemeralResume(fileId);
-      } catch {
-        // best-effort cleanup
-      }
+      deleteEphemeralResume(fileId).catch(() => {});
     }
     if (fileInputRef.current) {
       fileInputRef.current.value = '';

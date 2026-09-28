@@ -259,6 +259,13 @@ app.post('/api/config/ai/test', async (req, res) => {
           if (!model && savedProvider.model) effectiveModel = savedProvider.model;
           if (!baseURL && savedProvider.baseURL) effectiveBaseUrl = savedProvider.baseURL;
         }
+        if (!effectiveApiKey && savedProvider?.apiKey && !savedProvider.apiKey.includes('...') && !savedProvider.apiKey.includes('••')) {
+          effectiveApiKey = savedProvider.apiKey;
+        }
+        if (!effectiveApiKey && Array.isArray(savedProvider?.savedKeys)) {
+          const anyValid = savedProvider.savedKeys.find(k => k.apiKey && !k.apiKey.includes('...') && !k.apiKey.includes('••'));
+          if (anyValid) effectiveApiKey = anyValid.apiKey;
+        }
       } catch (storageErr) {
         console.error(`[AI Test] Warning reading decrypted storage for ${providerKey}:`, storageErr.message);
       }
@@ -319,6 +326,13 @@ app.post('/api/config/ai/models', async (req, res) => {
           }
         } else if (savedProvider && savedProvider.apiKey && !savedProvider.apiKey.includes('...') && !savedProvider.apiKey.includes('••')) {
           effectiveApiKey = savedProvider.apiKey;
+        }
+        if (!effectiveApiKey && savedProvider?.apiKey && !savedProvider.apiKey.includes('...') && !savedProvider.apiKey.includes('••')) {
+          effectiveApiKey = savedProvider.apiKey;
+        }
+        if (!effectiveApiKey && Array.isArray(savedProvider?.savedKeys)) {
+          const anyValid = savedProvider.savedKeys.find(k => k.apiKey && !k.apiKey.includes('...') && !k.apiKey.includes('••'));
+          if (anyValid) effectiveApiKey = anyValid.apiKey;
         }
       } catch (storageErr) {
         console.error(`[AI Models] Warning reading storage for ${providerKey}:`, storageErr.message);
@@ -456,10 +470,14 @@ app.post('/api/config/smtp/test', async (req, res) => {
     if (!profile.password && profile.appPassword) {
       profile.password = profile.appPassword;
     }
-    // If testing an existing profile without re-typing password in test / local offline mode
-    if (profile.id && !profile.password && (!req.uid || req.uid === 'test_user_offline')) {
+    // If testing an existing profile without re-typing password
+    if ((profile.id || profile.username || profile.email) && !profile.password) {
       const fullConfig = storage.getDecryptedConfig();
-      const existing = (fullConfig.smtpProfiles || []).find(p => p.id === profile.id);
+      const existing = (fullConfig.smtpProfiles || []).find(p =>
+        (profile.id && p.id === profile.id) ||
+        (profile.username && (p.username === profile.username || p.fromEmail === profile.username)) ||
+        (profile.email && (p.username === profile.email || p.fromEmail === profile.email))
+      );
       if (existing) {
         profile.password = existing.password;
         profile.host = profile.host || existing.host;

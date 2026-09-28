@@ -66,8 +66,7 @@ for (const token of requiredLightOverrides) {
 // 4. Verify Responsive Breakpoints & Utilities
 assert(cssContent.includes('.responsive-grid-3'), 'CSS must include .responsive-grid-3 utility');
 assert(cssContent.includes('.responsive-grid-2'), 'CSS must include .responsive-grid-2 utility');
-assert(cssContent.includes('@media (max-width: 920px)'), 'CSS must include 920px breakpoint');
-assert(cssContent.includes('@media (max-width: 520px)'), 'CSS must include 520px mobile breakpoint');
+assert(cssContent.includes('@media (max-width: 768px)'), 'CSS must include 768px sidebar breakpoint');
 
 // 5. Verify Canonical 4-Step Linear Workflow in StepIndicator and WIZARD_STEPS
 assert(fs.existsSync(stepIndicatorPath), 'StepIndicator.jsx must exist');
@@ -76,8 +75,8 @@ assert(fs.existsSync(wizardStepsPath), 'wizardSteps.js must exist');
 const stepContent = fs.readFileSync(stepIndicatorPath, 'utf8') + fs.readFileSync(wizardStepsPath, 'utf8');
 
 assert(stepContent.includes("id: 1") && (stepContent.includes("title: 'Setup'") || stepContent.includes("Candidate Profile")), 'Step 1 must be Setup / Profile');
-assert(stepContent.includes("id: 2") && (stepContent.includes("title: 'Target Role'") || stepContent.includes("Target Role")), 'Step 2 must be Target Role');
-assert(stepContent.includes("id: 3") && (stepContent.includes("'Recipients'") || stepContent.includes("Recipient Management")), 'Step 3 must be Recipients');
+assert(stepContent.includes("id: 2") && (stepContent.includes("'Recipients'") || stepContent.includes("Recipient Management")), 'Step 2 must be Recipients');
+assert(stepContent.includes("id: 3") && (stepContent.includes("title: 'Target Role'") || stepContent.includes("Target Role")), 'Step 3 must be Target Role');
 assert(stepContent.includes("id: 4") && (stepContent.includes("AI Drafts") || stepContent.includes("Safe Outreach Dispatch")), 'Step 4 must be AI Drafts & Safe Outreach Dispatch');
 assert(!stepContent.includes("id: 5"), 'Step 5 must be merged into Step 4');
 // Verify Step 6 ("Logs") was removed from the primary pipeline as non-linear

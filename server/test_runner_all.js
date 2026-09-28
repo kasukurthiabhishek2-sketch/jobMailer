@@ -27,7 +27,8 @@ const testSuites = [
   { name: 'AI Provider Connection Timeout Behavior', file: 'test_connection_timeout.js' },
   { name: 'End-to-End Outreach Pipeline & Invariants', file: 'test_e2e_pipeline.js' },
   { name: 'Comprehensive Opaque-Box E2E Suite (Tiers 1-4)', file: 'test_e2e_suite.js' },
-  { name: 'Authenticated User Key Resolution for AI Routes', file: 'test_key_resolution.js' }
+  { name: 'Authenticated User Key Resolution for AI Routes', file: 'test_key_resolution.js' },
+  { name: 'GitHub Copilot OAuth Device Flow & No-Key Invariants', file: 'test_copilot_device_flow.js' }
 ];
 
 console.log('====================================================');
