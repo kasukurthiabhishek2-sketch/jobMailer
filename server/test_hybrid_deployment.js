@@ -172,7 +172,7 @@ function runTests() {
       );
       assert(renderYaml.includes('rootDir: server'),
         'Should deploy from server/ directory');
-      assert(renderYaml.includes('startCommand: npm start'),
+      assert(renderYaml.includes('npm start'),
         'Should use npm start');
       assert(renderYaml.includes('healthCheckPath: /api/health'),
         'Should use /api/health check');

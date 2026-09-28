@@ -82,9 +82,13 @@ const STANDARD_ALLOWED_ORIGINS = [
 function isOriginAllowed(origin) {
   if (!origin) return true;
 
+  const normalizedOrigin = origin.replace(/\/+$/, '');
+
   if (process.env.ALLOWED_ORIGINS) {
-    const customAllowed = process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim());
-    return customAllowed.includes(origin);
+    const customAllowed = process.env.ALLOWED_ORIGINS.split(',')
+      .map(s => s.trim().replace(/\/+$/, ''))
+      .filter(Boolean);
+    return customAllowed.includes(normalizedOrigin);
   }
 
   if (process.env.NODE_ENV !== 'production') {
@@ -98,7 +102,7 @@ function isOriginAllowed(origin) {
     }
   }
 
-  return STANDARD_ALLOWED_ORIGINS.includes(origin);
+  return STANDARD_ALLOWED_ORIGINS.includes(normalizedOrigin);
 }
 
 app.use(cors({

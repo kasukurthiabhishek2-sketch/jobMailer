@@ -227,12 +227,14 @@ async function runTests() {
     assert.strictEqual(isOriginAllowed('http://127.0.0.1.nip.io'), false);
     assert.strictEqual(isOriginAllowed('invalid-origin-string'), false);
 
-    // Production mode with explicit ALLOWED_ORIGINS override
+    // Production mode with explicit ALLOWED_ORIGINS override (including trailing slash resilience)
     process.env.NODE_ENV = 'production';
-    process.env.ALLOWED_ORIGINS = 'https://app.jdmail.com,https://staging.jdmail.com';
+    process.env.ALLOWED_ORIGINS = 'https://app.jdmail.com/,https://staging.jdmail.com';
 
-    assert.strictEqual(isOriginAllowed('https://app.jdmail.com'), true);
+    assert.strictEqual(isOriginAllowed('https://app.jdmail.com'), true, 'Should match even if ALLOWED_ORIGINS has trailing slash');
+    assert.strictEqual(isOriginAllowed('https://app.jdmail.com/'), true, 'Should match even if origin has trailing slash');
     assert.strictEqual(isOriginAllowed('https://staging.jdmail.com'), true);
+    assert.strictEqual(isOriginAllowed('https://staging.jdmail.com/'), true);
     assert.strictEqual(isOriginAllowed('https://evil.com'), false);
     assert.strictEqual(isOriginAllowed('http://localhost:5174'), false);
 
