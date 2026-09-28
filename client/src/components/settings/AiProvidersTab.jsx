@@ -10,7 +10,9 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
-  Trash2
+  Trash2,
+  Plus,
+  Edit2
 } from 'lucide-react';
 import {
   saveAiProviderConfig,
@@ -56,6 +58,30 @@ const FRIENDLY_MODEL_NAMES = {
 function friendlyModelName(id) {
   if (!id) return '';
   return FRIENDLY_MODEL_NAMES[id] || id;
+}
+
+function getProviderSavedKeys(provider) {
+  if (Array.isArray(provider?.savedKeys) && provider.savedKeys.length > 0) {
+    return provider.savedKeys;
+  }
+  const hasKey = Boolean(
+    provider?.isConfigured ||
+    (provider?.apiKey && provider.apiKey.trim().length > 0) ||
+    (provider?.maskedKey && provider.maskedKey.trim().length > 0)
+  );
+  if (hasKey) {
+    const masked = provider.maskedKey || (provider.apiKey ? (provider.apiKey.length > 8 ? `${provider.apiKey.slice(0, 4)}...${provider.apiKey.slice(-4)}` : '••••••••') : '••••••••');
+    return [
+      {
+        id: provider.selectedKeyId || 'default',
+        name: 'Primary Key',
+        apiKey: provider.apiKey || '',
+        maskedKey: masked,
+        createdAt: Date.now()
+      }
+    ];
+  }
+  return [];
 }
 
 /* ── Inline UI primitives (only used in this file) ───────────────────── */
@@ -112,15 +138,28 @@ function ProviderLogo({ monogram }) {
 function ModelSelect({ value, options, onChange }) {
   const [open, setOpen] = useState(false);
   const [focusIndex, setFocusIndex] = useState(-1);
+  const [searchTerm, setSearchTerm] = useState('');
   const wrapperRef = useRef(null);
   const listRef = useRef(null);
   const triggerRef = useRef(null);
-  const selectedIndex = options.indexOf(value);
+  const searchRef = useRef(null);
+
+  const filtered = searchTerm
+    ? options.filter(opt => {
+        const q = searchTerm.toLowerCase();
+        return opt.toLowerCase().includes(q) || friendlyModelName(opt).toLowerCase().includes(q);
+      })
+    : options;
+
+  const selectedIndex = filtered.indexOf(value);
 
   useEffect(() => {
     if (!open) return;
     const onClickOutside = (e) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setOpen(false);
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setOpen(false);
+        setSearchTerm('');
+      }
     };
     document.addEventListener('mousedown', onClickOutside);
     return () => document.removeEventListener('mousedown', onClickOutside);
@@ -132,42 +171,61 @@ function ModelSelect({ value, options, onChange }) {
     }
   }, [focusIndex, open]);
 
+  useEffect(() => {
+    if (open && searchRef.current) {
+      searchRef.current.focus();
+    }
+  }, [open]);
+
+  const handleSearchChange = (e) => {
+    const term = e.target.value;
+    setSearchTerm(term);
+    const nextFiltered = term
+      ? options.filter(opt => {
+          const q = term.toLowerCase();
+          return opt.toLowerCase().includes(q) || friendlyModelName(opt).toLowerCase().includes(q);
+        })
+      : options;
+    setFocusIndex(nextFiltered.length > 0 ? 0 : -1);
+  };
+
   const select = (opt) => {
     onChange(opt);
     setOpen(false);
+    setSearchTerm('');
     triggerRef.current?.focus();
   };
 
-  const handleKeyDown = (e) => {
-    if (!open) {
-      if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) {
-        e.preventDefault();
-        setOpen(true);
-        setFocusIndex(selectedIndex >= 0 ? selectedIndex : 0);
-      }
-      return;
-    }
+  const handleListKeyDown = (e) => {
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setFocusIndex(i => Math.min(i + 1, options.length - 1));
+        setFocusIndex(i => Math.min(i + 1, filtered.length - 1));
         break;
       case 'ArrowUp':
         e.preventDefault();
         setFocusIndex(i => Math.max(i - 1, 0));
         break;
       case 'Enter':
-      case ' ':
         e.preventDefault();
-        if (focusIndex >= 0) select(options[focusIndex]);
+        if (focusIndex >= 0 && focusIndex < filtered.length) select(filtered[focusIndex]);
         break;
       case 'Escape':
         e.preventDefault();
         setOpen(false);
+        setSearchTerm('');
         triggerRef.current?.focus();
         break;
       default:
         break;
+    }
+  };
+
+  const handleTriggerKeyDown = (e) => {
+    if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) {
+      e.preventDefault();
+      setOpen(true);
+      setFocusIndex(selectedIndex >= 0 ? selectedIndex : 0);
     }
   };
 
@@ -177,8 +235,8 @@ function ModelSelect({ value, options, onChange }) {
         type="button"
         ref={triggerRef}
         className="model-select-trigger"
-        onClick={() => { setOpen(!open); setFocusIndex(selectedIndex >= 0 ? selectedIndex : 0); }}
-        onKeyDown={handleKeyDown}
+        onClick={() => { setOpen(!open); if (!open) setFocusIndex(selectedIndex >= 0 ? selectedIndex : 0); }}
+        onKeyDown={handleTriggerKeyDown}
         role="combobox"
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -191,30 +249,50 @@ function ModelSelect({ value, options, onChange }) {
         />
       </button>
       {open && (
-        <ul
-          ref={listRef}
-          role="listbox"
-          className="model-select-listbox"
-          onKeyDown={handleKeyDown}
-          tabIndex={-1}
-          aria-label="Select model"
-        >
-          {options.map((opt, i) => (
-            <li
-              key={opt}
-              role="option"
-              aria-selected={opt === value}
-              className={`model-select-option ${opt === value ? 'selected' : ''} ${i === focusIndex ? 'focused' : ''}`}
-              onClick={() => select(opt)}
-              onMouseEnter={() => setFocusIndex(i)}
-            >
-              <span className="model-select-option-label">{friendlyModelName(opt)}</span>
-              {friendlyModelName(opt) !== opt && (
-                <span className="model-select-option-id">{opt}</span>
-              )}
-            </li>
-          ))}
-        </ul>
+        <div className="model-select-dropdown">
+          {options.length > 8 && (
+            <div className="model-select-search-wrap">
+              <input
+                ref={searchRef}
+                type="text"
+                className="model-select-search"
+                placeholder="Search models…"
+                value={searchTerm}
+                onChange={handleSearchChange}
+                onKeyDown={handleListKeyDown}
+                aria-label="Search models"
+              />
+            </div>
+          )}
+          <ul
+            ref={listRef}
+            role="listbox"
+            className="model-select-listbox"
+            onKeyDown={handleListKeyDown}
+            tabIndex={-1}
+            aria-label="Select model"
+          >
+            {filtered.length === 0 ? (
+              <li className="model-select-empty">No models match “{searchTerm}”</li>
+            ) : (
+              filtered.map((opt, i) => (
+                <li
+                  key={opt}
+                  role="option"
+                  aria-selected={opt === value}
+                  className={`model-select-option ${opt === value ? 'selected' : ''} ${i === focusIndex ? 'focused' : ''}`}
+                  onClick={() => select(opt)}
+                  onMouseEnter={() => setFocusIndex(i)}
+                >
+                  <span className="model-select-option-label">{friendlyModelName(opt)}</span>
+                  {friendlyModelName(opt) !== opt && (
+                    <span className="model-select-option-id">{opt}</span>
+                  )}
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
       )}
     </div>
   );
@@ -227,9 +305,13 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
   const [editingKeys, setEditingKeys] = useState({});
   const [editingModels, setEditingModels] = useState({});
   const [editingBaseUrls, setEditingBaseUrls] = useState({});
-  const [replacingKey, setReplacingKey] = useState({});
+  const [addingKey, setAddingKey] = useState({});
+  const [newKeyName, setNewKeyName] = useState({});
+  const [editingKeyId, setEditingKeyId] = useState({});
+  const [editingKeyName, setEditingKeyName] = useState({});
   const [providerStates, setProviderStates] = useState({});
   const [modelLists, setModelLists] = useState({});
+  const [_replacingKey, setReplacingKey] = useState({});
 
   const [showManualCopilotInput, setShowManualCopilotInput] = useState(false);
   const [showCopilotToken, setShowCopilotToken] = useState(false);
@@ -577,54 +659,302 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
     }, 3000);
   };
 
-  const getEffectiveStatus = (providerKey) => {
+  const isProviderConfigured = useCallback((key, provider) => {
+    if (!provider) return false;
+    if (provider.isConfigured) return true;
+    if (provider.apiKey && provider.apiKey.trim().length > 0) return true;
+    if (provider.maskedKey && provider.maskedKey.trim().length > 0) return true;
+    if (Array.isArray(provider.savedKeys) && provider.savedKeys.length > 0) return true;
+    const status = providerStates[key]?.status;
+    if (status === 'connected' || status === 'key-saved') return true;
+    if (config?.activeProvider === key) return true;
+    if (key === 'copilot' && (provider.isConfigured || provider.connected)) return true;
+    return false;
+  }, [providerStates, config?.activeProvider]);
+
+  const getEffectiveStatus = useCallback((providerKey) => {
     const ps = providerStates[providerKey];
     if (ps?.status) return ps.status;
     const provider = config?.aiProviders?.[providerKey];
-    if (provider?.isConfigured) return 'key-saved';
+    if (isProviderConfigured(providerKey, provider)) return 'key-saved';
     return 'not-configured';
-  };
+  }, [providerStates, config?.aiProviders, isProviderConfigured]);
 
-  const handleSaveAndVerify = async (providerKey, rawKey) => {
+  const handleSaveAndVerify = async (providerKey, rawKey, customKeyName) => {
     if (!rawKey?.trim()) return;
     const trimmed = rawKey.trim();
 
     setProviderStates(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], saving: true } }));
 
     try {
-      const backendResult = await saveAiProviderConfig({
-        providerKey,
+      const currentProvider = config?.aiProviders?.[providerKey] || {};
+      const existingKeys = getProviderSavedKeys(currentProvider);
+      const masked = trimmed.length > 8 ? `${trimmed.slice(0, 4)}...${trimmed.slice(-4)}` : '••••••••';
+      const keyId = `key_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const keyName = customKeyName?.trim() || (existingKeys.length === 0 ? 'Primary Key' : `Key ${existingKeys.length + 1}`);
+
+      const newKeyObj = {
+        id: keyId,
+        name: keyName,
         apiKey: trimmed,
-        model: editingModels[providerKey] || config?.aiProviders?.[providerKey]?.model || '',
-        baseURL: providerKey === 'custom' ? (editingBaseUrls[providerKey] || config?.aiProviders?.[providerKey]?.baseURL || '') : undefined,
+        maskedKey: masked,
+        createdAt: new Date().toISOString()
+      };
+
+      const updatedSavedKeys = [...existingKeys, newKeyObj];
+
+      const updatedAiProvider = {
+        ...currentProvider,
+        apiKey: trimmed,
+        maskedKey: masked,
+        selectedKeyId: keyId,
+        savedKeys: updatedSavedKeys,
+        isConfigured: true,
+        model: editingModels[providerKey] || currentProvider.model || '',
+        baseURL: providerKey === 'custom' ? (editingBaseUrls[providerKey] || currentProvider.baseURL || '') : currentProvider.baseURL,
         enabled: true
+      };
+
+      const updatedConfig = stripUndefined({
+        ...config,
+        aiProviders: {
+          ...config?.aiProviders,
+          [providerKey]: updatedAiProvider
+        }
       });
 
-      const updatedConfig = backendResult || config;
-
       if (user?.uid) {
-        try { await saveSettings(user.uid, updatedConfig); } catch (e) { console.warn('Firestore save notice:', e.message); }
+        try {
+          await saveSettings(user.uid, updatedConfig);
+        } catch (e) {
+          console.warn('Firestore save notice:', e.message);
+        }
+      }
+
+      try {
+        await saveAiProviderConfig({
+          providerKey,
+          apiKey: trimmed,
+          keyName,
+          selectedKeyId: keyId,
+          model: updatedAiProvider.model,
+          baseURL: updatedAiProvider.baseURL,
+          enabled: true
+        });
+      } catch {
+        // Non-fatal if offline/local
       }
 
       onRefreshConfig(updatedConfig);
       setEditingKeys(prev => ({ ...prev, [providerKey]: '' }));
       setReplacingKey(prev => ({ ...prev, [providerKey]: false }));
+      setAddingKey(prev => ({ ...prev, [providerKey]: false }));
+      setNewKeyName(prev => ({ ...prev, [providerKey]: '' }));
 
-      onShowToast?.({ type: 'success', title: 'API key saved', message: `Key saved for ${PROVIDER_CONFIG[providerKey]?.name || providerKey}` });
+      onShowToast?.({
+        type: 'success',
+        title: 'API key saved',
+        message: `Saved "${keyName}" for ${PROVIDER_CONFIG[providerKey]?.name || providerKey}`
+      });
 
-      handleTestConnection(providerKey);
+      handleTestConnection(providerKey, trimmed);
     } catch (err) {
       onShowToast?.({ type: 'error', title: 'Save failed', message: err.message });
       setProviderStates(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], saving: false, status: 'error', error: err.message } }));
     }
   };
 
-  const handleTestConnection = async (providerKey) => {
+  const handleSelectKey = async (providerKey, keyId) => {
+    const currentProvider = config?.aiProviders?.[providerKey] || {};
+    const keys = getProviderSavedKeys(currentProvider);
+    const targetKey = keys.find(k => k.id === keyId);
+    if (!targetKey) return;
+
+    const updatedAiProvider = {
+      ...currentProvider,
+      apiKey: targetKey.apiKey || '',
+      maskedKey: targetKey.maskedKey || '',
+      selectedKeyId: keyId,
+      isConfigured: true
+    };
+
+    const updatedConfig = stripUndefined({
+      ...config,
+      aiProviders: {
+        ...config?.aiProviders,
+        [providerKey]: updatedAiProvider
+      }
+    });
+
+    if (user?.uid) {
+      try {
+        await saveSettings(user.uid, updatedConfig);
+      } catch (e) {
+        console.warn('Firestore save notice:', e.message);
+      }
+    }
+
+    try {
+      await saveAiProviderConfig({
+        providerKey,
+        selectedKeyId: keyId,
+        model: currentProvider.model || '',
+        enabled: true
+      });
+    } catch {}
+
+    onRefreshConfig(updatedConfig);
+    onShowToast?.({
+      type: 'success',
+      title: 'Active key updated',
+      message: `Switched to "${targetKey.name}" for ${PROVIDER_CONFIG[providerKey]?.name || providerKey}`
+    });
+
+    handleTestConnection(providerKey, targetKey.apiKey);
+  };
+
+  const handleRenameKey = async (providerKey, keyId, newName) => {
+    if (!newName?.trim()) return;
+    const trimmedName = newName.trim();
+    const currentProvider = config?.aiProviders?.[providerKey] || {};
+    const keys = getProviderSavedKeys(currentProvider);
+    const updatedKeys = keys.map(k => k.id === keyId ? { ...k, name: trimmedName } : k);
+
+    const updatedAiProvider = {
+      ...currentProvider,
+      savedKeys: updatedKeys
+    };
+
+    const updatedConfig = stripUndefined({
+      ...config,
+      aiProviders: {
+        ...config?.aiProviders,
+        [providerKey]: updatedAiProvider
+      }
+    });
+
+    if (user?.uid) {
+      try {
+        await saveSettings(user.uid, updatedConfig);
+      } catch (e) {
+        console.warn('Firestore save notice:', e.message);
+      }
+    }
+
+    try {
+      await saveAiProviderConfig({
+        providerKey,
+        renameKeyId: keyId,
+        newName: trimmedName,
+        model: currentProvider.model || '',
+        enabled: true
+      });
+    } catch {}
+
+    onRefreshConfig(updatedConfig);
+    setEditingKeyId(prev => ({ ...prev, [providerKey]: null }));
+    onShowToast?.({
+      type: 'info',
+      title: 'Key renamed',
+      message: `Renamed to "${trimmedName}"`
+    });
+  };
+
+  const handleDeleteSavedKey = async (providerKey, keyId) => {
+    const currentProvider = config?.aiProviders?.[providerKey] || {};
+    const keys = getProviderSavedKeys(currentProvider);
+    const targetKey = keys.find(k => k.id === keyId);
+    const keyName = targetKey?.name || 'API key';
+
+    if (!window.confirm(`Delete "${keyName}"? This cannot be undone.`)) {
+      return;
+    }
+
+    const remainingKeys = keys.filter(k => k.id !== keyId);
+    let newSelectedId = currentProvider.selectedKeyId;
+    let newApiKey = currentProvider.apiKey;
+    let newMaskedKey = currentProvider.maskedKey;
+    let isConfigured = currentProvider.isConfigured;
+
+    if (currentProvider.selectedKeyId === keyId || keys.length === 1) {
+      if (remainingKeys.length > 0) {
+        newSelectedId = remainingKeys[0].id;
+        newApiKey = remainingKeys[0].apiKey || '';
+        newMaskedKey = remainingKeys[0].maskedKey || '';
+        isConfigured = true;
+      } else {
+        newSelectedId = '';
+        newApiKey = '';
+        newMaskedKey = '';
+        isConfigured = false;
+      }
+    }
+
+    const updatedAiProvider = {
+      ...currentProvider,
+      apiKey: newApiKey,
+      maskedKey: newMaskedKey,
+      selectedKeyId: newSelectedId,
+      savedKeys: remainingKeys,
+      isConfigured
+    };
+
+    const updatedConfig = stripUndefined({
+      ...config,
+      aiProviders: {
+        ...config?.aiProviders,
+        [providerKey]: updatedAiProvider
+      }
+    });
+
+    if (user?.uid) {
+      try {
+        await saveSettings(user.uid, updatedConfig);
+      } catch (e) {
+        console.warn('Firestore save notice:', e.message);
+      }
+    }
+
+    try {
+      await saveAiProviderConfig({
+        providerKey,
+        deleteKeyId: keyId,
+        apiKey: newApiKey,
+        model: currentProvider.model || '',
+        enabled: true
+      });
+    } catch {}
+
+    if (!isConfigured && config?.activeProvider === providerKey) {
+      try { await setActiveAiProvider('gemini'); } catch {}
+    }
+
+    onRefreshConfig(updatedConfig);
+    if (!isConfigured) {
+      setProviderStates(prev => ({ ...prev, [providerKey]: { status: 'not-configured', error: null, message: null } }));
+      setModelLists(prev => ({ ...prev, [providerKey]: undefined }));
+    }
+    onShowToast?.({
+      type: 'info',
+      title: 'Key removed',
+      message: `Deleted "${keyName}" for ${PROVIDER_CONFIG[providerKey]?.name || providerKey}`
+    });
+  };
+
+  const handleTestConnection = async (providerKey, overrideKey) => {
     setProviderStates(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], status: 'verifying', error: null } }));
     try {
-      const model = editingModels[providerKey] || config?.aiProviders?.[providerKey]?.model;
-      const baseURL = editingBaseUrls[providerKey] || config?.aiProviders?.[providerKey]?.baseURL || '';
-      const res = await testAiConnection({ providerKey, model, baseURL });
+      const currentProvider = config?.aiProviders?.[providerKey] || {};
+      const model = editingModels[providerKey] || currentProvider.model;
+      const baseURL = editingBaseUrls[providerKey] || currentProvider.baseURL || '';
+      // If a raw key is provided (e.g. just pasted), send it directly; otherwise let the server resolve from encrypted storage
+      const res = await testAiConnection({
+        providerKey,
+        apiKey: overrideKey || '',
+        model,
+        baseURL,
+        selectedKeyId: overrideKey ? undefined : (currentProvider.selectedKeyId || undefined)
+      });
       if (res?.success) {
         setProviderStates(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], status: 'connected', error: null, message: res.message, lastVerifiedAt: Date.now(), saving: false } }));
       } else {
@@ -638,7 +968,13 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
   const handleFetchModels = async (providerKey) => {
     setModelLists(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], loading: true, error: null } }));
     try {
-      const res = await listAiModels({ providerKey });
+      const currentProvider = config?.aiProviders?.[providerKey] || {};
+      // Let the server resolve the key from encrypted storage; only send raw key if user is typing one in right now
+      const res = await listAiModels({
+        providerKey,
+        apiKey: editingKeys[providerKey] || '',
+        selectedKeyId: currentProvider.selectedKeyId || undefined
+      });
       if (res?.success && Array.isArray(res.models)) {
         setModelLists(prev => ({ ...prev, [providerKey]: { models: res.models, loading: false, error: null, fetchedAt: Date.now() } }));
       } else {
@@ -654,22 +990,35 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
       return;
     }
     try {
-      const backendResult = await saveAiProviderConfig({
-        providerKey,
+      const currentProvider = config?.aiProviders?.[providerKey] || {};
+      const updatedAiProvider = {
+        ...currentProvider,
         apiKey: '',
-        model: config?.aiProviders?.[providerKey]?.model || '',
-        enabled: true
+        isConfigured: false,
+        maskedKey: ''
+      };
+      const updatedConfig = stripUndefined({
+        ...config,
+        aiProviders: {
+          ...config?.aiProviders,
+          [providerKey]: updatedAiProvider
+        }
       });
-      const updatedConfig = backendResult || config;
       if (user?.uid) {
         try {
-          const firestoreUpdate = { ...updatedConfig };
-          if (firestoreUpdate.aiProviders?.[providerKey]) {
-            firestoreUpdate.aiProviders[providerKey].isConfigured = false;
-          }
-          await saveSettings(user.uid, firestoreUpdate);
-        } catch (e) { console.warn('Firestore save notice:', e.message); }
+          await saveSettings(user.uid, updatedConfig);
+        } catch (e) {
+          console.warn('Firestore save notice:', e.message);
+        }
       }
+      try {
+        await saveAiProviderConfig({
+          providerKey,
+          apiKey: '',
+          model: currentProvider.model || '',
+          enabled: true
+        });
+      } catch {}
       if (config?.activeProvider === providerKey) {
         try { await setActiveAiProvider('gemini'); } catch {}
       }
@@ -721,7 +1070,12 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
   const handleModelChange = async (providerKey, newModel) => {
     setEditingModels(prev => ({ ...prev, [providerKey]: newModel }));
     const currentProvider = config?.aiProviders?.[providerKey] || {};
-    const updatedProvider = { ...currentProvider, model: newModel };
+    const hasKey = isProviderConfigured(providerKey, currentProvider);
+    const updatedProvider = {
+      ...currentProvider,
+      model: newModel,
+      isConfigured: hasKey || Boolean(newModel)
+    };
     const updatedConfig = stripUndefined({
       ...config,
       aiProviders: {
@@ -777,7 +1131,7 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
 
   const renderModelPicker = (key, provider) => {
     const status = getEffectiveStatus(key);
-    const isConfigured = provider.isConfigured;
+    const isConfigured = isProviderConfigured(key, provider);
     
     if (status !== 'connected' && status !== 'key-saved' && !isConfigured) {
       return (
@@ -834,17 +1188,162 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
   const renderApiKeyPanel = (key, provider) => {
     const meta = PROVIDER_CONFIG[key] || { name: key, keyPrefix: '' };
     const status = getEffectiveStatus(key);
-    const isReplacing = replacingKey[key];
-    const hasKey = provider.isConfigured;
+    const savedKeys = getProviderSavedKeys(provider);
+    const hasSavedKeys = savedKeys.length > 0;
+    const isAdding = Boolean(addingKey[key]) || !hasSavedKeys;
+    const activeKeyId = provider?.selectedKeyId || savedKeys[0]?.id;
     const isSaving = providerStates[key]?.saving;
+    const hasKey = isProviderConfigured(key, provider);
 
     return (
       <>
-        <div className="provider-section">
-          <div className="provider-section-title">Connection</div>
-          
-          {!hasKey || isReplacing ? (
+        {hasSavedKeys && (
+          <div className="provider-section">
+            <div className="provider-section-title">Saved API Keys ({savedKeys.length})</div>
+            <div className="saved-keys-list">
+              {savedKeys.map((k) => {
+                const isSelected = k.id === activeKeyId;
+                const isRenaming = editingKeyId[key] === k.id;
+                return (
+                  <div
+                    key={k.id}
+                    className={`saved-key-card ${isSelected ? 'saved-key-card-active' : ''}`}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                      <button
+                        type="button"
+                        className="saved-key-radio"
+                        onClick={() => handleSelectKey(key, k.id)}
+                        title={isSelected ? 'Active key' : 'Select this key'}
+                        aria-label={`Select key ${k.name}`}
+                      >
+                        {isSelected ? (
+                          <CheckCircle2 size={16} />
+                        ) : (
+                          <div className="saved-key-radio-unselected" />
+                        )}
+                      </button>
+
+                      {isRenaming ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
+                          <input
+                            type="text"
+                            className="form-input form-input-sm"
+                            style={{ height: '28px', fontSize: '0.85rem' }}
+                            value={editingKeyName[key] !== undefined ? editingKeyName[key] : k.name}
+                            onChange={e => setEditingKeyName(prev => ({ ...prev, [key]: e.target.value }))}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleRenameKey(key, k.id, editingKeyName[key] || k.name);
+                              if (e.key === 'Escape') setEditingKeyId(prev => ({ ...prev, [key]: null }));
+                            }}
+                            autoFocus
+                            aria-label="Edit key name"
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-xs"
+                            onClick={() => handleRenameKey(key, k.id, editingKeyName[key] || k.name)}
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-xs"
+                            onClick={() => setEditingKeyId(prev => ({ ...prev, [key]: null }))}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span className="saved-key-name">{k.name}</span>
+                            {isSelected && (
+                              <span className="status-badge status-badge-ready" style={{ fontSize: '10px', padding: '2px 6px' }}>
+                                Active
+                              </span>
+                            )}
+                          </div>
+                          <code className="saved-key-code">{k.maskedKey}</code>
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '12px' }}>
+                      {!isSelected && !isRenaming && (
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-xs"
+                          onClick={() => handleSelectKey(key, k.id)}
+                        >
+                          Use key
+                        </button>
+                      )}
+                      {!isRenaming && (
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-xs"
+                          title="Rename key"
+                          onClick={() => {
+                            setEditingKeyId(prev => ({ ...prev, [key]: k.id }));
+                            setEditingKeyName(prev => ({ ...prev, [key]: k.name }));
+                          }}
+                        >
+                          <Edit2 size={12} /> Rename
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs"
+                        style={{ color: 'var(--color-error)' }}
+                        title="Delete key"
+                        onClick={() => handleDeleteSavedKey(key, k.id)}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {!isAdding && (
+              <div style={{ marginTop: 'var(--sp-2)' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    setAddingKey(prev => ({ ...prev, [key]: true }));
+                    setNewKeyName(prev => ({ ...prev, [key]: `Key ${savedKeys.length + 1}` }));
+                  }}
+                  style={{ gap: '6px' }}
+                >
+                  <Plus size={13} /> Add another key
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {isAdding && (
+          <div className="provider-section" style={{ marginTop: hasSavedKeys ? 'var(--sp-3)' : 0 }}>
+            <div className="provider-section-title">
+              {hasSavedKeys ? 'Add New Key' : 'Connection'}
+            </div>
             <div className="apikey-input-area">
+              <label className="form-label" htmlFor={`keyname-${key}`}>
+                Key Name / Label
+              </label>
+              <input
+                id={`keyname-${key}`}
+                type="text"
+                placeholder="e.g. Work Account, Personal, Production"
+                value={newKeyName[key] !== undefined ? newKeyName[key] : (hasSavedKeys ? `Key ${savedKeys.length + 1}` : 'Primary Key')}
+                onChange={e => setNewKeyName(prev => ({ ...prev, [key]: e.target.value }))}
+                className="form-input"
+                style={{ marginBottom: 'var(--sp-2)' }}
+              />
+
               <label className="form-label" htmlFor={`apikey-${key}`}>
                 API key
               </label>
@@ -867,6 +1366,7 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
                   {showToken[key] ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
+
               {key === 'custom' && (
                 <>
                   <label className="form-label" htmlFor={`baseurl-${key}`} style={{ marginTop: 'var(--sp-3)' }}>
@@ -882,17 +1382,25 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
                   />
                 </>
               )}
+
               <div style={{ display: 'flex', gap: '8px', marginTop: '8px', alignItems: 'center' }}>
                 <button
                   type="button"
                   className="btn btn-primary btn-sm"
-                  onClick={() => handleSaveAndVerify(key, editingKeys[key])}
+                  onClick={() => handleSaveAndVerify(key, editingKeys[key], newKeyName[key])}
                   disabled={!editingKeys[key] || isSaving}
                 >
-                  {isSaving ? <><RefreshCw size={13} className="spin-icon" /> Saving...</> : 'Save & verify'}
+                  {isSaving ? <><RefreshCw size={13} className="spin-icon" /> Saving...</> : (hasSavedKeys ? 'Save & add key' : 'Save & verify')}
                 </button>
-                {isReplacing && (
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setReplacingKey(prev => ({...prev, [key]: false})); setEditingKeys(prev => ({...prev, [key]: ''})); }}>
+                {hasSavedKeys && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      setAddingKey(prev => ({ ...prev, [key]: false }));
+                      setEditingKeys(prev => ({ ...prev, [key]: '' }));
+                    }}
+                  >
                     Cancel
                   </button>
                 )}
@@ -903,34 +1411,43 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
                 )}
               </div>
             </div>
-          ) : (
-            <div className="apikey-saved-area">
-              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                Saved: <code style={{ userSelect: 'all' }}>{provider.maskedKey}</code>
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setReplacingKey(prev => ({ ...prev, [key]: true }))}>
-                  Replace key
-                </button>
-                <button type="button" className="btn btn-secondary btn-sm" style={{ color: 'var(--color-error)' }} onClick={() => handleRemoveKey(key)}>
-                  <Trash2 size={13} /> Remove key
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         <div className="provider-section">
           <div className="provider-section-title">Model</div>
           {renderModelPicker(key, provider)}
         </div>
 
+        {(() => {
+          const savedKeys = getProviderSavedKeys(provider);
+          if (savedKeys.length < 2) return null;
+          const activeId = provider?.selectedKeyId || savedKeys[0]?.id;
+          return (
+            <div className="provider-section">
+              <div className="provider-section-title">Active Key for Testing</div>
+              <select
+                className="form-input"
+                value={activeId}
+                onChange={e => handleSelectKey(key, e.target.value)}
+                style={{ maxWidth: '300px' }}
+              >
+                {savedKeys.map(k => (
+                  <option key={k.id} value={k.id}>
+                    {k.name} ({k.maskedKey})
+                  </option>
+                ))}
+              </select>
+            </div>
+          );
+        })()}
+
         <div className="provider-actions">
           <button
             type="button"
             className="btn btn-secondary btn-sm"
             onClick={() => handleTestConnection(key)}
-            disabled={!provider.isConfigured || status === 'verifying'}
+            disabled={!hasKey || status === 'verifying'}
           >
             {status === 'verifying' ? (
               <><RefreshCw size={13} className="spin-icon" aria-hidden="true" /> Verifying…</>
@@ -953,8 +1470,8 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
                 type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={() => handleSetActiveAi(key)}
-                disabled={!provider.isConfigured}
-                title={!provider.isConfigured ? 'Configure this provider first' : undefined}
+                disabled={!hasKey}
+                title={!hasKey ? 'Configure this provider first' : undefined}
               >
                 Set as default
               </button>
@@ -1215,7 +1732,7 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
             <div className="provider-row-info">
               <span className="provider-row-name">{meta.name}</span>
               <span className="provider-row-model" title={model}>
-                {provider.isConfigured ? (model ? friendlyModelName(model) : '') : 'Add an API key'}
+                {isProviderConfigured(key, provider) ? (model ? friendlyModelName(model) : '') : 'Add an API key'}
               </span>
             </div>
           </div>
@@ -1252,12 +1769,14 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
     const dA = config?.activeProvider === kA;
     const dB = config?.activeProvider === kB;
     if (dA !== dB) return dA ? -1 : 1;
-    if ((pA.isConfigured ? 1 : 0) !== (pB.isConfigured ? 1 : 0)) return pA.isConfigured ? -1 : 1;
+    const confA = isProviderConfigured(kA, pA) ? 1 : 0;
+    const confB = isProviderConfigured(kB, pB) ? 1 : 0;
+    if (confA !== confB) return confA ? -1 : 1;
     return 0;
   });
 
-  const inUse = sorted.filter(([, p]) => p.isConfigured);
-  const available = sorted.filter(([, p]) => !p.isConfigured);
+  const inUse = sorted.filter(([k, p]) => isProviderConfigured(k, p));
+  const available = sorted.filter(([k, p]) => !isProviderConfigured(k, p));
 
   return (
     <div>

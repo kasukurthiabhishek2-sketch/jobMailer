@@ -59,11 +59,11 @@ export async function fetchMigrationConfig() {
   }
 }
 
-export async function saveAiProviderConfig({ providerKey, apiKey, model, baseURL, enabled }) {
+export async function saveAiProviderConfig({ providerKey, apiKey, model, baseURL, enabled, keyName, savedKeys, selectedKeyId, deleteKeyId, renameKeyId, newName }) {
   const res = await authFetch('/api/config/ai', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ providerKey, apiKey, model, baseURL, enabled })
+    body: JSON.stringify({ providerKey, apiKey, model, baseURL, enabled, keyName, savedKeys, selectedKeyId, deleteKeyId, renameKeyId, newName })
   });
   return parseJsonResponse(res, 'Failed to save AI configuration');
 }
@@ -78,12 +78,12 @@ export async function setActiveAiProvider(providerKey) {
   return parseJsonResponse(res, 'Failed to set active AI provider');
 }
 
-export async function testAiConnection({ providerKey, apiKey, model, baseURL }) {
+export async function testAiConnection({ providerKey, apiKey, model, baseURL, selectedKeyId }) {
   try {
     const res = await authFetch('/api/config/ai/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ providerKey, apiKey, model, baseURL })
+      body: JSON.stringify({ providerKey, apiKey, model, baseURL, selectedKeyId })
     });
 
     const contentType = res.headers.get('content-type') || '';
@@ -322,12 +322,12 @@ export async function streamEmailSending({
   }
 }
 
-export async function listAiModels({ providerKey, apiKey }) {
+export async function listAiModels({ providerKey, apiKey, selectedKeyId }) {
   try {
     const res = await authFetch('/api/config/ai/models', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ providerKey, apiKey })
+      body: JSON.stringify({ providerKey, apiKey, selectedKeyId })
     });
     const contentType = res.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {

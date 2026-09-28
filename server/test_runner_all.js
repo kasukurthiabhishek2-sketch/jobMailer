@@ -12,6 +12,7 @@ const testSuites = [
   { name: 'SMTP Resilience, Strict TLS & Retries', file: 'test_smtp_resilience.js' },
   { name: 'Copilot AI Dispatch & Fallback', file: 'test_copilot_dispatch.js' },
   { name: 'AI Fact-Checking Guardrail & Prompts', file: 'test_ai_guardrail.js' },
+  { name: 'AI Multi-Stage JSON Recovery & Repair Engine', file: 'test_ai_json_recovery.js' },
   { name: 'Batch Concurrency & Order Preservation', file: 'test_batch_concurrency.js' },
   { name: 'Cross-Session Audit Deduplication', file: 'test_cross_session_dedup.js' },
   { name: 'Danger-Zone Full Purge Verification', file: 'test_danger_zone.js' },
@@ -22,7 +23,11 @@ const testSuites = [
   { name: 'Ephemeral Uploads & Zero Retention Policy', file: 'test_ephemeral_uploads.js' },
   { name: 'AI Provider 429 Backoff & Retry Logic', file: 'test_ai_retry.js' },
   { name: 'AI Provider Model Listing & Filtering', file: 'test_model_listing.js' },
-  { name: 'SMTP Pacing, Response Recording & Retry Pipeline', file: 'test_smtp_pipeline.js' }
+  { name: 'SMTP Pacing, Response Recording & Retry Pipeline', file: 'test_smtp_pipeline.js' },
+  { name: 'AI Provider Connection Timeout Behavior', file: 'test_connection_timeout.js' },
+  { name: 'End-to-End Outreach Pipeline & Invariants', file: 'test_e2e_pipeline.js' },
+  { name: 'Comprehensive Opaque-Box E2E Suite (Tiers 1-4)', file: 'test_e2e_suite.js' },
+  { name: 'Authenticated User Key Resolution for AI Routes', file: 'test_key_resolution.js' }
 ];
 
 console.log('====================================================');

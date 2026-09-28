@@ -6,7 +6,7 @@ const fs = require('fs');
 
 const storage = require('./services/storageService');
 const copilotService = require('./services/copilotService');
-const { generateColdEmail, testAiConnection, listProviderModels } = require('./services/aiService');
+const { generateColdEmail, testAiConnection, listProviderModels, cleanJsonOutput } = require('./services/aiService');
 const { parseResumeFile } = require('./services/resumeParser');
 const { parseRecipientSheet } = require('./services/sheetParser');
 const { testSmtpConnection, sendEmailMessage, sendEmailMessageWithRetry, classifySmtpError, dispatchCampaign } = require('./services/smtpService');
@@ -176,11 +176,11 @@ app.get('/api/config', (req, res) => {
 // Save / Update AI Provider settings
 app.post('/api/config/ai', (req, res) => {
   try {
-    const { providerKey, apiKey, model, baseURL, enabled } = req.body;
+    const { providerKey, apiKey, model, baseURL, enabled, keyName, savedKeys, selectedKeyId, deleteKeyId, renameKeyId, newName } = req.body;
     if (!providerKey) {
       return res.status(400).json({ error: 'providerKey is required' });
     }
-    const updated = storage.updateAiProvider(providerKey, { apiKey, model, baseURL, enabled });
+    const updated = storage.updateAiProvider(providerKey, { apiKey, model, baseURL, enabled, keyName, savedKeys, selectedKeyId, deleteKeyId, renameKeyId, newName });
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -205,7 +205,7 @@ app.post('/api/config/ai/active', (req, res) => {
 app.post('/api/config/ai/test', async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   try {
-    const { providerKey, apiKey, model, baseURL } = req.body || {};
+    const { providerKey, apiKey, model, baseURL, selectedKeyId } = req.body || {};
     if (!providerKey) {
       return res.status(400).json({ success: false, error: 'providerKey is required' });
     }
@@ -241,12 +241,18 @@ app.post('/api/config/ai/test', async (req, res) => {
 
     let effectiveApiKey = (apiKey && typeof apiKey === 'string') ? apiKey.trim() : '';
 
-    // If apiKey not sent (user testing existing saved key), get from decrypted storage
+    // If apiKey not sent, fall back to decrypted storage (the client never has raw keys — getPublicConfig strips them)
     if (!effectiveApiKey) {
       try {
         const fullConfig = storage.getDecryptedConfig();
         const savedProvider = fullConfig?.aiProviders?.[providerKey];
-        if (savedProvider && savedProvider.apiKey) {
+        if (savedProvider && Array.isArray(savedProvider.savedKeys) && savedProvider.savedKeys.length > 0) {
+          const lookupId = selectedKeyId || savedProvider.selectedKeyId;
+          const selected = savedProvider.savedKeys.find(k => k.id === lookupId) || savedProvider.savedKeys[0];
+          if (selected?.apiKey) effectiveApiKey = selected.apiKey;
+          if (!model && savedProvider.model) effectiveModel = savedProvider.model;
+          if (!baseURL && savedProvider.baseURL) effectiveBaseUrl = savedProvider.baseURL;
+        } else if (savedProvider && savedProvider.apiKey) {
           effectiveApiKey = savedProvider.apiKey;
           if (!model && savedProvider.model) effectiveModel = savedProvider.model;
           if (!baseURL && savedProvider.baseURL) effectiveBaseUrl = savedProvider.baseURL;
@@ -280,17 +286,21 @@ app.post('/api/config/ai/test', async (req, res) => {
 // List available models for a provider
 app.post('/api/config/ai/models', async (req, res) => {
   try {
-    const { providerKey, apiKey } = req.body || {};
+    const { providerKey, apiKey, selectedKeyId } = req.body || {};
     if (!providerKey) {
       return res.status(400).json({ success: false, error: 'providerKey is required' });
     }
 
-    let effectiveApiKey = (apiKey && typeof apiKey === 'string') ? apiKey.trim() : '';
+    let effectiveApiKey = (apiKey && typeof apiKey === 'string' && !apiKey.includes('...')) ? apiKey.trim() : '';
     if (!effectiveApiKey) {
       try {
         const fullConfig = storage.getDecryptedConfig();
         const savedProvider = fullConfig?.aiProviders?.[providerKey];
-        if (savedProvider && savedProvider.apiKey) {
+        if (savedProvider && Array.isArray(savedProvider.savedKeys) && savedProvider.savedKeys.length > 0) {
+          const lookupId = selectedKeyId || savedProvider.selectedKeyId;
+          const selected = savedProvider.savedKeys.find(k => k.id === lookupId) || savedProvider.savedKeys[0];
+          if (selected?.apiKey) effectiveApiKey = selected.apiKey;
+        } else if (savedProvider && savedProvider.apiKey) {
           effectiveApiKey = savedProvider.apiKey;
         }
       } catch (storageErr) {
@@ -403,9 +413,12 @@ app.post('/api/config/smtp/:id/default', (req, res) => {
 // Test SMTP Connection
 app.post('/api/config/smtp/test', async (req, res) => {
   try {
-    let profile = req.body;
-    // If testing an existing profile without re-typing password
-    if (profile.id && !profile.password) {
+    let profile = { ...req.body };
+    if (!profile.password && profile.appPassword) {
+      profile.password = profile.appPassword;
+    }
+    // If testing an existing profile without re-typing password in test / local offline mode
+    if (profile.id && !profile.password && (!req.uid || req.uid === 'test_user_offline')) {
       const fullConfig = storage.getDecryptedConfig();
       const existing = (fullConfig.smtpProfiles || []).find(p => p.id === profile.id);
       if (existing) {
@@ -579,14 +592,20 @@ app.delete('/api/upload/resume', (req, res) => {
 // ---------------------- AI EMAIL GENERATION ----------------------
 
 // Helper to resolve AI provider configuration from saved storage & client overrides
-function resolveAiProviderConfig({ providerKey: requestedProvider, providerConfig: clientProviderConfig }) {
+function resolveAiProviderConfig({ providerKey: requestedProvider, providerConfig: clientProviderConfig } = {}, callerUid) {
   const fullConfig = storage.getDecryptedConfig();
   const providerKey = requestedProvider || clientProviderConfig?.providerKey || fullConfig.activeProvider;
   const savedProvider = fullConfig.aiProviders?.[providerKey] || {};
 
-  const apiKey = (clientProviderConfig?.apiKey && !clientProviderConfig.apiKey.includes('...'))
-    ? clientProviderConfig.apiKey
-    : (savedProvider.apiKey || clientProviderConfig?.apiKey || '');
+  let apiKey = '';
+  if (clientProviderConfig?.apiKey && typeof clientProviderConfig.apiKey === 'string' && !clientProviderConfig.apiKey.includes('...')) {
+    apiKey = clientProviderConfig.apiKey.trim();
+  }
+
+  // Fall back to saved local config only if unauthenticated or in test runner mode
+  if (!apiKey && (!callerUid || callerUid === 'test_user_offline')) {
+    apiKey = savedProvider.apiKey || '';
+  }
 
   return {
     providerKey,
@@ -609,7 +628,7 @@ app.post('/api/ai/generate', async (req, res) => {
       senderName
     } = req.body;
 
-    const { providerKey, providerConfig } = resolveAiProviderConfig(req.body);
+    const { providerKey, providerConfig } = resolveAiProviderConfig(req.body, req.uid);
 
     if (!providerConfig || !providerConfig.apiKey) {
       return res.status(400).json({ error: `Provider ${providerKey} is not configured with an API key.` });
@@ -648,14 +667,31 @@ function adaptGenericEmailForRecipient(genericEmail, recipient, senderName) {
     return genericEmail;
   }
 
+  // Defensive check: If genericEmail.body contains raw JSON or markdown fences, sanitize first
+  let baseSubject = genericEmail.subject || '';
+  let baseBody = genericEmail.body || '';
+
+  if (typeof baseBody === 'string' && (baseBody.trim().startsWith('{') || baseBody.includes('```'))) {
+    const recovered = cleanJsonOutput(baseBody);
+    if (recovered && recovered.body) {
+      baseBody = recovered.body;
+      if (!baseSubject && recovered.subject) baseSubject = recovered.subject;
+    } else {
+      baseBody = baseBody.replace(/^```(?:json)?\s*/gi, '').replace(/\s*```\s*$/gi, '').trim();
+    }
+  }
+
   const rawName = (recipient?.name && typeof recipient.name === 'string') ? recipient.name.trim() : '';
   const rawCompany = (recipient?.company && typeof recipient.company === 'string') ? recipient.company.trim() : '';
   const rawRole = (recipient?.role && typeof recipient.role === 'string') ? recipient.role.trim() : '';
   const isGenericName = /^(hiring\s*manager|hiring\s*team|team|recruiter)$/i.test(rawName);
   const firstName = (rawName && !isGenericName) ? rawName.split(/\s+/)[0] : '';
 
-  let subject = genericEmail.subject || `Inquiry: Opportunities at ${rawCompany || 'your team'}`;
-  let body = genericEmail.body || '';
+  let subject = baseSubject || `Inquiry: Opportunities at ${rawCompany || 'your team'}`;
+  let body = baseBody || '';
+
+  // Strip outer quotes from subject
+  subject = subject.replace(/^subject:\s*/i, '').replace(/^["']+|["']+$/g, '').trim();
 
   // 1. Personalize Subject Line
   if (rawCompany) {
@@ -724,7 +760,7 @@ app.post('/api/ai/batch-generate', async (req, res) => {
       return res.status(400).json({ error: 'No recipients provided' });
     }
 
-    const { providerKey, providerConfig } = resolveAiProviderConfig(req.body);
+    const { providerKey, providerConfig } = resolveAiProviderConfig(req.body, req.uid);
 
     if (!providerConfig || !providerConfig.apiKey) {
       return res.status(400).json({ error: `Provider ${providerKey} is not configured with an API key.` });
@@ -858,17 +894,29 @@ app.post('/api/ai/batch-generate', async (req, res) => {
 
 // Send emails to recipients with real-time SSE progress streaming
 // Helpers to resolve SMTP profile & attachment for email sending
-function resolveSmtpProfile({ smtpProfileId, smtpProfile: clientSmtpProfile }, fullConfig) {
+function resolveSmtpProfile({ smtpProfileId, smtpProfile: clientSmtpProfile } = {}, fullConfig = {}, callerUid) {
   let profile = null;
   const targetId = smtpProfileId || clientSmtpProfile?.id;
-  if (targetId) {
-    profile = (fullConfig.smtpProfiles || []).find(p => p.id === targetId);
+  if (targetId && Array.isArray(fullConfig.smtpProfiles)) {
+    profile = fullConfig.smtpProfiles.find(p => p.id === targetId);
   }
-  if (!profile) {
-    profile = (fullConfig.smtpProfiles || []).find(p => p.isDefault) || fullConfig.smtpProfiles?.[0];
+  if (!profile && (!callerUid || callerUid === 'test_user_offline') && Array.isArray(fullConfig.smtpProfiles) && fullConfig.smtpProfiles.length > 0) {
+    profile = fullConfig.smtpProfiles.find(p => p.isDefault) || fullConfig.smtpProfiles[0];
   }
 
-  // Strictly authenticate password from server decrypted local storage (Option 1)
+  // Prioritize and merge client-provided SMTP profile (from user's Firebase config)
+  if (clientSmtpProfile) {
+    profile = {
+      ...(profile || {}),
+      ...clientSmtpProfile,
+      password: (clientSmtpProfile.password && !clientSmtpProfile.password.includes('•••'))
+        ? clientSmtpProfile.password
+        : (clientSmtpProfile.appPassword && !clientSmtpProfile.appPassword.includes('•••'))
+          ? clientSmtpProfile.appPassword
+          : (profile?.password || profile?.appPassword || '')
+    };
+  }
+
   if (profile && !profile.password && profile.appPassword) {
     profile = { ...profile, password: profile.appPassword };
   }
@@ -915,7 +963,7 @@ app.post('/api/send/stream', async (req, res) => {
   }
 
   const fullConfig = storage.getDecryptedConfig();
-  const profile = resolveSmtpProfile(req.body, fullConfig);
+  const profile = resolveSmtpProfile(req.body, fullConfig, req.uid);
 
   if (!profile || (!profile.password && !profile.appPassword)) {
     return res.status(400).json({
@@ -975,7 +1023,7 @@ app.post('/api/send', async (req, res) => {
   }
 
   const fullConfig = storage.getDecryptedConfig();
-  const profile = resolveSmtpProfile(req.body, fullConfig);
+  const profile = resolveSmtpProfile(req.body, fullConfig, req.uid);
 
   if (!profile || (!profile.password && !profile.appPassword)) {
     return res.status(400).json({
