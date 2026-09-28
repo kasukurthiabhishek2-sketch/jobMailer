@@ -6,7 +6,7 @@ const fs = require('fs');
 
 const storage = require('./services/storageService');
 const copilotService = require('./services/copilotService');
-const { generateColdEmail, testAiConnection } = require('./services/aiService');
+const { generateColdEmail, testAiConnection, listProviderModels } = require('./services/aiService');
 const { parseResumeFile } = require('./services/resumeParser');
 const { parseRecipientSheet } = require('./services/sheetParser');
 const { testSmtpConnection, sendEmailMessage, sendEmailMessageWithRetry, classifySmtpError, dispatchCampaign } = require('./services/smtpService');
@@ -274,6 +274,42 @@ app.post('/api/config/ai/test', async (req, res) => {
   } catch (err) {
     console.error(`[AI Test] Underlying error testing ${req.body?.providerKey || 'unknown'}:`, err);
     return res.status(500).json({ success: false, error: err.message || 'Internal server error while testing AI connection' });
+  }
+});
+
+// List available models for a provider
+app.post('/api/config/ai/models', async (req, res) => {
+  try {
+    const { providerKey, apiKey } = req.body || {};
+    if (!providerKey) {
+      return res.status(400).json({ success: false, error: 'providerKey is required' });
+    }
+
+    let effectiveApiKey = (apiKey && typeof apiKey === 'string') ? apiKey.trim() : '';
+    if (!effectiveApiKey) {
+      try {
+        const fullConfig = storage.getDecryptedConfig();
+        const savedProvider = fullConfig?.aiProviders?.[providerKey];
+        if (savedProvider && savedProvider.apiKey) {
+          effectiveApiKey = savedProvider.apiKey;
+        }
+      } catch (storageErr) {
+        console.error(`[AI Models] Warning reading storage for ${providerKey}:`, storageErr.message);
+      }
+    }
+
+    if (!effectiveApiKey) {
+      return res.status(400).json({ success: false, error: 'API key is required to list models.' });
+    }
+
+    const result = await listProviderModels(providerKey, effectiveApiKey);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error(`[AI Models] Error listing models for ${req.body?.providerKey}:`, err.message);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to list models' });
   }
 });
 

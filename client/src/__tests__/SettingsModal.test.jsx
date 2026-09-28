@@ -32,7 +32,7 @@ describe('SettingsModal Component (TICK-CYC3-09 / B3)', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('renders tab navigation and default AI tab when isOpen is true', () => {
+  it('renders vertical sidebar navigation and default AI tab when isOpen is true', () => {
     render(
       <SettingsModal
         isOpen={true}
@@ -82,7 +82,7 @@ describe('SettingsModal Component (TICK-CYC3-09 / B3)', () => {
     expect(screen.getByText('Destructive Action Notice')).toBeInTheDocument();
   });
 
-  it('calls onClose when Close button or overlay is clicked', () => {
+  it('calls onClose when Close button is clicked', () => {
     const onClose = vi.fn();
     render(
       <SettingsModal
@@ -97,5 +97,93 @@ describe('SettingsModal Component (TICK-CYC3-09 / B3)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Close settings' }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders dialog with proper a11y attributes', () => {
+    render(
+      <SettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        initialTab="ai"
+        config={dummyConfig}
+        onRefreshConfig={vi.fn()}
+        onShowToast={vi.fn()}
+      />
+    );
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveAttribute('aria-labelledby', 'settings-dialog-title');
+  });
+
+  it('renders nav with aria-label and aria-current on active item', () => {
+    render(
+      <SettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        initialTab="ai"
+        config={dummyConfig}
+        onRefreshConfig={vi.fn()}
+        onShowToast={vi.fn()}
+      />
+    );
+
+    const nav = screen.getByRole('navigation', { name: 'Settings sections' });
+    expect(nav).toBeInTheDocument();
+
+    const aiButton = screen.getByRole('button', { name: /AI Providers/i });
+    expect(aiButton).toHaveAttribute('aria-current', 'page');
+
+    const smtpButton = screen.getByRole('button', { name: /SMTP/i });
+    expect(smtpButton).not.toHaveAttribute('aria-current');
+  });
+
+  it('closes on Escape key', () => {
+    const onClose = vi.fn();
+    render(
+      <SettingsModal
+        isOpen={true}
+        onClose={onClose}
+        initialTab="ai"
+        config={dummyConfig}
+        onRefreshConfig={vi.fn()}
+        onShowToast={vi.fn()}
+      />
+    );
+
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders StatusBadge with correct status for configured provider', () => {
+    render(
+      <SettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        initialTab="ai"
+        config={dummyConfig}
+        onRefreshConfig={vi.fn()}
+        onShowToast={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Key saved')).toBeInTheDocument();
+    expect(screen.getByText('Default')).toBeInTheDocument();
+  });
+
+  it('renders provider rows with proper aria-expanded buttons', () => {
+    render(
+      <SettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        initialTab="ai"
+        config={dummyConfig}
+        onRefreshConfig={vi.fn()}
+        onShowToast={vi.fn()}
+      />
+    );
+
+    const geminiButton = screen.getByRole('button', { name: /Google Gemini/i });
+    expect(geminiButton).toHaveAttribute('aria-expanded');
   });
 });

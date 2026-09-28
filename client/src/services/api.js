@@ -322,6 +322,23 @@ export async function streamEmailSending({
   }
 }
 
+export async function listAiModels({ providerKey, apiKey }) {
+  try {
+    const res = await authFetch('/api/config/ai/models', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ providerKey, apiKey })
+    });
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      return res.json();
+    }
+    return { success: false, error: 'Non-JSON response from server' };
+  } catch (err) {
+    return { success: false, error: err.message || 'Failed to list models' };
+  }
+}
+
 export async function fetchOutreachLogs() {
   const res = await authFetch('/api/logs');
   return res.json();

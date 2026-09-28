@@ -1,58 +1,240 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Shield,
+  Lock,
   Check,
   ChevronDown,
-  ChevronUp,
-  Server,
   CheckCircle2,
-  Key,
   RefreshCw,
   Copy,
   ExternalLink,
-  AlertCircle
+  AlertCircle,
+  Eye,
+  EyeOff,
+  Trash2
 } from 'lucide-react';
 import {
   saveAiProviderConfig,
   setActiveAiProvider,
   testAiConnection,
+  listAiModels,
   startCopilotAuth,
   getCurrentCopilotFlow,
   checkCopilotStatus
 } from '../../services/api';
 import { saveSettings, stripUndefined } from '../../lib/settings';
 
-const PROVIDER_META = {
-  gemini: { name: 'Google Gemini', brandClass: 'brand-gemini', dotColor: '#4285f4' },
-  openai: { name: 'OpenAI', brandClass: 'brand-openai', dotColor: '#10a37f' },
-  groq: { name: 'Groq', brandClass: 'brand-groq', dotColor: '#f55036' },
-  grok: { name: 'Grok (xAI)', brandClass: 'brand-grok', dotColor: '#1d9bf0' },
-  copilot: { name: 'GitHub Copilot', brandClass: 'brand-copilot', dotColor: '#2da44e' },
-  nvidia: { name: 'NVIDIA NIM', brandClass: 'brand-nvidia', dotColor: '#76b900' },
-  custom: { name: 'Custom Endpoint', brandClass: 'brand-custom', dotColor: '#64748b' }
+/* ── Constants ───────────────────────────────────────────────────────────── */
+
+const PROVIDER_CONFIG = {
+  gemini:  { name: 'Google Gemini',   monogram: 'G', keyPrefix: 'AIza', keyPage: 'https://aistudio.google.com/apikey' },
+  openai:  { name: 'OpenAI',          monogram: 'O', keyPrefix: 'sk-', keyPage: 'https://platform.openai.com/api-keys' },
+  groq:    { name: 'Groq',            monogram: 'Q', keyPrefix: 'gsk_', keyPage: 'https://console.groq.com/keys' },
+  grok:    { name: 'Grok (xAI)',      monogram: 'X', keyPrefix: 'xai-', keyPage: 'https://console.x.ai/' },
+  copilot: { name: 'GitHub Copilot',  monogram: 'C', keyPrefix: 'ghu_', keyPage: null },
+  nvidia:  { name: 'NVIDIA NIM',      monogram: 'N', keyPrefix: 'nvapi-', keyPage: 'https://build.nvidia.com/nim' },
+  custom:  { name: 'Custom Endpoint', monogram: '⌘', keyPrefix: '', keyPage: null },
 };
 
-/**
- * AiProvidersTab — Configuration, testing, and authentication for AI providers and GitHub Copilot.
- */
-export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, user }) {
-  // Accordion state
-  const [expandedMap, setExpandedMap] = useState({});
+const FRIENDLY_MODEL_NAMES = {
+  'gemini-1.5-flash': 'Gemini 1.5 Flash',
+  'gemini-1.5-pro': 'Gemini 1.5 Pro',
+  'gemini-2.0-flash-exp': 'Gemini 2.0 Flash',
+  'gpt-4o': 'GPT-4o',
+  'gpt-4o-mini': 'GPT-4o Mini',
+  'gpt-3.5-turbo': 'GPT-3.5 Turbo',
+  'grok-2-1212': 'Grok 2',
+  'grok-2-vision-1212': 'Grok 2 Vision',
+  'grok-beta': 'Grok Beta',
+  'meta/llama-3.1-70b-instruct': 'Llama 3.1 70B',
+  'meta/llama-3.1-8b-instruct': 'Llama 3.1 8B',
+  'mistralai/mixtral-8x22b-instruct-v0.1': 'Mixtral 8x22B',
+  'qwen/qwen3.8-27b': 'Qwen 3.8 27B',
+  'openai/gpt-oss-20b': 'GPT-OSS 20B',
+  'openai/gpt-oss-120b': 'GPT-OSS 120B',
+};
 
-  const toggleExpand = (key) => {
-    setExpandedMap(prev => {
-      const isCurrentlyOpen = prev[key] !== undefined ? prev[key] : (config?.activeProvider === key);
-      return { ...prev, [key]: !isCurrentlyOpen };
-    });
+function friendlyModelName(id) {
+  if (!id) return '';
+  return FRIENDLY_MODEL_NAMES[id] || id;
+}
+
+/* ── Inline UI primitives (only used in this file) ───────────────────── */
+
+function StatusBadge({ status, lastVerifiedAt }) {
+  if (status === 'connected') {
+    const ago = lastVerifiedAt ? formatTimeAgo(lastVerifiedAt) : '';
+    return (
+      <span className="status-badge status-badge-ready" title={ago ? `Verified ${ago}` : undefined}>
+        <CheckCircle2 size={12} aria-hidden="true" /> Connected
+      </span>
+    );
+  }
+  if (status === 'verifying') {
+    return (
+      <span className="status-badge status-badge-attention">
+        <RefreshCw size={12} className="spin-icon" aria-hidden="true" /> Verifying…
+      </span>
+    );
+  }
+  if (status === 'error') {
+    return (
+      <span className="status-badge status-badge-attention">
+        <AlertCircle size={12} aria-hidden="true" /> Error
+      </span>
+    );
+  }
+  if (status === 'key-saved') {
+    return (
+      <span className="status-badge status-badge-neutral">
+        <Lock size={12} aria-hidden="true" /> Key saved
+      </span>
+    );
+  }
+  return <span className="status-badge status-badge-neutral">Not configured</span>;
+}
+
+function formatTimeAgo(timestamp) {
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+  if (seconds < 60) return 'just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
+}
+
+function ProviderLogo({ monogram }) {
+  return (
+    <span className="provider-logo-tile" aria-hidden="true">
+      {monogram}
+    </span>
+  );
+}
+
+function ModelSelect({ value, options, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [focusIndex, setFocusIndex] = useState(-1);
+  const wrapperRef = useRef(null);
+  const listRef = useRef(null);
+  const triggerRef = useRef(null);
+  const selectedIndex = options.indexOf(value);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClickOutside = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [open]);
+
+  useEffect(() => {
+    if (open && focusIndex >= 0 && listRef.current?.children[focusIndex]) {
+      listRef.current.children[focusIndex].scrollIntoView({ block: 'nearest' });
+    }
+  }, [focusIndex, open]);
+
+  const select = (opt) => {
+    onChange(opt);
+    setOpen(false);
+    triggerRef.current?.focus();
   };
 
-  // AI settings edit states
+  const handleKeyDown = (e) => {
+    if (!open) {
+      if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) {
+        e.preventDefault();
+        setOpen(true);
+        setFocusIndex(selectedIndex >= 0 ? selectedIndex : 0);
+      }
+      return;
+    }
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setFocusIndex(i => Math.min(i + 1, options.length - 1));
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setFocusIndex(i => Math.max(i - 1, 0));
+        break;
+      case 'Enter':
+      case ' ':
+        e.preventDefault();
+        if (focusIndex >= 0) select(options[focusIndex]);
+        break;
+      case 'Escape':
+        e.preventDefault();
+        setOpen(false);
+        triggerRef.current?.focus();
+        break;
+      default:
+        break;
+    }
+  };
+
+  return (
+    <div className="model-select" ref={wrapperRef}>
+      <button
+        type="button"
+        ref={triggerRef}
+        className="model-select-trigger"
+        onClick={() => { setOpen(!open); setFocusIndex(selectedIndex >= 0 ? selectedIndex : 0); }}
+        onKeyDown={handleKeyDown}
+        role="combobox"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span className="model-select-value">{friendlyModelName(value)}</span>
+        <ChevronDown
+          size={14}
+          className={`model-select-icon ${open ? 'provider-chevron-open' : ''}`}
+          aria-hidden="true"
+        />
+      </button>
+      {open && (
+        <ul
+          ref={listRef}
+          role="listbox"
+          className="model-select-listbox"
+          onKeyDown={handleKeyDown}
+          tabIndex={-1}
+          aria-label="Select model"
+        >
+          {options.map((opt, i) => (
+            <li
+              key={opt}
+              role="option"
+              aria-selected={opt === value}
+              className={`model-select-option ${opt === value ? 'selected' : ''} ${i === focusIndex ? 'focused' : ''}`}
+              onClick={() => select(opt)}
+              onMouseEnter={() => setFocusIndex(i)}
+            >
+              <span className="model-select-option-label">{friendlyModelName(opt)}</span>
+              {friendlyModelName(opt) !== opt && (
+                <span className="model-select-option-id">{opt}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/* ── Main component ──────────────────────────────────────────────────── */
+
+export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, user }) {
+  const [expandedKey, setExpandedKey] = useState(null);
   const [editingKeys, setEditingKeys] = useState({});
   const [editingModels, setEditingModels] = useState({});
   const [editingBaseUrls, setEditingBaseUrls] = useState({});
-  const [aiTestStatus, setAiTestStatus] = useState({});
+  const [replacingKey, setReplacingKey] = useState({});
+  const [providerStates, setProviderStates] = useState({});
+  const [modelLists, setModelLists] = useState({});
 
-  // Copilot Device Code Auth State
+  const [showManualCopilotInput, setShowManualCopilotInput] = useState(false);
+  const [showCopilotToken, setShowCopilotToken] = useState(false);
+  const [showToken, setShowToken] = useState({});
+
   const [copilotFlow, setCopilotFlow] = useState(() => {
     try {
       const saved = sessionStorage.getItem('jdmail_copilot_flow');
@@ -87,7 +269,6 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
     };
   });
 
-  const [showManualCopilotInput, setShowManualCopilotInput] = useState(false);
   const configRef = useRef(config);
   const userRef = useRef(user);
 
@@ -121,17 +302,9 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
           stopPolling();
           try { sessionStorage.removeItem('jdmail_copilot_flow'); } catch {}
           setCopilotFlow({
-            active: false,
-            deviceCode: '',
-            userCode: '',
-            verificationUri: '',
-            expiresIn: 0,
-            expiresAt: 0,
-            polling: false,
-            copied: false,
-            error: null,
-            checking: false,
-            statusMessage: ''
+            active: false, deviceCode: '', userCode: '', verificationUri: '',
+            expiresIn: 0, expiresAt: 0, polling: false, copied: false,
+            error: null, checking: false, statusMessage: ''
           });
           if (res.config) {
             const currentConfig = configRef.current;
@@ -161,7 +334,7 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
           }
           onShowToast?.({
             type: 'success',
-            title: 'GitHub Copilot Connected',
+            title: 'GitHub Copilot connected',
             message: 'Successfully authenticated with your GitHub Copilot subscription!'
           });
           return;
@@ -204,16 +377,9 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
     try {
       stopPolling();
       setCopilotFlow({
-        active: true,
-        deviceCode: '',
-        userCode: '',
-        verificationUri: '',
-        expiresIn: 0,
-        expiresAt: 0,
-        polling: true,
-        copied: false,
-        error: null,
-        checking: false,
+        active: true, deviceCode: '', userCode: '', verificationUri: '',
+        expiresIn: 0, expiresAt: 0, polling: true, copied: false,
+        error: null, checking: false,
         statusMessage: 'Requesting verification code from GitHub...'
       });
 
@@ -248,7 +414,7 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
     } catch (err) {
       stopPolling();
       setCopilotFlow(prev => ({ ...prev, polling: false, error: err.message }));
-      onShowToast?.({ type: 'error', title: 'GitHub Error', message: err.message });
+      onShowToast?.({ type: 'error', title: 'GitHub error', message: err.message });
     }
   };
 
@@ -262,17 +428,9 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
         stopPolling();
         try { sessionStorage.removeItem('jdmail_copilot_flow'); } catch {}
         setCopilotFlow({
-          active: false,
-          deviceCode: '',
-          userCode: '',
-          verificationUri: '',
-          expiresIn: 0,
-          expiresAt: 0,
-          polling: false,
-          copied: false,
-          error: null,
-          checking: false,
-          statusMessage: ''
+          active: false, deviceCode: '', userCode: '', verificationUri: '',
+          expiresIn: 0, expiresAt: 0, polling: false, copied: false,
+          error: null, checking: false, statusMessage: ''
         });
         if (res.config) {
           const currentConfig = configRef.current;
@@ -302,7 +460,7 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
         }
         onShowToast?.({
           type: 'success',
-          title: 'GitHub Copilot Connected',
+          title: 'GitHub Copilot connected',
           message: 'Successfully authenticated with your GitHub Copilot subscription!'
         });
         return;
@@ -310,29 +468,26 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
 
       if (res.status === 'pending') {
         setCopilotFlow(prev => ({
-          ...prev,
-          checking: false,
-          error: null,
+          ...prev, checking: false, error: null,
           statusMessage: 'Waiting for you to authorize on GitHub...'
         }));
         if (showToastOnPending) {
           onShowToast?.({
             type: 'info',
-            title: 'Authorization Pending',
+            title: 'Authorization pending',
             message: 'Still waiting for approval on GitHub. Make sure you entered the code and clicked "Authorize GitHub Copilot".'
           });
         }
       } else if (res.status === 'slow_down') {
         currentIntervalRef.current = Math.max(currentIntervalRef.current + 5000, (res.interval || 10) * 1000);
         setCopilotFlow(prev => ({
-          ...prev,
-          checking: false,
+          ...prev, checking: false,
           statusMessage: `GitHub rate limit: please wait ${currentIntervalRef.current / 1000}s...`
         }));
         if (showToastOnPending) {
           onShowToast?.({
             type: 'warning',
-            title: 'Rate Limit',
+            title: 'Rate limit',
             message: 'GitHub asked to slow down requests. Please wait a few seconds and click Verify again.'
           });
         }
@@ -340,15 +495,13 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
         stopPolling();
         try { sessionStorage.removeItem('jdmail_copilot_flow'); } catch {}
         setCopilotFlow(prev => ({
-          ...prev,
-          checking: false,
-          polling: false,
+          ...prev, checking: false, polling: false,
           error: res.error || 'Authorization failed'
         }));
         if (showToastOnPending) {
           onShowToast?.({
             type: 'error',
-            title: 'Authorization Failed',
+            title: 'Authorization failed',
             message: res.error || 'Device code expired or was rejected by GitHub.'
           });
         }
@@ -356,7 +509,7 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
     } catch (err) {
       setCopilotFlow(prev => ({ ...prev, checking: false }));
       if (showToastOnPending) {
-        onShowToast?.({ type: 'error', title: 'Check Error', message: err.message });
+        onShowToast?.({ type: 'error', title: 'Check error', message: err.message });
       }
     }
   }, [copilotFlow.checking, copilotFlow.deviceCode, onRefreshConfig, onShowToast]);
@@ -365,17 +518,9 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
     stopPolling();
     try { sessionStorage.removeItem('jdmail_copilot_flow'); } catch {}
     setCopilotFlow({
-      active: false,
-      deviceCode: '',
-      userCode: '',
-      verificationUri: '',
-      expiresIn: 0,
-      expiresAt: 0,
-      polling: false,
-      copied: false,
-      error: null,
-      checking: false,
-      statusMessage: ''
+      active: false, deviceCode: '', userCode: '', verificationUri: '',
+      expiresIn: 0, expiresAt: 0, polling: false, copied: false,
+      error: null, checking: false, statusMessage: ''
     });
   };
 
@@ -424,7 +569,7 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
     window.open(uri || 'https://github.com/login/device', '_blank', 'noopener,noreferrer');
     onShowToast?.({
       type: 'success',
-      title: 'Code Copied',
+      title: 'Code copied',
       message: `Verification code ${code} copied to clipboard! Opening GitHub to authenticate.`
     });
     setTimeout(() => {
@@ -432,136 +577,110 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
     }, 3000);
   };
 
-  const handleModelChange = async (providerKey, newModel) => {
-    setEditingModels(prev => ({ ...prev, [providerKey]: newModel }));
-    const currentProvider = config?.aiProviders?.[providerKey] || {};
-    const updatedProvider = {
-      ...currentProvider,
-      model: newModel
-    };
-    const updatedConfig = stripUndefined({
-      ...config,
-      aiProviders: {
-        ...config?.aiProviders,
-        [providerKey]: updatedProvider
-      }
-    });
-
-    try {
-      await saveAiProviderConfig({
-        providerKey,
-        model: newModel,
-        apiKey: currentProvider.apiKey || '',
-        baseURL: updatedProvider.baseURL,
-        enabled: true
-      });
-    } catch (backendErr) {
-      console.warn('Local backend save notice:', backendErr.message);
-    }
-
-    if (user?.uid) {
-      try {
-        await saveSettings(user.uid, updatedConfig);
-      } catch (e) {
-        console.warn('Firestore save notice:', e.message);
-      }
-    }
-
-    onRefreshConfig(updatedConfig);
-    onShowToast?.({
-      type: 'info',
-      title: 'Model Preference Saved',
-      message: `${PROVIDER_META[providerKey]?.name || providerKey} model set to ${newModel}`
-    });
+  const getEffectiveStatus = (providerKey) => {
+    const ps = providerStates[providerKey];
+    if (ps?.status) return ps.status;
+    const provider = config?.aiProviders?.[providerKey];
+    if (provider?.isConfigured) return 'key-saved';
+    return 'not-configured';
   };
 
-  const handleSaveApiKey = async (providerKey, rawKey) => {
-    if (rawKey === undefined || rawKey === null) return;
+  const handleSaveAndVerify = async (providerKey, rawKey) => {
+    if (!rawKey?.trim()) return;
     const trimmed = rawKey.trim();
-    if (!trimmed) return;
 
-    const currentProvider = config?.aiProviders?.[providerKey] || {};
-    const updatedProvider = {
-      ...currentProvider,
-      apiKey: trimmed,
-      model: editingModels[providerKey] || currentProvider.model || '',
-      enabled: true,
-      isConfigured: true
-    };
-    const updatedConfig = stripUndefined({
-      ...config,
-      aiProviders: {
-        ...config?.aiProviders,
-        [providerKey]: updatedProvider
-      }
-    });
+    setProviderStates(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], saving: true } }));
 
     try {
-      await saveAiProviderConfig({
+      const backendResult = await saveAiProviderConfig({
         providerKey,
         apiKey: trimmed,
-        model: updatedProvider.model,
-        baseURL: updatedProvider.baseURL,
+        model: editingModels[providerKey] || config?.aiProviders?.[providerKey]?.model || '',
+        baseURL: providerKey === 'custom' ? (editingBaseUrls[providerKey] || config?.aiProviders?.[providerKey]?.baseURL || '') : undefined,
         enabled: true
       });
-    } catch (backendErr) {
-      console.warn('Local backend save notice:', backendErr.message);
-    }
 
-    if (user?.uid) {
-      try {
-        await saveSettings(user.uid, updatedConfig);
-      } catch (e) {
-        console.warn('Firestore save notice:', e.message);
+      const updatedConfig = backendResult || config;
+
+      if (user?.uid) {
+        try { await saveSettings(user.uid, updatedConfig); } catch (e) { console.warn('Firestore save notice:', e.message); }
       }
-    }
 
-    onRefreshConfig(updatedConfig);
-    setEditingKeys(prev => ({ ...prev, [providerKey]: '' }));
-    onShowToast?.({
-      type: 'success',
-      title: 'API Key Saved',
-      message: `API key saved for ${PROVIDER_META[providerKey]?.name || providerKey}`
-    });
+      onRefreshConfig(updatedConfig);
+      setEditingKeys(prev => ({ ...prev, [providerKey]: '' }));
+      setReplacingKey(prev => ({ ...prev, [providerKey]: false }));
+
+      onShowToast?.({ type: 'success', title: 'API key saved', message: `Key saved for ${PROVIDER_CONFIG[providerKey]?.name || providerKey}` });
+
+      handleTestConnection(providerKey);
+    } catch (err) {
+      onShowToast?.({ type: 'error', title: 'Save failed', message: err.message });
+      setProviderStates(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], saving: false, status: 'error', error: err.message } }));
+    }
   };
 
-  const handleSaveBaseUrl = async (providerKey, rawUrl) => {
-    if (rawUrl === undefined || rawUrl === null) return;
-    const trimmed = rawUrl.trim();
-    const currentProvider = config?.aiProviders?.[providerKey] || {};
-    const updatedProvider = {
-      ...currentProvider,
-      baseURL: trimmed || 'https://api.openai.com/v1'
-    };
-    const updatedConfig = stripUndefined({
-      ...config,
-      aiProviders: {
-        ...config?.aiProviders,
-        [providerKey]: updatedProvider
-      }
-    });
-
+  const handleTestConnection = async (providerKey) => {
+    setProviderStates(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], status: 'verifying', error: null } }));
     try {
-      await saveAiProviderConfig({
+      const model = editingModels[providerKey] || config?.aiProviders?.[providerKey]?.model;
+      const baseURL = editingBaseUrls[providerKey] || config?.aiProviders?.[providerKey]?.baseURL || '';
+      const res = await testAiConnection({ providerKey, model, baseURL });
+      if (res?.success) {
+        setProviderStates(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], status: 'connected', error: null, message: res.message, lastVerifiedAt: Date.now(), saving: false } }));
+      } else {
+        setProviderStates(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], status: 'error', error: res?.error || 'Connection test failed', saving: false } }));
+      }
+    } catch (err) {
+      setProviderStates(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], status: 'error', error: err.message, saving: false } }));
+    }
+  };
+
+  const handleFetchModels = async (providerKey) => {
+    setModelLists(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], loading: true, error: null } }));
+    try {
+      const res = await listAiModels({ providerKey });
+      if (res?.success && Array.isArray(res.models)) {
+        setModelLists(prev => ({ ...prev, [providerKey]: { models: res.models, loading: false, error: null, fetchedAt: Date.now() } }));
+      } else {
+        setModelLists(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], loading: false, error: res?.error || 'Failed to load models' } }));
+      }
+    } catch (err) {
+      setModelLists(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], loading: false, error: err.message } }));
+    }
+  };
+
+  const handleRemoveKey = async (providerKey) => {
+    if (!window.confirm(`Remove the API key for ${PROVIDER_CONFIG[providerKey]?.name || providerKey}? This cannot be undone.`)) {
+      return;
+    }
+    try {
+      const backendResult = await saveAiProviderConfig({
         providerKey,
-        model: editingModels[providerKey] || currentProvider.model || '',
-        apiKey: currentProvider.apiKey || '',
-        baseURL: updatedProvider.baseURL,
+        apiKey: '',
+        model: config?.aiProviders?.[providerKey]?.model || '',
         enabled: true
       });
-    } catch (backendErr) {
-      console.warn('Local backend save notice:', backendErr.message);
-    }
-
-    if (user?.uid) {
-      try {
-        await saveSettings(user.uid, updatedConfig);
-      } catch (e) {
-        console.warn('Firestore save notice:', e.message);
+      const updatedConfig = backendResult || config;
+      if (user?.uid) {
+        try {
+          const firestoreUpdate = { ...updatedConfig };
+          if (firestoreUpdate.aiProviders?.[providerKey]) {
+            firestoreUpdate.aiProviders[providerKey].isConfigured = false;
+          }
+          await saveSettings(user.uid, firestoreUpdate);
+        } catch (e) { console.warn('Firestore save notice:', e.message); }
       }
+      if (config?.activeProvider === providerKey) {
+        try { await setActiveAiProvider('gemini'); } catch {}
+      }
+      onRefreshConfig(updatedConfig);
+      setProviderStates(prev => ({ ...prev, [providerKey]: { status: 'not-configured', error: null, message: null } }));
+      setModelLists(prev => ({ ...prev, [providerKey]: undefined }));
+      setReplacingKey(prev => ({ ...prev, [providerKey]: false }));
+      onShowToast?.({ type: 'info', title: 'Key removed', message: `API key removed for ${PROVIDER_CONFIG[providerKey]?.name || providerKey}` });
+    } catch (err) {
+      onShowToast?.({ type: 'error', title: 'Error', message: err.message });
     }
-
-    onRefreshConfig(updatedConfig);
   };
 
   const handleSetActiveAi = async (providerKey) => {
@@ -591,499 +710,582 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
       onRefreshConfig(updatedConfig);
       onShowToast?.({
         type: 'success',
-        title: 'Active Provider Updated',
-        message: `Active AI provider set to ${config?.aiProviders?.[providerKey]?.name || providerKey}`
+        title: 'Default provider updated',
+        message: `Default AI provider set to ${PROVIDER_CONFIG[providerKey]?.name || providerKey}`
       });
     } catch (err) {
       onShowToast?.({ type: 'error', title: 'Error', message: err.message });
     }
   };
 
-  const handleTestAi = async (providerKey) => {
-    setAiTestStatus(prev => ({
-      ...prev,
-      [providerKey]: { loading: true }
-    }));
+  const handleModelChange = async (providerKey, newModel) => {
+    setEditingModels(prev => ({ ...prev, [providerKey]: newModel }));
+    const currentProvider = config?.aiProviders?.[providerKey] || {};
+    const updatedProvider = { ...currentProvider, model: newModel };
+    const updatedConfig = stripUndefined({
+      ...config,
+      aiProviders: {
+        ...config?.aiProviders,
+        [providerKey]: updatedProvider
+      }
+    });
 
     try {
-      const apiKey = editingKeys[providerKey];
-      const model = editingModels[providerKey] || config?.aiProviders?.[providerKey]?.model;
-      const baseURL = editingBaseUrls[providerKey] || config?.aiProviders?.[providerKey]?.baseURL || '';
-
-      const res = await testAiConnection({ providerKey, apiKey, model, baseURL });
-      if (res && res.success) {
-        setAiTestStatus(prev => ({
-          ...prev,
-          [providerKey]: { loading: false, success: true, message: res.message }
-        }));
-      } else {
-        setAiTestStatus(prev => ({
-          ...prev,
-          [providerKey]: { loading: false, success: false, error: res?.error || 'Connection test failed' }
-        }));
-      }
-    } catch (err) {
-      setAiTestStatus(prev => ({
-        ...prev,
-        [providerKey]: { loading: false, success: false, error: err.message || 'Connection test failed' }
-      }));
+      await saveAiProviderConfig({
+        providerKey,
+        model: newModel,
+        apiKey: currentProvider.apiKey || '',
+        baseURL: providerKey === 'custom' ? (editingBaseUrls[providerKey] || currentProvider.baseURL) : undefined,
+        enabled: true
+      });
+    } catch (backendErr) {
+      console.warn('Local backend save notice:', backendErr.message);
     }
+
+    if (user?.uid) {
+      try {
+        await saveSettings(user.uid, updatedConfig);
+      } catch (e) {
+        console.warn('Firestore save notice:', e.message);
+      }
+    }
+
+    onRefreshConfig(updatedConfig);
+    onShowToast?.({
+      type: 'info',
+      title: 'Model saved',
+      message: `${PROVIDER_CONFIG[providerKey]?.name || providerKey} model set to ${friendlyModelName(newModel)}`
+    });
+  };
+
+  const toggleExpand = (key) => {
+    setExpandedKey(expandedKey === key ? null : key);
+  };
+
+  // Auto-fetch models when expanding a configured provider's card
+  React.useEffect(() => {
+    if (!expandedKey) return;
+    const provider = config?.aiProviders?.[expandedKey];
+    if (provider?.isConfigured) {
+      const cached = modelLists[expandedKey];
+      if (!cached || !cached.models || (Date.now() - (cached.fetchedAt || 0) > 600000)) {
+        handleFetchModels(expandedKey);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandedKey]);
+
+  const renderModelPicker = (key, provider) => {
+    const status = getEffectiveStatus(key);
+    const isConfigured = provider.isConfigured;
+    
+    if (status !== 'connected' && status !== 'key-saved' && !isConfigured) {
+      return (
+        <div>
+          <input type="text" className="form-input" disabled value="Verify your API key first" />
+        </div>
+      );
+    }
+
+    const ml = modelLists[key];
+    const hasFetched = ml?.models?.length > 0;
+    const fallbackModels = provider.supportedModels || [];
+    // Normalize: live models are {id, name} objects, fallback are strings
+    const modelIds = hasFetched ? ml.models.map(m => m.id) : fallbackModels;
+    const current = editingModels[key] || provider.model;
+
+    // If the saved model isn't in the list, add it at the top to avoid silent failure
+    if (current && !modelIds.includes(current)) {
+      modelIds.unshift(current);
+    }
+
+    return (
+      <div className="model-picker-container">
+        {ml?.loading ? (
+          <div className="skeleton-loader" style={{ height: '36px', borderRadius: '4px' }}></div>
+        ) : (
+          modelIds.length > 0 ? (
+            <ModelSelect value={current} options={modelIds} onChange={val => handleModelChange(key, val)} />
+          ) : (
+            <input
+              type="text"
+              value={editingModels[key] !== undefined ? editingModels[key] : (provider.model || '')}
+              onChange={e => setEditingModels(prev => ({ ...prev, [key]: e.target.value }))}
+              onBlur={e => handleModelChange(key, e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleModelChange(key, e.target.value); }}
+              className="form-input"
+              placeholder="Model name"
+            />
+          )
+        )}
+        <div className="model-refresh-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px' }}>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            {hasFetched ? `${modelIds.length} models from ${PROVIDER_CONFIG[key]?.name || key}` : (fallbackModels.length > 0 ? '(cached list)' : '')}
+          </span>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleFetchModels(key)} disabled={ml?.loading}>
+            <RefreshCw size={12} className={ml?.loading ? 'spin-icon' : ''} /> Refresh models
+          </button>
+        </div>
+        {ml?.error && <div style={{ color: 'var(--color-error)', fontSize: '0.8rem', marginTop: '4px' }}>{ml.error}</div>}
+      </div>
+    );
+  };
+
+  const renderApiKeyPanel = (key, provider) => {
+    const meta = PROVIDER_CONFIG[key] || { name: key, keyPrefix: '' };
+    const status = getEffectiveStatus(key);
+    const isReplacing = replacingKey[key];
+    const hasKey = provider.isConfigured;
+    const isSaving = providerStates[key]?.saving;
+
+    return (
+      <>
+        <div className="provider-section">
+          <div className="provider-section-title">Connection</div>
+          
+          {!hasKey || isReplacing ? (
+            <div className="apikey-input-area">
+              <label className="form-label" htmlFor={`apikey-${key}`}>
+                API key
+              </label>
+              <div className="password-input-wrapper">
+                <input
+                  id={`apikey-${key}`}
+                  type={showToken[key] ? "text" : "password"}
+                  placeholder={meta.keyPrefix ? `Paste ${meta.keyPrefix}...` : 'Paste your API key'}
+                  value={editingKeys[key] || ''}
+                  onChange={e => setEditingKeys(prev => ({ ...prev, [key]: e.target.value }))}
+                  className="form-input"
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  className="password-toggle-btn"
+                  onClick={() => setShowToken(prev => ({ ...prev, [key]: !prev[key] }))}
+                  aria-label={showToken[key] ? 'Hide token' : 'Show token'}
+                >
+                  {showToken[key] ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              {key === 'custom' && (
+                <>
+                  <label className="form-label" htmlFor={`baseurl-${key}`} style={{ marginTop: 'var(--sp-3)' }}>
+                    Base URL
+                  </label>
+                  <input
+                    id={`baseurl-${key}`}
+                    type="text"
+                    value={editingBaseUrls[key] !== undefined ? editingBaseUrls[key] : (provider.baseURL || 'https://api.openai.com/v1')}
+                    onChange={e => setEditingBaseUrls(prev => ({ ...prev, [key]: e.target.value }))}
+                    className="form-input"
+                    placeholder="https://api.openai.com/v1"
+                  />
+                </>
+              )}
+              <div style={{ display: 'flex', gap: '8px', marginTop: '8px', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => handleSaveAndVerify(key, editingKeys[key])}
+                  disabled={!editingKeys[key] || isSaving}
+                >
+                  {isSaving ? <><RefreshCw size={13} className="spin-icon" /> Saving...</> : 'Save & verify'}
+                </button>
+                {isReplacing && (
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setReplacingKey(prev => ({...prev, [key]: false})); setEditingKeys(prev => ({...prev, [key]: ''})); }}>
+                    Cancel
+                  </button>
+                )}
+                {meta.keyPage && (
+                  <a href={meta.keyPage} target="_blank" rel="noopener noreferrer" className="provider-setup-link" style={{ marginLeft: 'auto', fontSize: '0.85rem' }}>
+                    Get a key <ExternalLink size={12} style={{ display: 'inline' }} />
+                  </a>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="apikey-saved-area">
+              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                Saved: <code style={{ userSelect: 'all' }}>{provider.maskedKey}</code>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setReplacingKey(prev => ({ ...prev, [key]: true }))}>
+                  Replace key
+                </button>
+                <button type="button" className="btn btn-secondary btn-sm" style={{ color: 'var(--color-error)' }} onClick={() => handleRemoveKey(key)}>
+                  <Trash2 size={13} /> Remove key
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="provider-section">
+          <div className="provider-section-title">Model</div>
+          {renderModelPicker(key, provider)}
+        </div>
+
+        <div className="provider-actions">
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => handleTestConnection(key)}
+            disabled={!provider.isConfigured || status === 'verifying'}
+          >
+            {status === 'verifying' ? (
+              <><RefreshCw size={13} className="spin-icon" aria-hidden="true" /> Verifying…</>
+            ) : (
+              'Test connection'
+            )}
+          </button>
+          
+          <div className="provider-actions-right">
+             <div className="status-region" aria-live="polite">
+              {providerStates[key]?.status === 'error' && (
+                <div style={{ color: 'var(--color-error)', fontSize: '0.8rem', maxWidth: '200px', textAlign: 'right' }}>
+                  {providerStates[key].error}
+                </div>
+              )}
+             </div>
+
+            {config?.activeProvider !== key && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => handleSetActiveAi(key)}
+                disabled={!provider.isConfigured}
+                title={!provider.isConfigured ? 'Configure this provider first' : undefined}
+              >
+                Set as default
+              </button>
+            )}
+            {config?.activeProvider === key && (
+              <span className="provider-default-label">
+                <Check size={14} aria-hidden="true" /> Default
+              </span>
+            )}
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  const renderCopilotPanel = (key, provider) => (
+    <>
+      <div className="provider-section">
+        <div className="provider-section-title">Connection</div>
+        <p className="provider-section-desc">
+          GitHub Copilot authenticates through GitHub's Device Flow.
+        </p>
+
+        {/* Connected state */}
+        {provider.isConfigured && !copilotFlow.active && (
+          <div className="copilot-connected">
+            <span className="copilot-status-line">
+              <CheckCircle2 size={14} aria-hidden="true" />
+              Signed in with GitHub · Copilot subscription active
+            </span>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleStartCopilotAuth}
+              style={{ gap: 6 }}
+            >
+              <RefreshCw size={14} aria-hidden="true" /> Reconnect GitHub
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => handleRemoveKey(key)}
+              style={{ gap: 6, marginLeft: '8px', color: 'var(--color-error)' }}
+            >
+              <Trash2 size={14} aria-hidden="true" /> Remove
+            </button>
+          </div>
+        )}
+
+        {/* Disconnected state */}
+        {!provider.isConfigured && !copilotFlow.active && (
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={handleStartCopilotAuth}
+            style={{ gap: 8 }}
+          >
+            Connect GitHub Copilot
+          </button>
+        )}
+
+        {/* Active device flow */}
+        {copilotFlow.active && copilotFlow.userCode && (
+          <div className="copilot-flow-card">
+            <div className="copilot-flow-top">
+              <div>
+                <div className="form-label">One-time verification code</div>
+                <div className="copilot-user-code">{copilotFlow.userCode}</div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => handleCopyAndOpenGithub(copilotFlow.userCode, copilotFlow.verificationUri)}
+                style={{ gap: 8 }}
+              >
+                {copilotFlow.copied ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
+                {copilotFlow.copied ? 'Copied! Opening GitHub…' : 'Copy and open GitHub'}
+                <ExternalLink size={14} aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="copilot-flow-actions">
+              <button
+                type="button"
+                className="btn btn-primary btn-sm copilot-verify-btn"
+                onClick={() => handleCheckCopilotStatus(true)}
+                disabled={copilotFlow.checking}
+                aria-busy={copilotFlow.checking || undefined}
+              >
+                {copilotFlow.checking ? (
+                  <><RefreshCw size={13} className="spin-icon" aria-hidden="true" /> Verifying…</>
+                ) : (
+                  <><CheckCircle2 size={14} aria-hidden="true" /> Complete connection</>
+                )}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleCancelCopilotAuth}
+                style={{ marginLeft: 'auto' }}
+              >
+                Cancel
+              </button>
+            </div>
+
+            <div
+              className={`copilot-status ${copilotFlow.error ? 'copilot-status-error' : ''}`}
+              role="status"
+              aria-live="polite"
+            >
+              {(copilotFlow.checking || copilotFlow.polling) && !copilotFlow.error && (
+                <RefreshCw size={13} className="spin-icon" aria-hidden="true" />
+              )}
+              <span>
+                {copilotFlow.checking
+                  ? 'Verifying authorization…'
+                  : (copilotFlow.error || copilotFlow.statusMessage || 'Waiting for GitHub authorization…')}
+              </span>
+            </div>
+
+            {copilotFlow.error && (
+              <div className="copilot-error-box">
+                <div className="copilot-error-msg">
+                  <AlertCircle size={15} aria-hidden="true" />
+                  <span>{copilotFlow.error}</span>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleStartCopilotAuth}
+                >
+                  Get new code
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* PAT fallback disclosure */}
+        <div className="divider-or"><span>or</span></div>
+        <button
+          type="button"
+          className="pat-disclosure-toggle"
+          onClick={() => setShowManualCopilotInput(!showManualCopilotInput)}
+          aria-expanded={showManualCopilotInput}
+        >
+          Use a personal access token instead
+          <ChevronDown
+            size={14}
+            className={showManualCopilotInput ? 'provider-chevron-open' : ''}
+            aria-hidden="true"
+          />
+        </button>
+
+        {showManualCopilotInput && (
+          <div style={{ marginTop: 'var(--sp-2)' }}>
+            <label className="form-label" htmlFor="copilot-pat">
+              GitHub token {provider.isConfigured && (
+                <span className="form-label-hint">(Saved: {provider.maskedKey})</span>
+              )}
+            </label>
+            <div className="password-input-wrapper">
+              <input
+                id="copilot-pat"
+                type={showCopilotToken ? 'text' : 'password'}
+                placeholder={provider.isConfigured ? 'Enter new token to update' : 'Paste ghu_… or personal access token'}
+                value={editingKeys.copilot || ''}
+                onChange={e => setEditingKeys(prev => ({ ...prev, copilot: e.target.value }))}
+                className="form-input"
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                className="password-toggle-btn"
+                onClick={() => setShowCopilotToken(!showCopilotToken)}
+                aria-label={showCopilotToken ? 'Hide token' : 'Show token'}
+              >
+                {showCopilotToken ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+            <div style={{ marginTop: '8px' }}>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => handleSaveAndVerify('copilot', editingKeys.copilot)} disabled={!editingKeys.copilot || providerStates.copilot?.saving}>
+                {providerStates.copilot?.saving ? <><RefreshCw size={13} className="spin-icon" /> Saving...</> : 'Save & verify'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="provider-section">
+        <div className="provider-section-title">Model</div>
+        {renderModelPicker(key, provider)}
+      </div>
+
+      <div className="provider-actions">
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          onClick={() => handleTestConnection(key)}
+          disabled={!provider.isConfigured || getEffectiveStatus(key) === 'verifying'}
+        >
+          {getEffectiveStatus(key) === 'verifying' ? (
+            <><RefreshCw size={13} className="spin-icon" aria-hidden="true" /> Verifying…</>
+          ) : (
+            'Test connection'
+          )}
+        </button>
+        
+        <div className="provider-actions-right">
+            <div className="status-region" aria-live="polite">
+            {providerStates[key]?.status === 'error' && (
+              <div style={{ color: 'var(--color-error)', fontSize: '0.8rem', maxWidth: '200px', textAlign: 'right' }}>
+                {providerStates[key].error}
+              </div>
+            )}
+            </div>
+            {config?.activeProvider !== key && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => handleSetActiveAi(key)}
+                disabled={!provider.isConfigured}
+              >
+                Set as default
+              </button>
+            )}
+            {config?.activeProvider === key && (
+              <span className="provider-default-label">
+                <Check size={14} aria-hidden="true" /> Default
+              </span>
+            )}
+        </div>
+      </div>
+    </>
+  );
+
+  const renderProvider = ([key, provider]) => {
+    const meta = PROVIDER_CONFIG[key] || {
+      name: provider.name || key,
+      monogram: (provider.name || key).charAt(0)
+    };
+    const isDefault = config?.activeProvider === key;
+    const isExpanded = expandedKey === key;
+    const status = getEffectiveStatus(key);
+    const model = editingModels[key] || provider.model;
+
+    return (
+      <div key={key} className={`provider-row ${isExpanded ? 'provider-row-open' : ''}`}>
+        <button
+          type="button"
+          className="provider-row-header"
+          onClick={() => toggleExpand(key)}
+          aria-expanded={isExpanded}
+          aria-controls={`provider-panel-${key}`}
+        >
+          <div className="provider-row-left">
+            <ProviderLogo monogram={meta.monogram} />
+            <div className="provider-row-info">
+              <span className="provider-row-name">{meta.name}</span>
+              <span className="provider-row-model" title={model}>
+                {provider.isConfigured ? (model ? friendlyModelName(model) : '') : 'Add an API key'}
+              </span>
+            </div>
+          </div>
+          <div className="provider-row-right">
+            <StatusBadge status={status} lastVerifiedAt={providerStates[key]?.lastVerifiedAt} />
+            {isDefault && <span className="status-badge status-badge-default">Default</span>}
+            <ChevronDown
+              size={16}
+              className={`provider-chevron ${isExpanded ? 'provider-chevron-open' : ''}`}
+              aria-hidden="true"
+            />
+          </div>
+        </button>
+
+        {isExpanded && (
+          <div
+            className="provider-row-panel"
+            id={`provider-panel-${key}`}
+            role="region"
+            aria-label={`${meta.name} settings`}
+          >
+            {key === 'copilot'
+              ? renderCopilotPanel(key, provider)
+              : renderApiKeyPanel(key, provider)}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const aiProvidersList = config?.aiProviders ? Object.entries(config.aiProviders) : [];
 
+  const sorted = [...aiProvidersList].sort(([kA, pA], [kB, pB]) => {
+    const dA = config?.activeProvider === kA;
+    const dB = config?.activeProvider === kB;
+    if (dA !== dB) return dA ? -1 : 1;
+    if ((pA.isConfigured ? 1 : 0) !== (pB.isConfigured ? 1 : 0)) return pA.isConfigured ? -1 : 1;
+    return 0;
+  });
+
+  const inUse = sorted.filter(([, p]) => p.isConfigured);
+  const available = sorted.filter(([, p]) => !p.isConfigured);
+
   return (
     <div>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: 12,
-          background: 'var(--bg-tertiary)',
-          borderRadius: 'var(--radius-md)',
-          border: '1px solid var(--border-subtle)',
-          marginBottom: 20,
-          fontSize: 13
-        }}
-      >
-        <Shield size={16} style={{ color: 'var(--success)', flexShrink: 0 }} />
-        <span>
-          <strong>Encrypted at Rest:</strong> All API keys are securely encrypted using AES-256-GCM. Keys are never logged or exposed in client responses.
-        </span>
+      <p className="pane-description">
+        Configure AI providers for email generation. The default provider is used for all AI features.
+      </p>
+      <div className="encryption-notice">
+        <Lock size={14} aria-hidden="true" />
+        <span>API keys are encrypted at rest and never sent back to the browser.</span>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {aiProvidersList.map(([key, provider]) => {
-          const isActive = config?.activeProvider === key;
-          const testRes = aiTestStatus[key];
-          const meta = PROVIDER_META[key] || { name: provider.name || key, brandClass: 'brand-custom', dotColor: '#64748b' };
-          const isExpanded = expandedMap[key] !== undefined ? expandedMap[key] : isActive;
+      {inUse.length > 0 && (
+        <div className="provider-group">
+          <div className="provider-group-label">
+            In use <span className="provider-group-count">{inUse.length}</span>
+          </div>
+          {inUse.map(renderProvider)}
+        </div>
+      )}
 
-          if (!isExpanded) {
-            return (
-              <div
-                key={key}
-                className="provider-row-collapsed"
-                onClick={() => toggleExpand(key)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={e => e.key === 'Enter' && toggleExpand(key)}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      backgroundColor: meta.dotColor,
-                      display: 'inline-block',
-                      flexShrink: 0
-                    }}
-                  />
-                  <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
-                    {meta.name}
-                  </span>
-                  {isActive && (
-                    <span className={`badge-counter ${meta.brandClass}`} style={{ fontSize: 11, padding: '2px 8px' }}>
-                      Active Model
-                    </span>
-                  )}
-                  {provider.isConfigured ? (
-                    <span style={{ color: 'var(--success)', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      <Check size={12} /> Configured
-                    </span>
-                  ) : (
-                    <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-                      No Key Set
-                    </span>
-                  )}
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                    {editingModels[key] || provider.model}
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    style={{ padding: 4, color: 'var(--text-secondary)' }}
-                    aria-label={`Expand ${meta.name}`}
-                  >
-                    <ChevronDown size={15} />
-                  </button>
-                </div>
-              </div>
-            );
-          }
-
-          return (
-            <div
-              key={key}
-              className="provider-row-expanded"
-              style={{
-                padding: 16,
-                borderRadius: 'var(--radius-md)',
-                background: isActive ? 'rgba(37, 99, 235, 0.04)' : 'var(--bg-secondary)',
-                border: `1px solid ${isActive ? 'var(--accent-primary)' : 'var(--border-subtle)'}`,
-                borderLeft: `3px solid ${meta.dotColor}`
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: 14,
-                  cursor: 'pointer'
-                }}
-                onClick={() => toggleExpand(key)}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      backgroundColor: meta.dotColor,
-                      display: 'inline-block',
-                      flexShrink: 0
-                    }}
-                  />
-                  <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
-                    {meta.name}
-                  </span>
-                  {isActive && (
-                    <span className={`badge-counter ${meta.brandClass}`} style={{ fontSize: 11, padding: '2px 8px' }}>
-                      Active Model
-                    </span>
-                  )}
-                  {provider.isConfigured ? (
-                    <span style={{ color: 'var(--success)', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      <Check size={13} /> Key Configured
-                    </span>
-                  ) : (
-                    <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-                      No Key Set
-                    </span>
-                  )}
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} onClick={e => e.stopPropagation()}>
-                  <button
-                    type="button"
-                    className={`btn ${isActive ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-                    onClick={() => handleSetActiveAi(key)}
-                    disabled={isActive}
-                  >
-                    {isActive ? 'Current Default' : 'Set as Active'}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    style={{ padding: 4, color: 'var(--text-secondary)' }}
-                    onClick={() => toggleExpand(key)}
-                    aria-label={`Collapse ${meta.name}`}
-                  >
-                    <ChevronUp size={15} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Inputs */}
-              {key === 'copilot' ? (
-                <div>
-                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
-                    GitHub Copilot authenticates securely through GitHub's Device Flow. No API key required.
-                  </div>
-
-                  {copilotFlow.active && copilotFlow.userCode ? (
-                    <div
-                      style={{
-                        background: 'var(--bg-tertiary)',
-                        border: '1px solid var(--primary-light)',
-                        borderRadius: 'var(--radius-md)',
-                        padding: 18,
-                        marginBottom: 14
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', marginBottom: 14 }}>
-                        <div>
-                          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-                            One-Time Verification Code:
-                          </div>
-                          <div
-                            style={{
-                              display: 'inline-block',
-                              padding: '8px 18px',
-                              background: 'var(--bg-secondary)',
-                              border: '1px solid var(--border-glow)',
-                              borderRadius: 'var(--radius-sm)',
-                              fontSize: 24,
-                              fontWeight: 800,
-                              letterSpacing: 4,
-                              fontFamily: 'var(--font-mono)',
-                              color: 'var(--text-primary)'
-                            }}
-                          >
-                            {copilotFlow.userCode}
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          className="btn btn-primary"
-                          onClick={() => handleCopyAndOpenGithub(copilotFlow.userCode, copilotFlow.verificationUri)}
-                          style={{ gap: 8, padding: '10px 18px', fontSize: 13, fontWeight: 700 }}
-                        >
-                          {copilotFlow.copied ? <Check size={16} style={{ color: 'var(--success)' }} /> : <Copy size={16} />}
-                          {copilotFlow.copied ? 'Code Copied! Opening GitHub...' : 'Copy and Open GitHub to Authenticate'}
-                          <ExternalLink size={14} />
-                        </button>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', paddingTop: 10, borderTop: '1px solid var(--border-subtle)' }}>
-                        <button
-                          type="button"
-                          className="btn btn-primary btn-sm"
-                          onClick={() => handleCheckCopilotStatus(true)}
-                          disabled={copilotFlow.checking}
-                          style={{ gap: 6, background: '#10b981', borderColor: '#059669', color: '#fff' }}
-                        >
-                          {copilotFlow.checking ? (
-                            <>
-                              <RefreshCw size={13} className="spin-icon" /> Verifying...
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle2 size={14} /> I've Authorized — Complete Connection
-                            </>
-                          )}
-                        </button>
-
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-sm"
-                          onClick={handleCancelCopilotAuth}
-                          style={{ marginLeft: 'auto' }}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-
-                      {/* Real-time Status Indicator */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: copilotFlow.error ? 'var(--danger)' : 'var(--primary-light)', marginTop: 12 }}>
-                        {(copilotFlow.checking || copilotFlow.polling) && !copilotFlow.error && (
-                          <RefreshCw size={13} className="spin-icon" />
-                        )}
-                        <span>
-                          {copilotFlow.checking
-                            ? 'Verifying authorization status with GitHub...'
-                            : (copilotFlow.error || copilotFlow.statusMessage || 'Waiting for you to authorize on GitHub...')}
-                        </span>
-                      </div>
-
-                      {/* Error Box with Retry Option */}
-                      {copilotFlow.error && (
-                        <div
-                          style={{
-                            marginTop: 10,
-                            padding: '10px 14px',
-                            borderRadius: 'var(--radius-sm)',
-                            fontSize: 12,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: 10,
-                            background: 'var(--danger-bg)',
-                            color: '#f87171',
-                            border: '1px solid rgba(239, 68, 68, 0.25)'
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <AlertCircle size={15} style={{ flexShrink: 0 }} />
-                            <span>{copilotFlow.error}</span>
-                          </div>
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-sm"
-                            onClick={handleStartCopilotAuth}
-                            style={{ fontSize: 12, padding: '3px 8px' }}
-                          >
-                            Get New Code
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        onClick={handleStartCopilotAuth}
-                        style={{ gap: 8 }}
-                      >
-                        <Server size={15} />
-                        {provider.isConfigured ? 'Re-Authenticate GitHub Copilot' : 'Authenticate GitHub Copilot'}
-                      </button>
-
-                      {provider.isConfigured && (
-                        <span style={{ fontSize: 13, color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                          <CheckCircle2 size={16} /> Subscription Connected
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Fallback Manual Token Input Toggle */}
-                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-subtle)' }}>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => setShowManualCopilotInput(!showManualCopilotInput)}
-                      style={{ fontSize: 12, color: 'var(--text-secondary)', gap: 6 }}
-                    >
-                      <Key size={13} />
-                      {showManualCopilotInput ? 'Hide manual token input' : 'Or enter GitHub token / PAT manually'}
-                    </button>
-
-                    {showManualCopilotInput && (
-                      <div style={{ marginTop: 10 }}>
-                        <label className="form-label" style={{ fontSize: 12 }}>
-                          GitHub Token (ghu_... or PAT) {provider.isConfigured && <span style={{ color: 'var(--text-muted)' }}>(Saved: {provider.maskedKey})</span>}
-                        </label>
-                        <input
-                          type="password"
-                          placeholder={provider.isConfigured ? 'Enter new token to update...' : 'Paste ghu_... or GitHub Personal Access Token'}
-                          value={editingKeys['copilot'] !== undefined ? editingKeys['copilot'] : ''}
-                          onChange={e => setEditingKeys({ ...editingKeys, copilot: e.target.value })}
-                          onBlur={e => handleSaveApiKey('copilot', e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter') handleSaveApiKey('copilot', e.target.value); }}
-                          className="form-input"
-                          style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Model Selection for Copilot — Auto-saved on change without separate button */}
-                  <div style={{ marginTop: 12, maxWidth: 320 }}>
-                    <label className="form-label" style={{ fontSize: 12 }}>Copilot Model</label>
-                    <select
-                      className="form-select"
-                      value={editingModels[key] || provider.model || 'gpt-4o'}
-                      onChange={e => handleModelChange('copilot', e.target.value)}
-                    >
-                      {(provider.supportedModels || ['gpt-4o', 'gpt-4o-mini']).map(m => (
-                        <option key={m} value={m}>{m}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: key === 'custom' ? '1.5fr 1fr 1fr' : '1.5fr 1fr', gap: 12 }}>
-                  {/* API Key Input — Auto-saves on blur or enter */}
-                  <div>
-                    <label className="form-label" style={{ fontSize: 12 }}>
-                      API Key {provider.isConfigured && <span style={{ color: 'var(--text-muted)' }}>(Saved: {provider.maskedKey})</span>}
-                    </label>
-                    <input
-                      type="password"
-                      placeholder={provider.isConfigured ? 'Enter new key to update...' : 'Paste your API key here (sk-...)'}
-                      value={editingKeys[key] || ''}
-                      onChange={e => setEditingKeys({ ...editingKeys, [key]: e.target.value })}
-                      onBlur={e => handleSaveApiKey(key, e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') handleSaveApiKey(key, e.target.value); }}
-                      className="form-input"
-                      style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}
-                    />
-                  </div>
-
-                  {/* Model Dropdown — Auto-saves on select without separate button */}
-                  <div>
-                    <label className="form-label" style={{ fontSize: 12 }}>Model</label>
-                    {provider.supportedModels && provider.supportedModels.length > 0 ? (
-                      <select
-                        className="form-select"
-                        value={editingModels[key] || provider.model}
-                        onChange={e => handleModelChange(key, e.target.value)}
-                      >
-                        {provider.supportedModels.map(m => (
-                          <option key={m} value={m}>{m}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type="text"
-                        value={editingModels[key] !== undefined ? editingModels[key] : provider.model}
-                        onChange={e => setEditingModels({ ...editingModels, [key]: e.target.value })}
-                        onBlur={e => handleModelChange(key, e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') handleModelChange(key, e.target.value); }}
-                        className="form-input"
-                        placeholder="model name"
-                      />
-                    )}
-                  </div>
-
-                  {/* Custom Base URL if custom provider */}
-                  {key === 'custom' && (
-                    <div>
-                      <label className="form-label" style={{ fontSize: 12 }}>Base URL</label>
-                      <input
-                        type="text"
-                        value={editingBaseUrls[key] !== undefined ? editingBaseUrls[key] : (provider.baseURL || 'https://api.openai.com/v1')}
-                        onChange={e => setEditingBaseUrls({ ...editingBaseUrls, [key]: e.target.value })}
-                        onBlur={e => handleSaveBaseUrl(key, e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') handleSaveBaseUrl(key, e.target.value); }}
-                        className="form-input"
-                        placeholder="https://api.openai.com/v1"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Test Connection Banner if present */}
-              {testRes && (
-                <div
-                  style={{
-                    marginTop: 10,
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-sm)',
-                    fontSize: 12,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    background: testRes.success ? 'var(--success-bg)' : 'var(--danger-bg)',
-                    color: testRes.success ? 'var(--success)' : '#f87171'
-                  }}
-                >
-                  {testRes.success ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
-                  <span>{testRes.message || testRes.error}</span>
-                </div>
-              )}
-
-              {/* Actions: Test Connection only (no redundant save button) */}
-              <div style={{ marginTop: 12, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => handleTestAi(key)}
-                  disabled={testRes?.loading}
-                >
-                  {testRes?.loading ? (
-                    <>
-                      <RefreshCw size={13} className="spin-icon" /> Testing...
-                    </>
-                  ) : (
-                    'Test Connection'
-                  )}
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      {available.length > 0 && (
+        <div className="provider-group">
+          <div className="provider-group-label">
+            Available <span className="provider-group-count">{available.length}</span>
+          </div>
+          {available.map(renderProvider)}
+        </div>
+      )}
     </div>
   );
 }

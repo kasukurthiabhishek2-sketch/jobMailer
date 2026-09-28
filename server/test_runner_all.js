@@ -21,6 +21,7 @@ const testSuites = [
   { name: 'Security Guardrails & Hardening', file: 'test_security_guardrails.js' },
   { name: 'Ephemeral Uploads & Zero Retention Policy', file: 'test_ephemeral_uploads.js' },
   { name: 'AI Provider 429 Backoff & Retry Logic', file: 'test_ai_retry.js' },
+  { name: 'AI Provider Model Listing & Filtering', file: 'test_model_listing.js' },
   { name: 'SMTP Pacing, Response Recording & Retry Pipeline', file: 'test_smtp_pipeline.js' }
 ];
 

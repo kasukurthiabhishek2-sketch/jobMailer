@@ -579,9 +579,108 @@ async function testAiConnection(providerKey, config) {
   }
 }
 
+/**
+ * Fetch available models from a provider's API.
+ * Returns { success, models: [{ id, name, created? }], provider } or { success: false, error }.
+ */
+async function listProviderModels(providerKey, apiKey) {
+  if (!apiKey || !apiKey.trim()) {
+    return { success: false, error: 'API key is required to list models.' };
+  }
+  const trimmedKey = apiKey.trim();
+
+  try {
+    if (providerKey === 'gemini') {
+      const url = 'https://generativelanguage.googleapis.com/v1beta/models';
+      const res = await fetch(`${url}?key=${trimmedKey}&pageSize=100`);
+      if (!res.ok) {
+        const text = await res.text();
+        let msg = `Gemini models API error (${res.status})`;
+        try { const j = JSON.parse(text); msg = j.error?.message || msg; } catch {}
+        return { success: false, error: msg };
+      }
+      const data = await res.json();
+      const models = (data.models || [])
+        .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
+        .map(m => ({
+          id: (m.name || '').replace(/^models\//, ''),
+          name: m.displayName || m.name || '',
+          created: null
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      return { success: true, models, provider: providerKey };
+    }
+
+    if (providerKey === 'copilot') {
+      const models = [
+        { id: 'gpt-4o', name: 'GPT-4o', created: null },
+        { id: 'gpt-4o-mini', name: 'GPT-4o Mini', created: null }
+      ];
+      return { success: true, models, provider: providerKey };
+    }
+
+    // OpenAI-compatible providers
+    const BASE_URLS = {
+      openai: 'https://api.openai.com/v1',
+      groq: 'https://api.groq.com/openai/v1',
+      grok: 'https://api.x.ai/v1',
+      nvidia: 'https://integrate.api.nvidia.com/v1',
+      custom: 'https://api.openai.com/v1'
+    };
+    const baseURL = BASE_URLS[providerKey] || BASE_URLS.openai;
+    const endpoint = `${baseURL.replace(/\/+$/, '')}/models`;
+
+    const res = await fetch(endpoint, {
+      headers: { 'Authorization': `Bearer ${trimmedKey}` }
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      let msg = `Models API error (${res.status})`;
+      try { const j = JSON.parse(text); msg = j.error?.message || j.message || msg; } catch {}
+      return { success: false, error: msg };
+    }
+    const data = await res.json();
+    let rawModels = data.data || data.models || [];
+
+    if (providerKey === 'openai') {
+      rawModels = rawModels.filter(m => {
+        const id = (m.id || '').toLowerCase();
+        return !id.includes('embedding') && !id.includes('whisper') &&
+               !id.includes('tts') && !id.includes('dall-e') &&
+               !id.includes('moderation') && !id.includes('audio') &&
+               !id.includes('davinci') && !id.includes('babbage');
+      });
+    } else if (providerKey === 'groq') {
+      rawModels = rawModels.filter(m => {
+        const id = (m.id || '').toLowerCase();
+        return !id.includes('whisper') && !id.includes('tts') &&
+               !id.includes('guard') && m.active !== false;
+      });
+    }
+
+    const models = rawModels.map(m => ({
+      id: m.id || '',
+      name: m.id || '',
+      created: m.created || null
+    }));
+
+    models.sort((a, b) => {
+      if (a.created && b.created) return b.created - a.created;
+      if (a.created) return -1;
+      if (b.created) return 1;
+      return a.id.localeCompare(b.id);
+    });
+
+    return { success: true, models, provider: providerKey };
+  } catch (err) {
+    return { success: false, error: err.message || 'Failed to fetch models' };
+  }
+}
+
 module.exports = {
   generateColdEmail,
   testAiConnection,
+  listProviderModels,
   cleanJsonOutput,
   buildPrompts,
   auditDraftClaims,
