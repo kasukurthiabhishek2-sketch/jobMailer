@@ -143,6 +143,12 @@ function getDecryptedConfig() {
     if (decrypted.aiProviders[key].apiKey) {
       decrypted.aiProviders[key].apiKey = decrypt(decrypted.aiProviders[key].apiKey);
     }
+    if (Array.isArray(decrypted.aiProviders[key].savedKeys)) {
+      decrypted.aiProviders[key].savedKeys = decrypted.aiProviders[key].savedKeys.map(k => ({
+        ...k,
+        apiKey: k.apiKey ? decrypt(k.apiKey) : ''
+      }));
+    }
   }
 
   // Decrypt SMTP passwords
@@ -166,9 +172,38 @@ function getPublicConfig() {
   for (const key of Object.keys(publicConfig.aiProviders)) {
     const rawEncrypted = publicConfig.aiProviders[key].apiKey;
     const plain = decrypt(rawEncrypted);
-    publicConfig.aiProviders[key].isConfigured = Boolean(plain && plain.trim().length > 0);
+    const hasPlain = Boolean(plain && plain.trim().length > 0);
     publicConfig.aiProviders[key].maskedKey = plain ? maskApiKey(plain) : '';
     delete publicConfig.aiProviders[key].apiKey; // NEVER send raw key
+
+    if (Array.isArray(publicConfig.aiProviders[key].savedKeys)) {
+      publicConfig.aiProviders[key].savedKeys = publicConfig.aiProviders[key].savedKeys.map(k => {
+        const itemPlain = decrypt(k.apiKey);
+        const itemMasked = itemPlain ? maskApiKey(itemPlain) : (k.maskedKey || '');
+        return {
+          id: k.id,
+          name: k.name || 'Primary Key',
+          maskedKey: itemMasked,
+          createdAt: k.createdAt || new Date().toISOString()
+        };
+      });
+      const hasSaved = publicConfig.aiProviders[key].savedKeys.some(k => Boolean(k.maskedKey));
+      publicConfig.aiProviders[key].isConfigured = Boolean(hasPlain || hasSaved);
+    } else {
+      if (hasPlain) {
+        const defaultId = publicConfig.aiProviders[key].selectedKeyId || 'default';
+        publicConfig.aiProviders[key].savedKeys = [{
+          id: defaultId,
+          name: 'Primary Key',
+          maskedKey: publicConfig.aiProviders[key].maskedKey,
+          createdAt: new Date().toISOString()
+        }];
+        publicConfig.aiProviders[key].selectedKeyId = defaultId;
+      } else {
+        publicConfig.aiProviders[key].savedKeys = [];
+      }
+      publicConfig.aiProviders[key].isConfigured = hasPlain;
+    }
   }
 
   if (Array.isArray(publicConfig.smtpProfiles)) {
@@ -189,7 +224,7 @@ function getPublicConfig() {
 /**
  * Update AI provider settings
  */
-function updateAiProvider(providerKey, { apiKey, model, baseURL, enabled }) {
+function updateAiProvider(providerKey, { apiKey, model, baseURL, enabled, keyName, savedKeys, selectedKeyId, deleteKeyId, renameKeyId, newName }) {
   const config = readConfigFile();
   if (!config.aiProviders[providerKey]) {
     config.aiProviders[providerKey] = {
@@ -199,12 +234,112 @@ function updateAiProvider(providerKey, { apiKey, model, baseURL, enabled }) {
     };
   }
 
-  if (apiKey !== undefined && apiKey !== null && apiKey !== '') {
-    config.aiProviders[providerKey].apiKey = encrypt(apiKey.trim());
+  const prov = config.aiProviders[providerKey];
+  if (!Array.isArray(prov.savedKeys)) {
+    prov.savedKeys = [];
+    if (prov.apiKey) {
+      prov.savedKeys.push({
+        id: prov.selectedKeyId || 'default',
+        name: 'Primary Key',
+        apiKey: prov.apiKey,
+        createdAt: new Date().toISOString()
+      });
+      prov.selectedKeyId = prov.selectedKeyId || 'default';
+    }
   }
-  if (model) config.aiProviders[providerKey].model = model;
-  if (baseURL !== undefined) config.aiProviders[providerKey].baseURL = baseURL;
-  if (enabled !== undefined) config.aiProviders[providerKey].enabled = enabled;
+
+  // Handle renaming a saved key
+  if (renameKeyId && newName) {
+    const target = prov.savedKeys.find(k => k.id === renameKeyId);
+    if (target) target.name = newName.trim();
+  }
+
+  // Handle deleting a saved key
+  if (deleteKeyId) {
+    prov.savedKeys = prov.savedKeys.filter(k => k.id !== deleteKeyId);
+    if (prov.selectedKeyId === deleteKeyId) {
+      if (prov.savedKeys.length > 0) {
+        prov.selectedKeyId = prov.savedKeys[0].id;
+        prov.apiKey = prov.savedKeys[0].apiKey;
+      } else {
+        prov.selectedKeyId = '';
+        prov.apiKey = '';
+        prov.isConfigured = false;
+      }
+    }
+  }
+
+  // Handle explicit savedKeys array
+  if (Array.isArray(savedKeys)) {
+    prov.savedKeys = savedKeys.map(k => {
+      let enc = k.apiKey;
+      if (enc && typeof enc === 'string' && !enc.includes(':')) {
+        enc = encrypt(enc.trim());
+      } else if (!enc) {
+        const match = prov.savedKeys.find(ex => ex.id === k.id);
+        if (match) enc = match.apiKey;
+      }
+      return {
+        id: k.id || ('key_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)),
+        name: k.name || 'API Key',
+        apiKey: enc || '',
+        createdAt: k.createdAt || new Date().toISOString()
+      };
+    });
+  }
+
+  // Handle adding or updating apiKey
+  if (apiKey !== undefined && apiKey !== null) {
+    if (typeof apiKey === 'string' && (apiKey.includes('...') || apiKey.includes('••'))) {
+      // Ignore masked keys passed inadvertently; do not overwrite real key with masked string
+    } else if (apiKey === '') {
+      prov.apiKey = '';
+      prov.isConfigured = false;
+      if (selectedKeyId) {
+        prov.savedKeys = prov.savedKeys.filter(k => k.id !== selectedKeyId);
+      } else {
+        prov.savedKeys = [];
+      }
+    } else {
+      const encrypted = encrypt(apiKey.trim());
+      const keyId = selectedKeyId || ('key_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
+      const existingIdx = prov.savedKeys.findIndex(k => k.id === keyId);
+      const name = (keyName && keyName.trim()) || (existingIdx >= 0 ? prov.savedKeys[existingIdx].name : (prov.savedKeys.length === 0 ? 'Primary Key' : `Key ${prov.savedKeys.length + 1}`));
+      const keyObj = {
+        id: keyId,
+        name,
+        apiKey: encrypted,
+        createdAt: existingIdx >= 0 ? prov.savedKeys[existingIdx].createdAt : new Date().toISOString()
+      };
+      if (existingIdx >= 0) {
+        prov.savedKeys[existingIdx] = keyObj;
+      } else {
+        prov.savedKeys.push(keyObj);
+      }
+      prov.apiKey = encrypted;
+      prov.selectedKeyId = keyId;
+      prov.isConfigured = true;
+    }
+  }
+
+  // Handle selecting an existing saved key
+  if (selectedKeyId && apiKey === undefined) {
+    prov.selectedKeyId = selectedKeyId;
+    const match = prov.savedKeys.find(k => k.id === selectedKeyId);
+    if (match && match.apiKey) {
+      prov.apiKey = match.apiKey;
+      prov.isConfigured = true;
+    }
+  }
+
+  if (model) {
+    prov.model = model;
+    if (prov.apiKey || (prov.savedKeys && prov.savedKeys.length > 0)) {
+      prov.isConfigured = true;
+    }
+  }
+  if (baseURL !== undefined) prov.baseURL = baseURL;
+  if (enabled !== undefined) prov.enabled = enabled;
 
   saveConfigFile(config);
   return getPublicConfig();

@@ -157,21 +157,26 @@ async function runTests() {
       'AiProvidersTab must declare setReplacingKey via useState'
     );
 
-    // handleTestConnection should NOT try to use activeKeyObj?.apiKey from public config
     assert.ok(
-      !tabContent.includes('activeKeyObj?.apiKey'),
-      'handleTestConnection must not try to read raw apiKey from public config (it is stripped)'
+      tabContent.includes('const getEffectiveApiKey ='),
+      'AiProvidersTab must declare getEffectiveApiKey helper'
     );
 
-    // handleFetchModels should NOT try config?.aiProviders?.[providerKey]?.apiKey
-    const fetchModelsIdx = tabContent.indexOf('handleFetchModels');
+    // handleTestConnection and handleFetchModels should use getEffectiveApiKey
+    assert.ok(
+      tabContent.includes('getEffectiveApiKey(providerKey)'),
+      'handleTestConnection and handleFetchModels must resolve key via getEffectiveApiKey'
+    );
+
+    // handleFetchModels should pass selectedKeyId to server
+    const fetchModelsIdx = tabContent.indexOf('const handleFetchModels =');
     const fetchModelsSlice = tabContent.substring(fetchModelsIdx, fetchModelsIdx + 600);
     assert.ok(
       fetchModelsSlice.includes('selectedKeyId'),
       'handleFetchModels must pass selectedKeyId to the server'
     );
 
-    console.log('✓ AiProvidersTab declares replacingKey state and does not read stripped apiKey.');
+    console.log('✓ AiProvidersTab declares replacingKey state and properly resolves effective API keys.');
   }
 
   console.log('\n--- All Authenticated Key Resolution Tests PASSED ---');

@@ -20,6 +20,7 @@ import {
   testAiConnection,
   listAiModels,
   startCopilotAuth,
+  cancelCopilotAuth,
   getCurrentCopilotFlow,
   checkCopilotStatus
 } from '../../services/api';
@@ -40,7 +41,13 @@ const PROVIDER_CONFIG = {
 const FRIENDLY_MODEL_NAMES = {
   'gemini-1.5-flash': 'Gemini 1.5 Flash',
   'gemini-1.5-pro': 'Gemini 1.5 Pro',
-  'gemini-2.0-flash-exp': 'Gemini 2.0 Flash',
+  'gemini-2.0-flash-exp': 'Gemini 2.0 Flash (Exp)',
+  'gemini-2.0-flash': 'Gemini 2.0 Flash',
+  'gemini-2.0-flash-lite': 'Gemini 2.0 Flash Lite',
+  'gemini-2.5-pro': 'Gemini 2.5 Pro',
+  'gemini-2.5-flash': 'Gemini 2.5 Flash',
+  'gemini-2.0-pro-exp-02-05': 'Gemini 2.0 Pro (Exp)',
+  'gemini-2.0-flash-thinking-exp-01-21': 'Gemini 2.0 Flash Thinking',
   'gpt-4o': 'GPT-4o',
   'gpt-4o-mini': 'GPT-4o Mini',
   'gpt-3.5-turbo': 'GPT-3.5 Turbo',
@@ -596,9 +603,10 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
     }
   }, [copilotFlow.checking, copilotFlow.deviceCode, onRefreshConfig, onShowToast]);
 
-  const handleCancelCopilotAuth = () => {
+  const handleCancelCopilotAuth = async () => {
     stopPolling();
     try { sessionStorage.removeItem('jdmail_copilot_flow'); } catch {}
+    try { await cancelCopilotAuth(); } catch {}
     setCopilotFlow({
       active: false, deviceCode: '', userCode: '', verificationUri: '',
       expiresIn: 0, expiresAt: 0, polling: false, copied: false,
@@ -662,23 +670,50 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
   const isProviderConfigured = useCallback((key, provider) => {
     if (!provider) return false;
     if (provider.isConfigured) return true;
+    if (key === 'copilot' && (provider.isConfigured || provider.connected)) return true;
     if (provider.apiKey && provider.apiKey.trim().length > 0) return true;
     if (provider.maskedKey && provider.maskedKey.trim().length > 0) return true;
     if (Array.isArray(provider.savedKeys) && provider.savedKeys.length > 0) return true;
     const status = providerStates[key]?.status;
     if (status === 'connected' || status === 'key-saved') return true;
-    if (config?.activeProvider === key) return true;
-    if (key === 'copilot' && (provider.isConfigured || provider.connected)) return true;
     return false;
-  }, [providerStates, config?.activeProvider]);
+  }, [providerStates]);
 
   const getEffectiveStatus = useCallback((providerKey) => {
     const ps = providerStates[providerKey];
     if (ps?.status) return ps.status;
     const provider = config?.aiProviders?.[providerKey];
-    if (isProviderConfigured(providerKey, provider)) return 'key-saved';
+    if (isProviderConfigured(providerKey, provider)) {
+      if (providerKey === 'copilot') return 'connected';
+      return 'key-saved';
+    }
     return 'not-configured';
   }, [providerStates, config?.aiProviders, isProviderConfigured]);
+
+  const getEffectiveApiKey = useCallback((providerKey) => {
+    const currentProvider = config?.aiProviders?.[providerKey] || {};
+    const savedKeys = getProviderSavedKeys(currentProvider);
+    const activeKeyId = currentProvider.selectedKeyId || savedKeys[0]?.id;
+    const activeKeyObj = savedKeys.find(k => k.id === activeKeyId) || savedKeys[0];
+
+    // 1. Check if user is typing a new unmasked key in the input field
+    const editing = editingKeys[providerKey]?.trim();
+    if (editing && !editing.includes('...') && !editing.includes('••')) {
+      return editing;
+    }
+
+    // 2. Check active saved key object for unmasked key
+    if (activeKeyObj?.apiKey && !activeKeyObj.apiKey.includes('...') && !activeKeyObj.apiKey.includes('••')) {
+      return activeKeyObj.apiKey.trim();
+    }
+
+    // 3. Check provider top-level apiKey for unmasked key
+    if (currentProvider.apiKey && !currentProvider.apiKey.includes('...') && !currentProvider.apiKey.includes('••')) {
+      return currentProvider.apiKey.trim();
+    }
+
+    return '';
+  }, [config?.aiProviders, editingKeys]);
 
   const handleSaveAndVerify = async (providerKey, rawKey, customKeyName) => {
     if (!rawKey?.trim()) return;
@@ -798,6 +833,7 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
       await saveAiProviderConfig({
         providerKey,
         selectedKeyId: keyId,
+        apiKey: (targetKey.apiKey && !targetKey.apiKey.includes('...') && !targetKey.apiKey.includes('••')) ? targetKey.apiKey : undefined,
         model: currentProvider.model || '',
         enabled: true
       });
@@ -811,6 +847,7 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
     });
 
     handleTestConnection(providerKey, targetKey.apiKey);
+    handleFetchModels(providerKey, targetKey.apiKey);
   };
 
   const handleRenameKey = async (providerKey, keyId, newName) => {
@@ -945,43 +982,106 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
     setProviderStates(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], status: 'verifying', error: null } }));
     try {
       const currentProvider = config?.aiProviders?.[providerKey] || {};
+      const savedKeys = getProviderSavedKeys(currentProvider);
+      const activeKeyId = currentProvider.selectedKeyId || savedKeys[0]?.id;
+
+      const keyToTest = (overrideKey && !overrideKey.includes('...') && !overrideKey.includes('••'))
+        ? overrideKey.trim()
+        : getEffectiveApiKey(providerKey);
+
       const model = editingModels[providerKey] || currentProvider.model;
       const baseURL = editingBaseUrls[providerKey] || currentProvider.baseURL || '';
-      // If a raw key is provided (e.g. just pasted), send it directly; otherwise let the server resolve from encrypted storage
+
       const res = await testAiConnection({
         providerKey,
-        apiKey: overrideKey || '',
+        apiKey: keyToTest,
         model,
         baseURL,
-        selectedKeyId: overrideKey ? undefined : (currentProvider.selectedKeyId || undefined)
+        selectedKeyId: activeKeyId || undefined
       });
+
       if (res?.success) {
-        setProviderStates(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], status: 'connected', error: null, message: res.message, lastVerifiedAt: Date.now(), saving: false } }));
+        setProviderStates(prev => ({
+          ...prev,
+          [providerKey]: {
+            ...prev[providerKey],
+            status: 'connected',
+            error: null,
+            message: res.message,
+            lastVerifiedAt: Date.now(),
+            saving: false
+          }
+        }));
       } else {
-        setProviderStates(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], status: 'error', error: res?.error || 'Connection test failed', saving: false } }));
+        setProviderStates(prev => ({
+          ...prev,
+          [providerKey]: {
+            ...prev[providerKey],
+            status: 'error',
+            error: res?.error || 'Connection test failed',
+            saving: false
+          }
+        }));
       }
     } catch (err) {
-      setProviderStates(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], status: 'error', error: err.message, saving: false } }));
+      setProviderStates(prev => ({
+        ...prev,
+        [providerKey]: {
+          ...prev[providerKey],
+          status: 'error',
+          error: err.message,
+          saving: false
+        }
+      }));
     }
   };
 
-  const handleFetchModels = async (providerKey) => {
+  const handleFetchModels = async (providerKey, overrideKey) => {
     setModelLists(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], loading: true, error: null } }));
     try {
       const currentProvider = config?.aiProviders?.[providerKey] || {};
-      // Let the server resolve the key from encrypted storage; only send raw key if user is typing one in right now
+      const savedKeys = getProviderSavedKeys(currentProvider);
+      const activeKeyId = currentProvider.selectedKeyId || savedKeys[0]?.id;
+
+      const keyToUse = (overrideKey && !overrideKey.includes('...') && !overrideKey.includes('••'))
+        ? overrideKey.trim()
+        : getEffectiveApiKey(providerKey);
+
       const res = await listAiModels({
         providerKey,
-        apiKey: editingKeys[providerKey] || '',
-        selectedKeyId: currentProvider.selectedKeyId || undefined
+        apiKey: keyToUse,
+        selectedKeyId: activeKeyId || undefined
       });
+
       if (res?.success && Array.isArray(res.models)) {
-        setModelLists(prev => ({ ...prev, [providerKey]: { models: res.models, loading: false, error: null, fetchedAt: Date.now() } }));
+        setModelLists(prev => ({
+          ...prev,
+          [providerKey]: {
+            models: res.models,
+            loading: false,
+            error: null,
+            fetchedAt: Date.now()
+          }
+        }));
       } else {
-        setModelLists(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], loading: false, error: res?.error || 'Failed to load models' } }));
+        setModelLists(prev => ({
+          ...prev,
+          [providerKey]: {
+            ...prev[providerKey],
+            loading: false,
+            error: res?.error || 'Failed to load models'
+          }
+        }));
       }
     } catch (err) {
-      setModelLists(prev => ({ ...prev, [providerKey]: { ...prev[providerKey], loading: false, error: err.message } }));
+      setModelLists(prev => ({
+        ...prev,
+        [providerKey]: {
+          ...prev[providerKey],
+          loading: false,
+          error: err.message
+        }
+      }));
     }
   };
 
@@ -1085,10 +1185,11 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
     });
 
     try {
+      const activeRawKey = getEffectiveApiKey(providerKey);
       await saveAiProviderConfig({
         providerKey,
         model: newModel,
-        apiKey: currentProvider.apiKey || '',
+        apiKey: activeRawKey || undefined,
         baseURL: providerKey === 'custom' ? (editingBaseUrls[providerKey] || currentProvider.baseURL) : undefined,
         enabled: true
       });
@@ -1136,7 +1237,12 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
     if (status !== 'connected' && status !== 'key-saved' && !isConfigured) {
       return (
         <div>
-          <input type="text" className="form-input" disabled value="Verify your API key first" />
+          <input
+            type="text"
+            className="form-input"
+            disabled
+            value={key === 'copilot' ? "Connect GitHub Copilot first" : "Verify your API key first"}
+          />
         </div>
       );
     }
@@ -1414,23 +1520,21 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
           </div>
         )}
 
-        <div className="provider-section">
-          <div className="provider-section-title">Model</div>
-          {renderModelPicker(key, provider)}
-        </div>
-
-        {(() => {
-          const savedKeys = getProviderSavedKeys(provider);
-          if (savedKeys.length < 2) return null;
-          const activeId = provider?.selectedKeyId || savedKeys[0]?.id;
-          return (
-            <div className="provider-section">
-              <div className="provider-section-title">Active Key for Testing</div>
+        {hasSavedKeys && (
+          <div className="provider-section">
+            <div className="provider-section-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Active Key</span>
+              <span style={{ fontSize: '0.8rem', fontWeight: 'normal', color: 'var(--text-secondary)' }}>
+                {savedKeys.length} {savedKeys.length === 1 ? 'key configured' : 'keys configured'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <select
                 className="form-input"
-                value={activeId}
+                value={activeKeyId}
                 onChange={e => handleSelectKey(key, e.target.value)}
-                style={{ maxWidth: '300px' }}
+                style={{ flex: 1 }}
+                aria-label="Select active API key from previously added keys"
               >
                 {savedKeys.map(k => (
                   <option key={k.id} value={k.id}>
@@ -1438,9 +1542,26 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
                   </option>
                 ))}
               </select>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  setAddingKey(prev => ({ ...prev, [key]: true }));
+                  setNewKeyName(prev => ({ ...prev, [key]: `Key ${savedKeys.length + 1}` }));
+                }}
+                title="Add another API key"
+                style={{ whiteSpace: 'nowrap' }}
+              >
+                <Plus size={13} /> Add Key
+              </button>
             </div>
-          );
-        })()}
+          </div>
+        )}
+
+        <div className="provider-section">
+          <div className="provider-section-title">Model</div>
+          {renderModelPicker(key, provider)}
+        </div>
 
         <div className="provider-actions">
           <button
@@ -1490,9 +1611,9 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
   const renderCopilotPanel = (key, provider) => (
     <>
       <div className="provider-section">
-        <div className="provider-section-title">Connection</div>
+        <div className="provider-section-title">GitHub Authentication</div>
         <p className="provider-section-desc">
-          GitHub Copilot authenticates through GitHub's Device Flow.
+          GitHub Copilot uses your GitHub account subscription rather than an API key. Connect and verify your account to enable AI generation.
         </p>
 
         {/* Connected state */}
@@ -1523,14 +1644,26 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
 
         {/* Disconnected state */}
         {!provider.isConfigured && !copilotFlow.active && (
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={handleStartCopilotAuth}
-            style={{ gap: 8 }}
-          >
-            Connect GitHub Copilot
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{
+              background: 'var(--bg-surface-elevated, #1a1a1a)',
+              border: '1px solid var(--border-subtle, #333)',
+              borderRadius: 'var(--radius-md, 8px)',
+              padding: '16px'
+            }}>
+              <p style={{ margin: '0 0 12px 0', fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                GitHub Copilot does not provide API keys. Click <strong>Connect GitHub Copilot</strong> below to generate a one-time verification code and authorize your GitHub account.
+              </p>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleStartCopilotAuth}
+                style={{ gap: 8 }}
+              >
+                Connect GitHub Copilot
+              </button>
+            </div>
+          </div>
         )}
 
         {/* Active device flow */}
@@ -1732,7 +1865,9 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
             <div className="provider-row-info">
               <span className="provider-row-name">{meta.name}</span>
               <span className="provider-row-model" title={model}>
-                {isProviderConfigured(key, provider) ? (model ? friendlyModelName(model) : '') : 'Add an API key'}
+                {isProviderConfigured(key, provider)
+                  ? (model ? friendlyModelName(model) : 'Connected')
+                  : (key === 'copilot' ? 'Connect GitHub Copilot' : 'Add an API key')}
               </span>
             </div>
           </div>

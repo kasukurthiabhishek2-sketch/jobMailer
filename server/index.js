@@ -239,9 +239,9 @@ app.post('/api/config/ai/test', async (req, res) => {
       ? model.trim()
       : (DEFAULT_MODELS[providerKey] || '');
 
-    let effectiveApiKey = (apiKey && typeof apiKey === 'string') ? apiKey.trim() : '';
+    let effectiveApiKey = (apiKey && typeof apiKey === 'string' && !apiKey.includes('...') && !apiKey.includes('••')) ? apiKey.trim() : '';
 
-    // If apiKey not sent, fall back to decrypted storage (the client never has raw keys — getPublicConfig strips them)
+    // If apiKey not sent or masked, fall back to decrypted storage
     if (!effectiveApiKey) {
       try {
         const fullConfig = storage.getDecryptedConfig();
@@ -249,10 +249,12 @@ app.post('/api/config/ai/test', async (req, res) => {
         if (savedProvider && Array.isArray(savedProvider.savedKeys) && savedProvider.savedKeys.length > 0) {
           const lookupId = selectedKeyId || savedProvider.selectedKeyId;
           const selected = savedProvider.savedKeys.find(k => k.id === lookupId) || savedProvider.savedKeys[0];
-          if (selected?.apiKey) effectiveApiKey = selected.apiKey;
+          if (selected?.apiKey && !selected.apiKey.includes('...') && !selected.apiKey.includes('••')) {
+            effectiveApiKey = selected.apiKey;
+          }
           if (!model && savedProvider.model) effectiveModel = savedProvider.model;
           if (!baseURL && savedProvider.baseURL) effectiveBaseUrl = savedProvider.baseURL;
-        } else if (savedProvider && savedProvider.apiKey) {
+        } else if (savedProvider && savedProvider.apiKey && !savedProvider.apiKey.includes('...') && !savedProvider.apiKey.includes('••')) {
           effectiveApiKey = savedProvider.apiKey;
           if (!model && savedProvider.model) effectiveModel = savedProvider.model;
           if (!baseURL && savedProvider.baseURL) effectiveBaseUrl = savedProvider.baseURL;
@@ -260,9 +262,22 @@ app.post('/api/config/ai/test', async (req, res) => {
       } catch (storageErr) {
         console.error(`[AI Test] Warning reading decrypted storage for ${providerKey}:`, storageErr.message);
       }
+    } else {
+      // Sync valid key to local storage so server stays in sync
+      try {
+        storage.updateAiProvider(providerKey, { apiKey: effectiveApiKey, selectedKeyId, model: effectiveModel, baseURL: effectiveBaseUrl });
+      } catch (syncErr) {
+        console.error(`[AI Test] Notice syncing key for ${providerKey}:`, syncErr.message);
+      }
     }
 
     if (!effectiveApiKey) {
+      if (providerKey === 'copilot') {
+        return res.status(400).json({
+          success: false,
+          error: 'GitHub authorization required. Please connect your GitHub account via "Connect GitHub Copilot".'
+        });
+      }
       return res.status(400).json({ success: false, error: 'API key is required to test connection.' });
     }
 
@@ -291,7 +306,7 @@ app.post('/api/config/ai/models', async (req, res) => {
       return res.status(400).json({ success: false, error: 'providerKey is required' });
     }
 
-    let effectiveApiKey = (apiKey && typeof apiKey === 'string' && !apiKey.includes('...')) ? apiKey.trim() : '';
+    let effectiveApiKey = (apiKey && typeof apiKey === 'string' && !apiKey.includes('...') && !apiKey.includes('••')) ? apiKey.trim() : '';
     if (!effectiveApiKey) {
       try {
         const fullConfig = storage.getDecryptedConfig();
@@ -299,16 +314,29 @@ app.post('/api/config/ai/models', async (req, res) => {
         if (savedProvider && Array.isArray(savedProvider.savedKeys) && savedProvider.savedKeys.length > 0) {
           const lookupId = selectedKeyId || savedProvider.selectedKeyId;
           const selected = savedProvider.savedKeys.find(k => k.id === lookupId) || savedProvider.savedKeys[0];
-          if (selected?.apiKey) effectiveApiKey = selected.apiKey;
-        } else if (savedProvider && savedProvider.apiKey) {
+          if (selected?.apiKey && !selected.apiKey.includes('...') && !selected.apiKey.includes('••')) {
+            effectiveApiKey = selected.apiKey;
+          }
+        } else if (savedProvider && savedProvider.apiKey && !savedProvider.apiKey.includes('...') && !savedProvider.apiKey.includes('••')) {
           effectiveApiKey = savedProvider.apiKey;
         }
       } catch (storageErr) {
         console.error(`[AI Models] Warning reading storage for ${providerKey}:`, storageErr.message);
       }
+    } else {
+      // Sync valid key to local storage so server stays in sync
+      try {
+        storage.updateAiProvider(providerKey, { apiKey: effectiveApiKey, selectedKeyId });
+      } catch (syncErr) {
+        console.error(`[AI Models] Notice syncing key for ${providerKey}:`, syncErr.message);
+      }
     }
 
     if (!effectiveApiKey) {
+      if (providerKey === 'copilot') {
+        const result = await listProviderModels('copilot', '');
+        return res.status(200).json(result);
+      }
       return res.status(400).json({ success: false, error: 'API key is required to list models.' });
     }
 
@@ -343,6 +371,16 @@ app.get('/api/copilot/current-flow', (req, res) => {
   }
 });
 
+// Cancel GitHub Copilot Device Code Authorization Flow
+app.post('/api/copilot/cancel-flow', (req, res) => {
+  try {
+    copilotService.clearPendingDeviceFlow();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Check GitHub Copilot Device Code Authorization Status
 app.post('/api/copilot/check-status', async (req, res) => {
   try {
@@ -353,6 +391,7 @@ app.post('/api/copilot/check-status', async (req, res) => {
       // Automatically save and encrypt token under 'copilot' provider
       storage.updateAiProvider('copilot', {
         apiKey: result.accessToken,
+        keyName: 'GitHub Copilot Token',
         enabled: true
       });
 
