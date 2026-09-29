@@ -78,7 +78,8 @@ const STANDARD_ALLOWED_ORIGINS = [
   'http://localhost:4173',
   'http://127.0.0.1:4173',
   'http://localhost:5001',
-  'http://127.0.0.1:5001'
+  'http://127.0.0.1:5001',
+  'https://job-mailer-ruddy.vercel.app'
 ];
 
 function isOriginAllowed(origin) {
