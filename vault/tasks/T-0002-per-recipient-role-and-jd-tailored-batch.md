@@ -2,7 +2,7 @@
 id: T-0002
 title: Per-recipient role and JD tailored batch email generation
 summary: <one line>
-status: in_progress
+status: review
 owner: agent-gemini-0002
 claimed_at: 2026-09-29T20:26Z
 heartbeat: 2026-09-29T20:26Z
@@ -11,7 +11,7 @@ size: M
 scope: [server/index.js, client/src/components/EmailPreview.jsx, server/test_*.js]
 depends_on: []
 branch: agent/T-0000
-updated: 2026-09-29T20:26Z
+updated: 2026-09-29T20:31Z
 tags: [task]
 created: 2026-09-29T20:26Z
 ---
