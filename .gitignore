@@ -16,8 +16,14 @@ server/serviceAccountKey.json
 .agents/teamwork/
 test_screenshots/
 
-# Graphify transient files and cache
-graphify-out/cache/
-graphify-out/manifest.json
-graphify-out/cost.json
-graphify-out/20*/
+# Graphify (derived, deterministic, free to rebuild)
+graphify-out/
+
+# Vault derived/internal
+vault/_graph/
+vault/.obsidian/
+vault/tasks/.locks/
+
+# Env files
+.env
+.env.*

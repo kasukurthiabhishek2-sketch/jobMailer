@@ -1,0 +1,296 @@
+#!/usr/bin/env python3
+import os, sys, re, argparse, datetime, subprocess, glob
+
+def get_vault():
+    try: root = subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], stderr=subprocess.DEVNULL).decode().strip()
+    except: root = os.getcwd()
+    return os.path.join(root, 'vault')
+
+def now(): return datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%MZ')
+
+def parse_yaml(text):
+    data = {}
+    for line in text.split('\n'):
+        if ':' not in line: continue
+        k, v = line.split(':', 1)
+        k, v = k.strip(), v.strip()
+        if not v: continue
+        if v == 'null': v = None
+        elif v == 'true': v = True
+        elif v == 'false': v = False
+        elif v.startswith('[') and v.endswith(']'): v = [x.strip() for x in v[1:-1].split(',') if x.strip()]
+        else:
+            try: v = int(v)
+            except:
+                try: v = float(v)
+                except:
+                    if v.startswith('"') and v.endswith('"'): v = v[1:-1]
+                    elif v.startswith("'") and v.endswith("'"): v = v[1:-1]
+        data[k] = v
+    return data
+
+def dump_yaml(data):
+    lines = []
+    for k, v in data.items():
+        if v is None: sv = 'null'
+        elif isinstance(v, bool): sv = 'true' if v else 'false'
+        elif isinstance(v, list): sv = f"[{', '.join(map(str, v))}]"
+        else: sv = str(v)
+        lines.append(f"{k}: {sv}")
+    return '\n'.join(lines)
+
+def read_file(path):
+    try:
+        with open(path) as f: content = f.read()
+    except: return {}, ""
+    if content.startswith('---\n'):
+        parts = content.split('---\n', 2)
+        if len(parts) >= 3: return parse_yaml(parts[1]), parts[2]
+    return {}, content
+
+def write_file(path, fm, body):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w') as f: f.write('---\n' + dump_yaml(fm) + '\n---\n' + body)
+
+def get_tasks(vault):
+    tasks = {}
+    for p in glob.glob(f"{vault}/tasks/T-*.md"):
+        name = os.path.basename(p)
+        if name.startswith('_') or name.startswith('.'): continue
+        fm, _ = read_file(p)
+        if 'id' not in fm: fm['id'] = name.split('-')[0]+'-'+name.split('-')[1].split('.')[0]
+        tasks[fm['id']] = (p, fm)
+    return tasks
+
+def is_stale(fm):
+    if not fm.get('heartbeat') or not fm.get('lease_minutes'): return False
+    try:
+        hb = datetime.datetime.strptime(fm['heartbeat'], '%Y-%m-%dT%H:%MZ')
+        diff = datetime.datetime.utcnow() - hb
+        return diff.total_seconds() / 60 > int(fm['lease_minutes'])
+    except: return False
+
+def cmd_board(args, vault):
+    tasks = get_tasks(vault)
+    lines = []
+    for tid, (p, fm) in tasks.items():
+        status = fm.get('status', 'todo')
+        if status == 'done' and not args.all: continue
+        deps = fm.get('depends_on', [])
+        is_ready = True
+        if isinstance(deps, str): deps = [deps]
+        for d in deps:
+            if d in tasks and tasks[d][1].get('status') != 'done': is_ready = False
+        display_status = status
+        if status == 'todo':
+            display_status = 'READY' if is_ready else 'WAITING'
+        if is_stale(fm): display_status = 'STALE'
+        order = 0
+        if status in ['in_progress', 'review']: order = 1
+        elif display_status == 'READY': order = 2
+        elif display_status == 'WAITING': order = 4
+        else: order = 3
+        lines.append((order, tid, display_status, fm.get('owner', 'null'), fm.get('heartbeat', ''), fm.get('size', ''), fm.get('title', '')))
+    for order, tid, status, owner, hb, size, title in sorted(lines):
+        print(f"{tid} {status} {owner} {hb} {size} {title}")
+
+def cmd_new(args, vault):
+    if args.size == 'L':
+        print("split it")
+        sys.exit(1)
+    tasks = get_tasks(vault)
+    max_id = 0
+    for tid in tasks:
+        try: max_id = max(max_id, int(tid.split('-')[1]))
+        except: pass
+    new_id = f"T-{max_id+1:04d}"
+    slug = re.sub(r'[^a-z0-9\-]', '-', args.title.lower())[:40].strip('-')
+    path = os.path.join(vault, 'tasks', f"{new_id}-{slug}.md")
+    tmpl_path = os.path.join(vault, 'tasks', '_template.md')
+    fm, body = read_file(tmpl_path)
+    fm.update({'id': new_id, 'title': args.title, 'status': 'todo', 'created': now()})
+    if args.scope: fm['scope'] = args.scope.split(',')
+    if args.size: fm['size'] = args.size
+    if args.deps: fm['depends_on'] = args.deps.split(',')
+    if args.accept: fm['acceptance'] = args.accept
+    write_file(path, fm, body)
+    print(new_id)
+
+def cmd_claim(args, vault):
+    tasks = get_tasks(vault)
+    if args.id not in tasks: sys.exit(f"Task {args.id} not found")
+    p, fm = tasks[args.id]
+    lock_dir = os.path.join(vault, 'tasks', '.locks', args.id)
+    os.makedirs(os.path.dirname(lock_dir), exist_ok=True)
+    try: os.mkdir(lock_dir)
+    except FileExistsError:
+        if not is_stale(fm):
+            print(f"Owned by {fm.get('owner')}")
+            sys.exit(1)
+        else:
+            print("stale, use takeover")
+            sys.exit(1)
+    fm['status'] = 'in_progress'
+    fm['owner'] = args.agent
+    fm['claimed_at'] = now()
+    fm['heartbeat'] = now()
+    fm['updated'] = now()
+    write_file(p, fm, read_file(p)[1])
+    print(f"agent/{args.id}")
+    print(f"git switch -c agent/{args.id}")
+
+def cmd_beat(args, vault):
+    tasks = get_tasks(vault)
+    if args.id not in tasks: sys.exit(1)
+    p, fm = tasks[args.id]
+    fm['heartbeat'] = now()
+    fm['updated'] = now()
+    write_file(p, fm, read_file(p)[1])
+
+def cmd_takeover(args, vault):
+    tasks = get_tasks(vault)
+    if args.id not in tasks: sys.exit(1)
+    p, fm = tasks[args.id]
+    if not args.force and not is_stale(fm): sys.exit(1)
+    old = fm.get('owner', 'null')
+    fm['owner'] = args.agent
+    fm['claimed_at'] = now()
+    fm['heartbeat'] = now()
+    write_file(p, fm, read_file(p)[1])
+    cmd_log(argparse.Namespace(text=f"takeover {args.id} from {old} to {args.agent}"), vault)
+
+def cmd_release(args, vault):
+    tasks = get_tasks(vault)
+    if args.id not in tasks: sys.exit(1)
+    p, fm = tasks[args.id]
+    fm['status'] = 'todo'
+    fm['owner'] = None
+    fm['claimed_at'] = None
+    fm['heartbeat'] = None
+    write_file(p, fm, read_file(p)[1])
+    lock_dir = os.path.join(vault, 'tasks', '.locks', args.id)
+    try: os.rmdir(lock_dir)
+    except: pass
+
+def cmd_done(args, vault):
+    tasks = get_tasks(vault)
+    if args.id not in tasks: sys.exit(1)
+    p, fm = tasks[args.id]
+    fm['status'] = args.status
+    fm['updated'] = now()
+    write_file(p, fm, read_file(p)[1])
+    lock_dir = os.path.join(vault, 'tasks', '.locks', args.id)
+    try: os.rmdir(lock_dir)
+    except: pass
+
+def cmd_handoff(args, vault):
+    tasks = get_tasks(vault)
+    if args.id not in tasks: sys.exit(1)
+    p, fm = tasks[args.id]
+    for k in ['id', 'title', 'status', 'owner', 'size', 'scope']:
+        print(f"{k}: {fm.get(k, '')}")
+    body = read_file(p)[1]
+    for sec in ['Goal', 'Acceptance', 'Plan', 'Checkpoint']:
+        m = re.search(f'## {sec}.*?(?=## |$)', body, re.S)
+        if m: print(m.group(0).strip()[:200])
+    try:
+        print(subprocess.check_output(['git', 'log', '--oneline', '-5', f"agent/{args.id}"], stderr=subprocess.DEVNULL).decode())
+        print(subprocess.check_output(['git', 'diff', '--stat', f"main...agent/{args.id}"], stderr=subprocess.DEVNULL).decode())
+    except: pass
+
+def cmd_log(args, vault):
+    log_path = os.path.join(vault, 'log.md')
+    if not os.path.exists(log_path):
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        with open(log_path, 'w') as f: f.write('# Log\n')
+    text = args.text[:200].replace('\n', ' ')
+    with open(log_path, 'a') as f: f.write(f"- {now()} {text}\n")
+
+def cmd_index(args, vault):
+    lines = ["<!-- GENERATED by av index: do not edit -->"]
+    files = []
+    for root, dirs, fs in os.walk(vault):
+        dirs[:] = [d for d in dirs if not d.startswith('_') and not d.startswith('.') and d != 'tasks']
+        for f in fs:
+            if f.startswith('_') or f.startswith('.') or f.startswith('log') or f == 'index.md' or not f.endswith('.md'): continue
+            files.append(os.path.relpath(os.path.join(root, f), vault))
+    for f in sorted(files):
+        p = os.path.join(vault, f)
+        fm, _ = read_file(p)
+        title = fm.get('title', os.path.basename(f)[:-3])
+        summary = fm.get('summary', '')
+        lines.append(f"- [[{f[:-3]}|{title}]] - {summary}")
+    idx_path = os.path.join(vault, 'index.md')
+    if len(lines) > 150: print("WARNING: index > 150 lines", file=sys.stderr)
+    with open(idx_path, 'w') as f: f.write('\n'.join(lines) + '\n')
+    return '\n'.join(lines)
+
+def cmd_lint(args, vault):
+    errs, warns = [], []
+    for root, dirs, fs in os.walk(vault):
+        dirs[:] = [d for d in dirs if not d.startswith('.') and not d.startswith('_')]
+        for f in fs:
+            if f.startswith('.') or f.startswith('_') or f == 'index.md' or not f.endswith('.md'): continue
+            p = os.path.join(root, f)
+            fm, body = read_file(p)
+            rel = os.path.relpath(p, vault)
+            if 'title' not in fm or 'summary' not in fm or 'updated' not in fm: errs.append(f"{rel}: missing fm")
+            if len(body.split('\n')) > (100 if 'tasks' in rel else 80): errs.append(f"{rel}: too long")
+            if 'summary' in fm and len(str(fm['summary'])) > 120: warns.append(f"{rel}: summary > 120")
+            if 'tasks' in rel and fm.get('status') == 'in_progress':
+                if not fm.get('owner') or not fm.get('heartbeat') or '## Checkpoint' not in body: errs.append(f"{rel}: bad in_progress")
+                if is_stale(fm): warns.append(f"{rel}: stale")
+    if errs:
+        for e in errs[:15]: print("ERR:", e)
+        sys.exit(1)
+    for w in warns[:15]: print("WARN:", w)
+
+def main():
+    parser = argparse.ArgumentParser()
+    subp = parser.add_subparsers(dest='cmd', required=True)
+    
+    p = subp.add_parser('board')
+    p.add_argument('--all', action='store_true')
+    
+    p = subp.add_parser('new')
+    p.add_argument('title')
+    p.add_argument('--scope')
+    p.add_argument('--size')
+    p.add_argument('--deps')
+    p.add_argument('--accept')
+    
+    p = subp.add_parser('claim')
+    p.add_argument('id')
+    p.add_argument('agent')
+    
+    p = subp.add_parser('beat')
+    p.add_argument('id')
+    
+    p = subp.add_parser('takeover')
+    p.add_argument('id')
+    p.add_argument('agent')
+    p.add_argument('--force', action='store_true')
+    
+    p = subp.add_parser('release')
+    p.add_argument('id')
+    
+    p = subp.add_parser('done')
+    p.add_argument('id')
+    p.add_argument('--status', default='review')
+    
+    p = subp.add_parser('handoff')
+    p.add_argument('id')
+    
+    p = subp.add_parser('log')
+    p.add_argument('text')
+    
+    p = subp.add_parser('index')
+    
+    p = subp.add_parser('lint')
+    
+    args = parser.parse_args()
+    vault = get_vault()
+    globals()[f"cmd_{args.cmd}"](args, vault)
+
+if __name__ == '__main__':
+    main()

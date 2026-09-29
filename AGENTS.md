@@ -1,66 +1,83 @@
-# Non-Negotiable Guardrails
+# AGENTS.md
+<!-- Loaded every session: every line costs tokens. Keep <= 150 lines. Depth lives in vault/playbooks/ (read on demand). -->
 
-- **Never break existing functionality.** `cd server && npm test` and `cd client && npm run lint` must pass before *and* after every change. A change that breaks either is reverted, not "fixed later."
-- **Preserve the architecture's stated invariants** unless a task explicitly targets changing one, and if it does, it needs its own review + migration note:
-  - Native `fetch()` only for AI providers — no OpenAI/Google SDKs added.
-  - Secrets (`apiKey`, SMTP `password`) are AES-256-GCM encrypted at rest and **never** returned unmasked from any `/api/*` endpoint.
-  - The two-stage human-in-the-loop send gate (`isApproved` per recipient, explicit "Send Approved Emails" action) is never bypassed by an automated path.
-  - Cross-Origin Resource Sharing (CORS) origin matching must always normalize trailing slashes on both incoming `Origin` headers and configured `ALLOWED_ORIGINS` to adhere to W3C Origin specifications.
-  - `config.json` / `logs.json` schemas stay backward-compatible, or the change ships a migration + version bump.
-- **Every code change ships with a test.** No exceptions for "small" fixes — the small ones are exactly what regress silently.
-- **One backlog item per branch**, named `agent/<cycle>-<short-slug>`. No agent commits directly to `main`.
-- **Read `ARCHITECTURE.md` and `README.md` before touching code.** Any subagent whose plan contradicts those docs must flag the contradiction in its report instead of silently resolving it.
-- **No agent invents scope.** If a subagent thinks a problem is bigger than its ticket, it writes that in its report for the orchestrator to re-plan — it does not unilaterally expand the diff.
+## Project facts
+- Goal: AI-powered cold email outreach platform for job seekers — resume+JD pairing, multi-provider email generation, SMTP dispatch with SSE tracking.
+- Stack: Node.js 18+ / Express 4 (server), React 19 / Vite 8 (client), AES-256-GCM encryption, JSON flat-file storage
+- Commands: fast-test `cd server && npm test` | full-test `cd server && npm test` | lint `cd client && npm run lint` | run `npm run dev`
+- av (task/vault helper): `python3 scripts/av` (below, `av <cmd>` means this)
+- Search: `grep -rn --exclude-dir=graphify-out --exclude-dir=node_modules --exclude-dir=vault/_graph -m 20 "<pat>" <dir>`. Read files by line range, never whole.
+- Vault: `vault/` (Obsidian, plain Markdown). Graph: `graphify-out/` (local, gitignored, code only).
 
-# Codebase Debloat & Anti-Slop Rules
+## 0. Prime directives
+1. Tokens are the scarcest resource: retrieve the minimum, edit the minimum, write the minimum.
+2. You can die at any moment (context or quota). State lives in files and git, never only in your head.
+3. Graph = what the code IS (derived, free). Vault = what we DECIDED and what is IN PROGRESS (curated). Never copy one into the other.
+4. Section 3 overrides your habits. If a rule blocks a good result, say so in one line and ask.
+5. Secrets never go in code, vault, logs or checkpoints.
 
-Every agent modifying code in this codebase MUST adhere strictly to the following standards:
+## 0.5 Non-negotiable guardrails
+- **Never break existing functionality.** `cd server && npm test` and `cd client && npm run lint` must pass before and after every change.
+- Native `fetch()` only for AI providers — no OpenAI/Google SDKs.
+- Secrets (`apiKey`, SMTP `password`) AES-256-GCM encrypted at rest, **never** returned unmasked from `/api/*`.
+- Two-stage human-in-the-loop send gate (`isApproved` + explicit "Send Approved Emails") never bypassed.
+- CORS origin matching normalizes trailing slashes (W3C Origin spec).
+- `config.json` / `logs.json` schemas backward-compatible, or ship migration + version bump.
+- Every code change ships with a test. One backlog item per branch (`agent/<id>`). Read `ARCHITECTURE.md` and `README.md` before touching code.
 
-### Core Rules
+## 1. Orient (cold start <= 4k tokens; stop as soon as you know enough)
+1. `av board` (<= 30 lines). Resuming? `av handoff T-xxxx` prints the resume packet: trust it, don't re-explore.
+2. `git status -s` and `git log --oneline -8`.
+3. `graphify hook status || graphify hook install`. If `graphify-out/graph.json` is missing: `graphify extract . --code-only`.
+4. Read only what your task needs (section 2). Never read: whole GRAPH_REPORT.md, graph.json, vault/_graph/, lockfiles, generated or minified files, whole directory trees. Read log.md with `tail -20` only.
 
-1. **Think before touching anything.**
-   State what you think a piece of code is actually for before changing it. If you're not sure, say so and ask instead of guessing. If a file or function could reasonably be read two ways, don't silently pick one — flag it. If you spot a simpler way to do something than what's there, say so instead of quietly doing the complicated thing anyway.
+## 2. Before / after every change (scaled by tier)
+- T0 trivial (typo, comment, <= 3 lines, no signature change): no pre-check. After: commit + `av log "T-x fix: ..."`.
+- T1 normal (inside one module, contracts unchanged):
+  - BEFORE: `graphify affected "<symbol>"` + `grep -rn "<symbol>"`. Skim `vault/architecture/modules/<m>.md`.
+  - AFTER: run tests (quiet), `graphify update .`, update module note if purpose/invariants/gotchas changed, `av log`, checkpoint, commit.
+- T2 structural (new module/dependency; public API, contract or schema change; cross-module):
+  - BEFORE: `graphify query "<area>" --budget 1200`, `affected`, module notes, ADRs. Write PLAN in task file.
+  - AFTER: as T1, plus ADR required; update overview if module map changed; re-run `affected` on changed public symbols.
+- After edits: `graphify update .` (AST only, free). Deleted/renamed files: `graphify update . --force`.
+- Always finish with `av index && av lint`.
 
-2. **Simplicity first.**
-   Default to the least code that does the job. No abstraction for something used once. No config knob nobody sets. No error handling for a case that can't happen. If a file is 300 lines and could be 80, that's the job — rewrite it, don't tidy it. Test for every change: would a senior engineer reading this call it overcomplicated? If yes, cut it.
+## 3. Coding rules
+1. Think before coding. State assumptions. Ambiguous? List readings (<= 3 lines) and ask, or choose simplest.
+2. Simplicity first. Least code that solves the stated problem. No speculative features or one-use abstractions.
+3. Surgical changes. Every changed line traces to the task. Match local style. Don't refactor neighbours.
+4. Goal-driven execution. Verifiable checks before coding. Loop until they pass. Report evidence.
+5. Anti-slop: hunt for unused imports/vars/functions, restating comments, empty catches, pass-through wrappers, redundant null checks, leftover TODOs.
 
-3. **Surgical changes only.**
-   Don't "improve" code that isn't part of this pass — no drive-by reformatting, no unrelated refactors, no rewriting comments you just happen to dislike. Match the existing style even where you'd personally do it differently. If you notice slop outside the current area, log it instead of fixing it on the spot, unless your own edit is what created it (e.g. an import you just orphaned).
+## 4. Token discipline
+- Search first, read ranges. Edit with targeted replacements. Quiet commands: `| tail -40`.
+- Graph tools: `affected "X"`, `path "A" "B"`, `explain "X"`, `query "..." --budget 1200`. At most 2 graph calls in a row.
+- Never run LLM graph extraction. Two failed attempts at same fix: stop, write dead end, ask or hand off.
+- Budgets: orient <= 4k | checkpoint <= 200 tokens | module note <= 60 lines | ADR <= 30 | task file <= 100 | index <= 150.
+- Context: checkpoint every 10 tool calls and before anything long or risky.
 
-4. **Goal-driven, verifiable execution.**
-   Before a non-trivial change, restate the goal as something checkable — "remove X, tests still pass, behavior of Y is unchanged" — not "clean this up." After each change, verify it still builds/runs/passes tests (`cd server && npm test` and `cd client && npm run lint`). If nothing covers what you just touched, say so; don't assume it's fine.
+## 5. Handoff-ready at all times
+- After every completed step: overwrite `## Checkpoint` (<= 25 lines), `av beat T-xxxx`, `git commit -am "wip(T-xxxx): <step>"`.
+- Test: an agent reading only this file + the task file can continue without asking.
 
-5. **Chesterton's Fence.**
-   Don't remove something just because you don't see the point of it yet. Find out why it's there first. If you genuinely can't tell after looking, flag it for the user rather than deleting it.
+## 6. Multi-agent protocol
+- One file per task in `vault/tasks/`. Status: todo → in_progress → review → done (or blocked).
+- Identity: `<tool>-<model>-<4hex>`. `av claim T-xxxx <id>` is atomic (mkdir-based lease, 45 min default).
+- Workspace: one branch per task `agent/T-xxxx`. Parallel: `git worktree add`, then `graphify hook install`.
+- Scope: edit only files under the task's `scope`. Need outside? `av new` a task.
+- Takeover: only after lease expired. `av handoff`, then `av takeover`.
+- Size: <= 40% of one context (<=5 files, <=150 changed lines). Bigger: split first.
+- Merge: rebase, tests green, `graphify update .`, `av index && av lint`, fast-forward. See `vault/playbooks/merge-and-release.md`.
 
-6. **Rule of Three.**
-   Don't abstract something until it's needed in three real places. Two similar blocks of code can just stay two blocks. Collapse premature abstractions that were built for a "someday" that never came.
+## 7. Vault contract
+- Layout: `index.md` (generated) | `log.md` (append-only) | `lessons.md` | `product/brief.md` | `architecture/{overview,modules/*}` | `decisions/ADR-*` | `tasks/` | `playbooks/` | `_templates/`.
+- Every note: frontmatter `title`, `summary` (<= 120 chars), `updated`, `tags`; `[[wikilinks]]`; <= 80 lines.
+- Notes hold only what the graph can't: purpose, invariants, gotchas, decisions, why.
 
-### AI-Slop Checklist (Review Before Committing)
+## 8. Code layout (NEW code only)
+- Files <= ~300 lines, functions <= ~50; one responsibility per module; explicit public surface.
+- Unique, greppable names; one-line docstring + type hints on public functions.
+- Tests mirror source paths. Generated/build output gitignored and in `.graphifyignore`.
 
-Hunt for these specifically in every touched file:
-- **Unused dead code:** Unused imports, variables, functions, exports, and files nothing references anymore.
-- **Restating comments:** Comments that just restate the line under them ("// increment counter") — cut; keep only comments that explain *why*.
-- **Empty / swallow catch blocks:** `try/catch` (or equivalent) around code that can't actually throw, or that swallows errors silently instead of handling or logging them.
-- **Single-implementation interfaces/factories:** Interfaces, abstract base classes, or factories with exactly one real implementation.
-- **Pass-through wrappers:** Wrapper functions that just forward to another function with the same arguments and add nothing.
-- **Unused config flags:** Config flags, options, or parameters that are never set to anything but their default anywhere in the codebase.
-- **Premature deduplication vs duplication:** Logic duplicated across 3+ files that should be one helper — or the opposite: over-extracted one-line "helpers" that just hide a single call.
-- **Redundant type/null checks:** Null/type checks defending against states the type system, caller, or validation layer already rules out.
-- **Leftover scaffolding:** Stray TODOs, tutorial boilerplate, commented-out old versions of functions.
-- **Catch-all junk drawers:** Catch-all files (`utils.py`, `helpers.js`, `misc/`) hiding logic that actually belongs somewhere specific.
-- **Noisy logging:** Logging that adds noise rather than operational signal.
-- **Tautological tests:** Tests that only exercise the language/framework rather than your logic (don't cut a test just because it's inconvenient — only if it's not testing anything real).
-
-## graphify
-
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
-
-When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
-
-Rules:
-- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
-- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
-- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+## 9. Done means
+Acceptance checks pass (quote command + result) | diff only within scope | `graphify update .` | vault deltas + log + checkpoint | `av index && av lint` clean | committed as `T-xxxx: <what/why>` | `av done T-xxxx --status review` | one-line report.
