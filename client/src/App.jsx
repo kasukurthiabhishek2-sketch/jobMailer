@@ -231,7 +231,7 @@ export default function App() {
           recipients={recipients}
           jdReady={jdReady}
           emailReady={emailReady}
-          hasSpreadsheetRecipients={hasSpreadsheetRecipients}
+          showTargetRole={false}
         />
 
         <div className="wizard-container">
@@ -283,35 +283,15 @@ export default function App() {
                       <ChevronLeft size={16} />
                       Back to Profile
                     </button>
-                    <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
-                      {hasSpreadsheetRecipients && (
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          onClick={() => goToStep(3)}
-                          title="Configure or edit target job description"
-                        >
-                          Target Role
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        onClick={() => {
-                          if (hasSpreadsheetRecipients && !jobDescription?.trim()) {
-                            goToStep(3);
-                          } else {
-                            goToStep(4);
-                          }
-                        }}
-                        disabled={recipientsCount === 0}
-                      >
-                        {hasSpreadsheetRecipients && !jobDescription?.trim()
-                          ? 'Continue to Target Role'
-                          : 'Continue to AI Drafts'}
-                        <ChevronRight size={16} />
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => goToStep(4)}
+                      disabled={recipientsCount === 0}
+                    >
+                      Continue to AI Drafts
+                      <ChevronRight size={16} />
+                    </button>
                   </div>
                 </div>
               )}
@@ -367,10 +347,10 @@ export default function App() {
                     <button
                       type="button"
                       className="btn btn-secondary"
-                      onClick={() => goToStep(hasSpreadsheetRecipients ? 3 : 2)}
+                      onClick={() => goToStep(2)}
                     >
                       <ChevronLeft size={16} />
-                      {hasSpreadsheetRecipients ? 'Back to Target Role' : 'Back to Recipients'}
+                      Back to Recipients
                     </button>
                     <div />
                   </div>

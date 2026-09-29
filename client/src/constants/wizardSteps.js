@@ -96,8 +96,8 @@ export function getStepLockReason(stepId, state) {
   return step ? step.getLockReason(state) : null;
 }
 
-export function getVisibleWizardSteps(hasSpreadsheetRecipients) {
-  if (hasSpreadsheetRecipients) {
+export function getVisibleWizardSteps(includeTargetRole = false) {
+  if (includeTargetRole) {
     return WIZARD_STEPS.map((s, idx) => ({ ...s, stepNumber: idx + 1 }));
   }
   return WIZARD_STEPS

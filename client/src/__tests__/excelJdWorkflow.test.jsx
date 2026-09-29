@@ -26,14 +26,15 @@ describe('Excel Upload and Target Role Workflow', () => {
     });
   });
 
-  describe('StepIndicator conditional visibility', () => {
-    it('does NOT render Target Role in top nav when hasSpreadsheetRecipients is false', () => {
+  describe('StepIndicator navigation bar', () => {
+    it('does NOT render Target Role in top nav when showTargetRole is false (even with spreadsheet recipients)', () => {
       render(
         <StepIndicator
-          currentStep={1}
+          currentStep={2}
           resumeReady={true}
-          recipients={[{ id: 'r1', source: 'manual' }]}
-          hasSpreadsheetRecipients={false}
+          recipients={[{ id: 'r1', source: 'spreadsheet' }]}
+          hasSpreadsheetRecipients={true}
+          showTargetRole={false}
         />
       );
 
@@ -45,13 +46,13 @@ describe('Excel Upload and Target Role Workflow', () => {
       expect(buttons[2]).toHaveTextContent('Drafts & Send');
     });
 
-    it('renders Target Role in top nav when hasSpreadsheetRecipients is true', () => {
+    it('can optionally render Target Role in top nav when showTargetRole is true', () => {
       render(
         <StepIndicator
           currentStep={2}
           resumeReady={true}
           recipients={[{ id: 'r1', source: 'spreadsheet' }]}
-          hasSpreadsheetRecipients={true}
+          showTargetRole={true}
         />
       );
 

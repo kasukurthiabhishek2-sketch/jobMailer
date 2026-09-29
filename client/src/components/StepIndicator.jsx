@@ -15,7 +15,8 @@ export default function StepIndicator({
   emailReady = false,
   generatedEmails = {},
   stepStates,
-  hasSpreadsheetRecipients
+  hasSpreadsheetRecipients,
+  showTargetRole
 }) {
   // Normalize state for gating predicates
   const activeRecipients = Array.isArray(recipients) && recipients.length > 0
@@ -31,15 +32,17 @@ export default function StepIndicator({
       : generatedEmails
   };
 
-  // Determine if Excel / spreadsheet was uploaded
-  // Show Target Role ONLY when excel is uploaded
-  const isExcelUploaded = hasSpreadsheetRecipients !== undefined
-    ? Boolean(hasSpreadsheetRecipients)
-    : (Array.isArray(recipients) && recipients.length > 0
-        ? (recipients.some(r => r.source === 'spreadsheet') || !recipients.some(r => r.source === 'manual' || r.source === 'ai_parse'))
-        : true);
+  // Determine whether to show Target Role in nav bar
+  // Removed altogether from nav bar when showTargetRole={false}
+  const includeTargetRole = showTargetRole !== undefined
+    ? Boolean(showTargetRole)
+    : (hasSpreadsheetRecipients !== undefined
+        ? Boolean(hasSpreadsheetRecipients)
+        : (Array.isArray(recipients) && recipients.length > 0
+            ? (recipients.some(r => r.source === 'spreadsheet') || !recipients.some(r => r.source === 'manual' || r.source === 'ai_parse'))
+            : true));
 
-  const visibleSteps = getVisibleWizardSteps(isExcelUploaded);
+  const visibleSteps = getVisibleWizardSteps(includeTargetRole);
 
   return (
     <nav className="step-bar" aria-label="Workflow Steps">
