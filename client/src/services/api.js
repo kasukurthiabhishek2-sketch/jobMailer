@@ -246,22 +246,64 @@ export async function parseJobDescriptionApi({
   customPrompt,
   customSystemPrompt
 }) {
-  const res = await authFetch('/api/ai/parse-jd', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode, rawText, url, providerKey, providerConfig, customPrompt, customSystemPrompt })
-  });
+  const requestId = `REQ-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+  let res;
+  try {
+    res = await authFetch('/api/ai/parse-jd', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-request-id': requestId
+      },
+      body: JSON.stringify({ mode, rawText, url, providerKey, providerConfig, customPrompt, customSystemPrompt, requestId })
+    });
+  } catch (networkErr) {
+    const err = new Error('Network connection failed. Please check your internet connection or backend server status.');
+    err.code = 'NETWORK_DISCONNECTED';
+    err.stage = 'network';
+    err.requestId = requestId;
+    err.technicalMessage = networkErr?.message || 'Network fetch failure';
+    err.fallbackAvailable = true;
+    throw err;
+  }
 
   const contentType = res.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {
     const text = await res.text();
     console.error('[parseJobDescription] Non-JSON error:', res.status, text.slice(0, 300));
-    throw new Error('Server error — check logs');
+    const isSleeping = res.status === 502 || res.status === 503 || res.status === 504;
+    const err = new Error(
+      isSleeping
+        ? `The backend server is waking up from standby (HTTP ${res.status}). Please try again in 15 seconds.`
+        : `Server returned unexpected response (HTTP ${res.status}). Please check server logs.`
+    );
+    err.code = isSleeping ? 'BACKEND_SLEEPING_OR_TIMEOUT' : 'SERVER_NON_JSON_RESPONSE';
+    err.stage = 'network_gateway';
+    err.requestId = requestId;
+    err.httpStatus = res.status;
+    err.fallbackAvailable = true;
+    err.retryable = true;
+    throw err;
   }
 
   const data = await res.json();
   if (!res.ok || !data.success) {
-    throw new Error(data.error || 'Failed to parse job description');
+    const userMessage = data.error || data.errorDetails?.userMessage || 'Failed to parse job description';
+    const err = new Error(userMessage);
+    if (data.errorDetails) {
+      err.code = data.errorDetails.code;
+      err.stage = data.errorDetails.stage;
+      err.userMessage = data.errorDetails.userMessage;
+      err.technicalMessage = data.errorDetails.technicalMessage;
+      err.retryable = data.errorDetails.retryable;
+      err.fallbackAvailable = data.errorDetails.fallbackAvailable;
+      err.requestId = data.errorDetails.requestId || requestId;
+      err.details = data.errorDetails.details;
+    } else {
+      err.requestId = data.diagnostics?.requestId || requestId;
+    }
+    throw err;
   }
   return data;
 }

@@ -217,6 +217,252 @@ test('non-duplicate email passes dedup check', () => {
   assert.strictEqual(isDuplicate, false);
 });
 
+// ─── SSRF, Host & Port Security Tests ────────────────────────────────
+
+console.log('\n── SSRF & Port Security ──');
+
+const { isPrivateOrRestrictedIp, extractJsonLdJobPosting, detectContentBarriers } = require('./services/urlScraper');
+
+test('validateUrl rejects localhost', () => {
+  const r = validateUrl('http://localhost:5001/api/config');
+  assert.strictEqual(r.valid, false);
+  assert.strictEqual(r.code, 'URL_FORBIDDEN_HOST');
+});
+
+test('validateUrl rejects 127.0.0.1 loopback', () => {
+  const r = validateUrl('http://127.0.0.1:80/job');
+  assert.strictEqual(r.valid, false);
+  assert.strictEqual(r.code, 'URL_FORBIDDEN_HOST');
+});
+
+test('validateUrl rejects cloud metadata IP 169.254.169.254', () => {
+  const r = validateUrl('http://169.254.169.254/latest/meta-data/');
+  assert.strictEqual(r.valid, false);
+  assert.strictEqual(r.code, 'URL_FORBIDDEN_HOST');
+});
+
+test('validateUrl rejects Google cloud internal metadata hostname', () => {
+  const r = validateUrl('http://metadata.google.internal/computeMetadata/v1/');
+  assert.strictEqual(r.valid, false);
+  assert.strictEqual(r.code, 'URL_FORBIDDEN_HOST');
+});
+
+test('validateUrl rejects embedded credentials in URL', () => {
+  const r = validateUrl('https://admin:secret@boards.greenhouse.io/job/123');
+  assert.strictEqual(r.valid, false);
+  assert.strictEqual(r.code, 'URL_CREDENTIALS_FORBIDDEN');
+});
+
+test('validateUrl rejects non-standard web ports (e.g. 22, 6379, 8080)', () => {
+  assert.strictEqual(validateUrl('http://example.com:22/job').valid, false);
+  assert.strictEqual(validateUrl('http://example.com:6379/job').valid, false);
+  assert.strictEqual(validateUrl('http://example.com:8080/job').valid, false);
+  assert.strictEqual(validateUrl('https://example.com:443/job').valid, true);
+  assert.strictEqual(validateUrl('http://example.com:80/job').valid, true);
+});
+
+test('isPrivateOrRestrictedIp detects private IPv4 subnets', () => {
+  assert.strictEqual(isPrivateOrRestrictedIp('10.0.0.1'), true);
+  assert.strictEqual(isPrivateOrRestrictedIp('172.16.0.1'), true);
+  assert.strictEqual(isPrivateOrRestrictedIp('192.168.1.1'), true);
+  assert.strictEqual(isPrivateOrRestrictedIp('100.64.0.1'), true); // CGNAT
+  assert.strictEqual(isPrivateOrRestrictedIp('169.254.169.254'), true); // Link-local
+  assert.strictEqual(isPrivateOrRestrictedIp('127.0.0.1'), true); // Loopback
+  assert.strictEqual(isPrivateOrRestrictedIp('8.8.8.8'), false); // Public Google DNS
+  assert.strictEqual(isPrivateOrRestrictedIp('1.1.1.1'), false); // Public Cloudflare DNS
+});
+
+test('isPrivateOrRestrictedIp detects IPv6 loopback and link-local', () => {
+  assert.strictEqual(isPrivateOrRestrictedIp('::1'), true);
+  assert.strictEqual(isPrivateOrRestrictedIp('fe80::1'), true);
+  assert.strictEqual(isPrivateOrRestrictedIp('::ffff:127.0.0.1'), true);
+  assert.strictEqual(isPrivateOrRestrictedIp('2606:4700:4700::1111'), false); // Public IPv6
+});
+
+// ─── JSON-LD JobPosting Extraction Tests ─────────────────────────────
+
+console.log('\n── Deterministic JSON-LD Extraction ──');
+
+test('extractJsonLdJobPosting extracts Schema.org JobPosting', () => {
+  const html = `<html><head>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org/",
+      "@type": "JobPosting",
+      "title": "Staff Platform Engineer",
+      "description": "<p>We are looking for a Staff Engineer to lead distributed systems.</p>",
+      "hiringOrganization": {
+        "@type": "Organization",
+        "name": "Stripe"
+      },
+      "jobLocation": {
+        "@type": "Place",
+        "address": {
+          "addressLocality": "San Francisco",
+          "addressRegion": "CA",
+          "addressCountry": "USA"
+        }
+      }
+    }
+    </script>
+  </head><body></body></html>`;
+
+  const parsed = extractJsonLdJobPosting(html);
+  assert.ok(parsed, 'Must extract JSON-LD');
+  assert.strictEqual(parsed.company, 'Stripe');
+  assert.strictEqual(parsed.role, 'Staff Platform Engineer');
+  assert.strictEqual(parsed.location, 'San Francisco, CA, USA');
+  assert.ok(parsed.description.includes('distributed systems'));
+});
+
+test('extractJsonLdJobPosting handles @graph arrays', () => {
+  const html = `<html><head>
+    <script type="application/ld+json">
+    {
+      "@graph": [
+        { "@type": "WebSite", "name": "Company" },
+        {
+          "@type": "JobPosting",
+          "title": "Lead Rust Developer",
+          "hiringOrganization": { "name": "RustCorp" },
+          "jobLocationType": "TELECOMMUTE"
+        }
+      ]
+    }
+    </script>
+  </head></html>`;
+
+  const parsed = extractJsonLdJobPosting(html);
+  assert.ok(parsed);
+  assert.strictEqual(parsed.company, 'RustCorp');
+  assert.strictEqual(parsed.role, 'Lead Rust Developer');
+  assert.strictEqual(parsed.location, 'Remote');
+});
+
+// ─── SPA and Bot Barrier Detection Tests ─────────────────────────────
+
+console.log('\n── SPA and Bot Barrier Detection ──');
+
+test('detectContentBarriers flags empty SPA root shells', () => {
+  const html = '<html><body><div id="root"></div><script src="/bundle.js"></script></body></html>';
+  const result = detectContentBarriers(html, '');
+  assert.strictEqual(result.isSpa, true);
+  assert.strictEqual(result.isCaptcha, false);
+  assert.ok(result.reason.includes('JavaScript'));
+});
+
+test('detectContentBarriers flags Cloudflare Turnstile / Challenge pages', () => {
+  const html = '<html><head><title>Just a moment...</title></head><body><div id="cf-turnstile"></div></body></html>';
+  const result = detectContentBarriers(html, 'Checking if the site connection is secure');
+  assert.strictEqual(result.isCaptcha, true);
+  assert.ok(result.reason.includes('challenge'));
+});
+
+// ─── Schema Validation & Grounding Tests ─────────────────────────────
+
+console.log('\n── Schema Validation & Grounding ──');
+
+const { validateAndNormalizeJd, isValidEmail } = require('./utils/jdSchemaValidator');
+
+test('isValidEmail accepts genuine emails and rejects placeholders/system emails', () => {
+  assert.strictEqual(isValidEmail('recruiter.jane@stripe.com'), true);
+  assert.strictEqual(isValidEmail('jobs@figma.com'), true);
+  assert.strictEqual(isValidEmail('email@example.com'), false); // Placeholder
+  assert.strictEqual(isValidEmail('support@greenhouse.io'), false); // Platform domain
+  assert.strictEqual(isValidEmail('privacy@company.com'), false); // Compliance prefix
+  assert.strictEqual(isValidEmail('noreply@company.com'), false); // System prefix
+});
+
+test('validateAndNormalizeJd grounds contact emails against source text', () => {
+  const sourceText = 'We are hiring a Senior Engineer at Stripe. Please reach out to jessica@stripe.com with your resume.';
+  const rawAiOutput = {
+    company: 'Stripe',
+    role: 'Senior Engineer',
+    contacts: [
+      { name: 'Jessica', email: 'jessica@stripe.com', title: 'Recruiter' },
+      { name: 'Fake', email: 'hallucinated@other.com', title: 'Recruiter' },
+      { name: 'Example', email: 'email@example.com', title: '' }
+    ]
+  };
+
+  const { data } = validateAndNormalizeJd(rawAiOutput, sourceText);
+  assert.strictEqual(data.contacts.length, 1);
+  assert.strictEqual(data.contacts[0].email, 'jessica@stripe.com');
+  assert.strictEqual(data.confidence.emailFound, true);
+  assert.strictEqual(data.confidence.companyFound, true);
+  assert.strictEqual(data.confidence.roleFound, true);
+});
+
+test('validateAndNormalizeJd discards placeholder company and role names', () => {
+  const sourceText = 'Looking for an experienced software developer to build platforms.';
+  const rawAiOutput = {
+    company: 'Company Name',
+    role: 'Job Title',
+    contacts: []
+  };
+
+  const { data } = validateAndNormalizeJd(rawAiOutput, sourceText);
+  assert.strictEqual(data.company, '');
+  assert.strictEqual(data.role, '');
+  assert.strictEqual(data.confidence.companyFound, false);
+  assert.strictEqual(data.confidence.roleFound, false);
+});
+
+// ─── Schema-Agnostic JSON Extractor Tests ────────────────────────────
+
+console.log('\n── Schema-Agnostic JSON Extractor ──');
+
+const { extractJsonObject } = require('./utils/jsonExtractor');
+
+test('extractJsonObject parses markdown-fenced JSON with conversational preamble', () => {
+  const text = `Here is the extracted job information:\n\n\`\`\`json\n{\n  "company": "Vercel",\n  "role": "Edge Engineer"\n}\n\`\`\`\nHope this is useful!`;
+  const result = extractJsonObject(text);
+  assert.ok(result);
+  assert.strictEqual(result.company, 'Vercel');
+  assert.strictEqual(result.role, 'Edge Engineer');
+});
+
+test('extractJsonObject repairs unescaped newlines and trailing commas', () => {
+  const raw = '{\n  "company": "Figma",\n  "description": "Multiplayer\nCanvas Engine",\n}';
+  const result = extractJsonObject(raw);
+  assert.ok(result);
+  assert.strictEqual(result.company, 'Figma');
+  assert.ok(result.description.includes('Multiplayer'));
+});
+
+// ─── Structured Error Taxonomy & Diagnostics Tests ───────────────────
+
+console.log('\n── Error Taxonomy & Diagnostics ──');
+
+const { ERROR_CODES, ParsingError, generateRequestId } = require('./utils/errorTaxonomy');
+
+test('generateRequestId returns REQ-YYYYMMDD-XXXXXX format', () => {
+  const reqId = generateRequestId();
+  assert.ok(/^REQ-\d{8}-[A-F0-9]{6}$/.test(reqId), `Invalid request ID format: ${reqId}`);
+});
+
+test('ParsingError serializes into structured response contract', () => {
+  const err = new ParsingError({
+    code: ERROR_CODES.URL_HTTP_403,
+    stage: 'url_fetch',
+    message: 'URL returned HTTP 403 (Forbidden)',
+    userMessage: 'The job board blocked automated access. Try pasting the job description directly.',
+    technicalMessage: 'HTTP 403 Forbidden on greenhouse.io',
+    retryable: false,
+    fallbackAvailable: true,
+    requestId: 'REQ-20260930-123456'
+  });
+
+  const response = err.toResponse();
+  assert.strictEqual(response.success, false);
+  assert.strictEqual(response.error, 'The job board blocked automated access. Try pasting the job description directly.');
+  assert.strictEqual(response.errorDetails.code, 'URL_HTTP_403');
+  assert.strictEqual(response.errorDetails.stage, 'url_fetch');
+  assert.strictEqual(response.errorDetails.requestId, 'REQ-20260930-123456');
+  assert.strictEqual(response.errorDetails.fallbackAvailable, true);
+  assert.strictEqual(response.diagnostics.requestId, 'REQ-20260930-123456');
+});
+
 // ─── Summary ────────────────────────────────────────────────────────
 
 console.log(`\n${'═'.repeat(50)}`);
@@ -226,3 +472,4 @@ console.log(`${'═'.repeat(50)}\n`);
 if (failed > 0) {
   process.exit(1);
 }
+

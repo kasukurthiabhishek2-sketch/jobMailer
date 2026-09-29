@@ -163,7 +163,7 @@ async function testCopilotConnection(githubAccessToken) {
 /**
  * Call Copilot Chat Completions API
  */
-async function callCopilotChat({ githubAccessToken, model = 'gpt-4o', systemPrompt, userPrompt }) {
+async function callCopilotChat({ githubAccessToken, model = 'gpt-4o', systemPrompt, userPrompt, raw = false }) {
   const sessionToken = await getCopilotSessionToken(githubAccessToken);
 
   const payload = {
@@ -195,13 +195,13 @@ async function callCopilotChat({ githubAccessToken, model = 'gpt-4o', systemProm
       const j = JSON.parse(text);
       if ((j.error?.code === 'model_not_supported' || j.error?.message?.toLowerCase().includes('not supported') || text.includes('not supported')) && model !== 'gpt-4o') {
         console.warn(`[Copilot] Model '${model}' not supported by GitHub Copilot. Automatically falling back to 'gpt-4o'.`);
-        return await callCopilotChat({ githubAccessToken, model: 'gpt-4o', systemPrompt, userPrompt });
+        return await callCopilotChat({ githubAccessToken, model: 'gpt-4o', systemPrompt, userPrompt, raw });
       }
       msg = j.error?.message || j.message || msg;
     } catch (e) {
       if (text.includes('not supported') && model !== 'gpt-4o') {
         console.warn(`[Copilot] Model '${model}' not supported by GitHub Copilot. Automatically falling back to 'gpt-4o'.`);
-        return await callCopilotChat({ githubAccessToken, model: 'gpt-4o', systemPrompt, userPrompt });
+        return await callCopilotChat({ githubAccessToken, model: 'gpt-4o', systemPrompt, userPrompt, raw });
       }
     }
     throw new Error(msg);
@@ -213,6 +213,10 @@ async function callCopilotChat({ githubAccessToken, model = 'gpt-4o', systemProm
     throw new Error('Copilot returned an empty response.');
   }
 
+  if (raw) {
+    return rawText;
+  }
+
   const { cleanJsonOutput } = require('./aiService');
   const parsed = cleanJsonOutput(rawText);
   if (!parsed || !parsed.body) {
@@ -222,6 +226,13 @@ async function callCopilotChat({ githubAccessToken, model = 'gpt-4o', systemProm
     };
   }
   return parsed;
+}
+
+/**
+ * Call Copilot Chat Completions API and return raw completion text
+ */
+async function callCopilotChatRaw(args) {
+  return await callCopilotChat({ ...args, raw: true });
 }
 
 /**
@@ -268,6 +279,7 @@ module.exports = {
   getCopilotSessionToken,
   testCopilotConnection,
   callCopilotChat,
+  callCopilotChatRaw,
   clearSessionCache,
   getSessionCache,
   getPendingDeviceFlow,

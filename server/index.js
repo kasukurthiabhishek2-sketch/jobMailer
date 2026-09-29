@@ -11,6 +11,7 @@ const { generateColdEmail, parseJobDescription, testAiConnection, listProviderMo
 const { parseResumeFile } = require('./services/resumeParser');
 const { parseRecipientSheet } = require('./services/sheetParser');
 const { fetchUrlAsText } = require('./services/urlScraper');
+const { ERROR_CODES, STAGES, ParsingError, generateRequestId } = require('./utils/errorTaxonomy');
 const { testSmtpConnection, sendEmailMessage, sendEmailMessageWithRetry, classifySmtpError, dispatchCampaign } = require('./services/smtpService');
 
 const app = express();
@@ -876,40 +877,85 @@ function adaptGenericEmailForRecipient(genericEmail, recipient, senderName) {
 
 // Parse a raw job description (text or URL) using AI to extract structured recipient data
 app.post('/api/ai/parse-jd', async (req, res) => {
+  const startTime = Date.now();
+  const requestId = req.headers['x-request-id'] || req.body?.requestId || generateRequestId();
+
   try {
     const { mode, rawText, url } = req.body;
 
     if (!mode || (mode !== 'text' && mode !== 'url')) {
-      return res.status(400).json({ error: 'Invalid mode. Must be "text" or "url".' });
+      throw new ParsingError({
+        code: ERROR_CODES.URL_INVALID,
+        stage: STAGES.URL_VALIDATION,
+        message: 'Invalid mode. Must be "text" or "url".',
+        userMessage: 'Invalid mode selected. Please select either "Paste JD Text" or "Paste URL".',
+        technicalMessage: `Received invalid mode: "${mode}"`,
+        retryable: false,
+        fallbackAvailable: false,
+        requestId
+      });
+    }
+
+    // Resolve AI configuration first to prevent open proxy abuse before any network fetch
+    const { providerKey, providerConfig } = resolveAiProviderConfig(req.body, req.uid);
+
+    if (!providerConfig || !providerConfig.apiKey) {
+      throw new ParsingError({
+        code: ERROR_CODES.AI_KEY_MISSING,
+        stage: STAGES.AI_CONFIG,
+        message: `AI provider ${providerKey} is not configured with an API key.`,
+        userMessage: `AI provider "${providerKey}" is not configured with an API key. Please configure your key in Settings.`,
+        technicalMessage: `Provider ${providerKey} has empty apiKey`,
+        retryable: false,
+        fallbackAvailable: false,
+        requestId,
+        details: { providerKey }
+      });
     }
 
     let textToParse;
     let sourceUrl = null;
+    let deterministicData = {};
+    let scrapedMeta = null;
 
     if (mode === 'url') {
       if (!url || typeof url !== 'string' || !url.trim()) {
-        return res.status(400).json({ error: 'URL is required when mode is "url".' });
-      }
-      try {
-        const scraped = await fetchUrlAsText(url.trim());
-        textToParse = scraped.text;
-        sourceUrl = scraped.sourceUrl;
-      } catch (scrapeErr) {
-        return res.status(400).json({
-          error: `Could not fetch URL: ${scrapeErr.message}. Try pasting the job description text directly.`
+        throw new ParsingError({
+          code: ERROR_CODES.URL_REQUIRED,
+          stage: STAGES.URL_VALIDATION,
+          message: 'URL is required when mode is "url".',
+          userMessage: 'Please provide a job posting URL.',
+          technicalMessage: 'Empty or missing url parameter in mode: "url"',
+          retryable: false,
+          fallbackAvailable: true,
+          inputType: 'url',
+          requestId
         });
       }
+
+      const scraped = await fetchUrlAsText(url.trim(), { requestId });
+      textToParse = scraped.text;
+      sourceUrl = scraped.sourceUrl;
+      deterministicData = scraped.jsonLd || {};
+      scrapedMeta = {
+        title: scraped.title,
+        hasJsonLd: Boolean(scraped.jsonLd)
+      };
     } else {
       if (!rawText || typeof rawText !== 'string' || rawText.trim().length < 20) {
-        return res.status(400).json({ error: 'Job description text is too short (minimum 20 characters).' });
+        throw new ParsingError({
+          code: ERROR_CODES.JD_TOO_SHORT,
+          stage: STAGES.JD_VALIDATION,
+          message: 'Job description text is too short (minimum 20 characters).',
+          userMessage: 'Job description text is too short (minimum 20 characters required). Please paste the complete job description.',
+          technicalMessage: `Received text length: ${rawText ? rawText.trim().length : 0}`,
+          retryable: false,
+          fallbackAvailable: false,
+          inputType: 'text',
+          requestId
+        });
       }
       textToParse = rawText.trim();
-    }
-
-    const { providerKey, providerConfig } = resolveAiProviderConfig(req.body, req.uid);
-
-    if (!providerConfig || !providerConfig.apiKey) {
-      return res.status(400).json({ error: `AI provider ${providerKey} is not configured with an API key.` });
     }
 
     const customSystemPrompt = resolveCustomPrompt('jdParser', req.body.customSystemPrompt || req.body.customPrompt);
@@ -918,17 +964,46 @@ app.post('/api/ai/parse-jd', async (req, res) => {
       providerKey,
       providerConfig,
       rawText: textToParse,
-      customSystemPrompt
+      customSystemPrompt,
+      deterministic: deterministicData,
+      requestId
     });
+
+    const durationMs = Date.now() - startTime;
+    console.log(`[${requestId}] stage=final_validation status=success duration=${durationMs}ms mode=${mode}`);
 
     res.json({
       success: true,
       parsed,
-      sourceUrl
+      sourceUrl,
+      diagnostics: {
+        requestId,
+        inputType: mode,
+        extractionMethod: mode === 'url' ? (scrapedMeta?.hasJsonLd ? 'jsonld+ai' : 'dom+ai') : 'direct_text+ai',
+        durationMs
+      }
     });
   } catch (err) {
-    console.error('JD parse error:', err);
-    res.status(500).json({ error: err.message || 'Failed to parse job description.' });
+    const durationMs = Date.now() - startTime;
+    console.error(`[${requestId}] parse-jd failure:`, err.message || err);
+
+    if (err instanceof ParsingError || (err && err.name === 'ParsingError')) {
+      return res.status(err.httpStatus || 400).json(err.toResponse());
+    }
+
+    const fallbackErr = new ParsingError({
+      code: ERROR_CODES.UNKNOWN_ERROR,
+      stage: STAGES.AI_PARSING,
+      message: err.message || 'Failed to parse job description.',
+      userMessage: err.message || 'Failed to parse job description. Please try pasting the text directly.',
+      technicalMessage: err.stack || err.message,
+      retryable: true,
+      fallbackAvailable: true,
+      requestId,
+      httpStatus: 500
+    });
+
+    res.status(500).json(fallbackErr.toResponse());
   }
 });
 

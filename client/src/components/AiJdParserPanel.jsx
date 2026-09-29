@@ -44,6 +44,8 @@ export default function AiJdParserPanel({
   const [editLocation, setEditLocation] = useState('');
   const [selectedContactIdx, setSelectedContactIdx] = useState(0);
 
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+
   // Resolve active AI provider
   const activeProviderKey = config?.activeProvider || 'gemini';
   const activeProviderConfig = config?.aiProviders?.[activeProviderKey];
@@ -52,7 +54,7 @@ export default function AiJdParserPanel({
     activeProviderConfig?.apiKey ||
     activeProviderConfig?.maskedKey ||
     (Array.isArray(activeProviderConfig?.savedKeys) && activeProviderConfig.savedKeys.length > 0) ||
-    (activeProvider === 'copilot' && (activeProviderConfig?.connected || activeProviderConfig?.isConfigured))
+    (activeProviderKey === 'copilot' && (activeProviderConfig?.connected || activeProviderConfig?.isConfigured))
   );
 
   const inputValid = useMemo(() => {
@@ -82,6 +84,7 @@ export default function AiJdParserPanel({
 
     setIsParsing(true);
     setParseError(null);
+    setShowDiagnostics(false);
     setParsedData(null);
 
     try {
@@ -113,7 +116,16 @@ export default function AiJdParserPanel({
         });
       }
     } catch (err) {
-      setParseError(err.message);
+      setParseError({
+        message: err.message || 'Failed to parse job description',
+        code: err.code || 'UNKNOWN_ERROR',
+        stage: err.stage || 'unknown',
+        requestId: err.requestId || null,
+        technicalMessage: err.technicalMessage || null,
+        fallbackAvailable: Boolean(err.fallbackAvailable),
+        retryable: Boolean(err.retryable),
+        details: err.details || null
+      });
       onShowToast?.({
         type: 'error',
         title: 'Parsing Failed',
@@ -178,6 +190,7 @@ export default function AiJdParserPanel({
     setEditRole('');
     setEditLocation('');
     setParseError(null);
+    setShowDiagnostics(false);
     setSelectedContactIdx(0);
   };
 
@@ -261,22 +274,98 @@ export default function AiJdParserPanel({
             </div>
           )}
 
-          {/* Parse Error */}
+          {/* Parse Error with Multi-Layered Diagnostics & Recovery */}
           {parseError && (
             <div style={{
-              padding: '8px 12px',
-              background: 'var(--error-bg, rgba(239,68,68,0.1))',
+              padding: '10px 12px',
+              background: 'var(--error-bg, rgba(239,68,68,0.08))',
               border: '1px solid var(--accent-error, #ef4444)',
               borderRadius: 'var(--radius-md)',
-              color: 'var(--accent-error, #ef4444)',
-              fontSize: 12,
               marginBottom: 'var(--sp-3)',
               display: 'flex',
-              alignItems: 'center',
-              gap: 8
+              flexDirection: 'column',
+              gap: 6
             }}>
-              <AlertTriangle size={14} style={{ flexShrink: 0 }} />
-              {parseError}
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, color: 'var(--accent-error, #ef4444)' }}>
+                <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 2 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 12 }}>
+                    {typeof parseError === 'object' ? parseError.message : parseError}
+                  </div>
+                  {typeof parseError === 'object' && parseError.requestId && (
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                      Reference ID: <code style={{ userSelect: 'all', fontSize: 10, background: 'var(--bg-tertiary)', padding: '1px 4px', borderRadius: 3 }}>{parseError.requestId}</code>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Actionable Recovery Suggestion for URL mode */}
+              {inputMode === 'url' && (
+                <div style={{
+                  fontSize: 11,
+                  color: 'var(--text-secondary)',
+                  background: 'rgba(255,255,255,0.04)',
+                  padding: '6px 8px',
+                  borderRadius: 'var(--radius-sm)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginTop: 2
+                }}>
+                  <span>Can't access this URL?</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInputMode('text');
+                      setParseError(null);
+                      setShowDiagnostics(false);
+                    }}
+                    className="btn btn-sm btn-secondary"
+                    style={{ fontSize: 11, padding: '2px 8px', height: 'auto' }}
+                  >
+                    Switch to Paste JD
+                  </button>
+                </div>
+              )}
+
+              {/* Diagnostic Details Toggle */}
+              {typeof parseError === 'object' && (parseError.code || parseError.stage || parseError.technicalMessage) && (
+                <div style={{ marginTop: 2 }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowDiagnostics(!showDiagnostics)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      padding: 0,
+                      color: 'var(--text-muted)',
+                      fontSize: 10,
+                      cursor: 'pointer',
+                      textDecoration: 'underline'
+                    }}
+                  >
+                    {showDiagnostics ? 'Hide diagnostic details' : 'View diagnostic details'}
+                  </button>
+                  {showDiagnostics && (
+                    <pre style={{
+                      margin: '4px 0 0 0',
+                      padding: 6,
+                      background: 'var(--bg-tertiary)',
+                      borderRadius: 4,
+                      fontSize: 10,
+                      color: 'var(--text-muted)',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-all',
+                      fontFamily: 'monospace',
+                      maxHeight: 100,
+                      overflowY: 'auto'
+                    }}>
+                      {`Stage: ${parseError.stage}\nCode: ${parseError.code}\nRequest: ${parseError.requestId || 'N/A'}${parseError.technicalMessage ? `\nDetails: ${parseError.technicalMessage}` : ''}`}
+                    </pre>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
