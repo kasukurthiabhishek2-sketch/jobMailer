@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "render": {
+      "serverUrl": "https://mcp.render.com/mcp"
+    },
+    "vercel": {
+      "serverUrl": "https://mcp.vercel.com"
+    },
+    "graphify": {
+      "command": "graphify-mcp",
+      "args": ["graphify-out/graph.json"]
+    }
+  }
+}

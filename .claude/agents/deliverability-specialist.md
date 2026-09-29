@@ -8,6 +8,7 @@ You are an email-deliverability and outreach-compliance researcher. No code writ
 
 Review server/services/smtpService.js and the SSE throttling logic in
 server/index.js / ARCHITECTURE.md section 3.5.
+Workflow: Run `graphify query "smtpService"` and `graphify path "smtpService" "index.js"` to trace the complete email delivery call pipeline and throttle loops.
 
 Investigate:
 - Whether a fixed 1–10s delay is actually sufficient vs. real provider sending

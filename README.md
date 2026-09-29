@@ -467,6 +467,14 @@ npm run lint
 ```
 Output: `Found 0 warnings and 0 errors.`
 
+### 4. Knowledge Graph & Autonomous Agent Navigation (Graphify)
+JDMail includes **Graphify** integration to maintain a living, queryable knowledge graph of all components, services, and routes:
+
+- **Update Graph:** `npm run graphify:update` (re-extracts AST code graphs, updates `graphify-out/graph.json` and `graphify-out/GRAPH_REPORT.md`).
+- **Query Graph:** `npm run graphify:query -- "how are secrets encrypted"` (traverses graph nodes and links).
+- **Interactive Visualizer:** Open `graphify-out/graph.html` in any browser to inspect dependency clusters and god nodes.
+- **Agent Integration:** All coding agents query the graph prior to implementation and update it upon completion. Automatic git hooks (`.git/hooks/post-commit`) keep the graph in sync after every commit.
+
 ---
 
 ## Troubleshooting & FAQ

@@ -832,6 +832,7 @@ JDMail/
     ├── test_security_guardrails.js# Automated test suite for SSRF, path traversal & requireAuth
     ├── test_ephemeral_uploads.js# Automated test suite for zero file retention & resume deletion
     ├── test_ai_retry.js         # Automated test suite for HTTP 429 exponential backoff retries
+    ├── test_graphify_integration.js # Automated test suite for Graphify knowledge graph invariants
     ├── data/                    # Encrypted local data directory (gitignored)
     │   ├── .secret_key          # 256-bit AES master key (0o600 permissions)
     │   ├── config.json          # Encrypted settings, credentials & SMTP profiles
@@ -922,3 +923,22 @@ JDMail/
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   ```
+
+---
+
+## 10. Graphify Knowledge Graph & Multi-Agent Architecture
+
+JDMail integrates **Graphify** (`Graphify-Labs/graphify`), an AST-powered codebase knowledge graph engine, to provide structured, persistent context for development and autonomous AI coding agents across cycles.
+
+### 10.1 Graph Artifacts (`graphify-out/`)
+- `graph.json`: Machine-readable NetworkX/D3 node-link graph mapping symbols, functions, calls, imports, and cross-file dependencies.
+- `graph.html`: Standalone interactive visualization for visual codebase exploration.
+- `GRAPH_REPORT.md`: Architectural summary highlighting god nodes, community clusters, and structural cohesion.
+- `wiki/index.md`: Navigable markdown articles organized by detected code communities.
+
+### 10.2 Agent Protocols & Invariants
+1. **Pre-Implementation Discovery:** Prior to modifying code, agents query the graph (`graphify query "<question>"`, `graphify path "<A>" "<B>"`, `graphify explain "<concept>"`) to inspect caller graphs, import chains, and affected components.
+2. **Post-Implementation Synchronization:** Any agent that modifies code must run `npm run graphify:update` (or `graphify update .`) before declaring work complete. This triggers deterministic tree-sitter AST re-extraction across modified files.
+3. **Automated Git Hook Gate:** The `.git/hooks/post-commit` hook automatically triggers an AST rebuild on code commits to guarantee the knowledge graph remains synchronized with `HEAD`.
+4. **Git Attributes & Merge Driver:** `graphify-out/graph.json merge=graphify` in `.gitattributes` ensures clean union-merging during branch integrations.
+

@@ -12,6 +12,9 @@ Rules:
 - Read-only. You cannot fix anything, and you must not let the *intent* behind a
   change substitute for verifying its actual behavior — read the code, run
   `npm test`/`npm run lint` yourself, don't trust prior reports' claims uncorroborated.
+- Verify knowledge graph health: inspect `graphify-out/GRAPH_REPORT.md` and confirm
+  `npm run graphify:update` passes cleanly without errors. Confirm that implementation branches
+  kept the knowledge graph in sync.
 - If a previous cycle's `docs/RATING_HISTORY.md` entry exists, read it, but
   independently re-verify every previously-flagged issue is actually resolved in
   the code — do not take "marked as fixed" on faith.

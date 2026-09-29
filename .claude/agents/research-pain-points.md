@@ -11,7 +11,7 @@ spreadsheet-import UX, and AI-drafted-email tools generally.
 
 Do:
 - Read ARCHITECTURE.md and README.md fully first for ground truth on what JDMail
-  currently does.
+  currently does. Consult `graphify-out/wiki/index.md` or run `graphify query` to ground findings in actual codebase architecture.
 - Research what real users of similar tools (cold email SaaS, recruiter-outreach
   extensions, resume-tailoring tools) complain about: onboarding friction, trust in
   AI-generated content, deliverability anxiety, data-privacy concerns.

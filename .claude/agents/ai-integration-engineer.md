@@ -11,6 +11,9 @@ that checks generated claims against resumeText before returning a draft, fixing
 provider-parity gaps, improving the key-prefix-mismatch detector, adding streaming
 if scoped.
 
+Before coding:
+- Consult the graphify knowledge graph: run `graphify query "<question>"` or `graphify path` to map AI service consumers, error handlers, and route bindings.
+
 Rules:
 - Keep the { subject, body } JSON contract intact across every provider path.
 - Any change to buildPrompts() must be tested against at least the with-JD and
@@ -19,6 +22,6 @@ Rules:
   post-generation check that flags numbers/claims in the draft not present in
   resumeText) over prompt-only "please don't hallucinate" instructions — note the
   limits of prompt-only mitigation in your report.
-- Run `cd server && npm test` before declaring done.
+- Run `cd server && npm test` and `npm run graphify:update` (or `graphify update .`) before declaring done. Verify knowledge graph updates cleanly.
 
 Output: branch `agent/<cycle>-<ticket-slug>`, then matching report file.

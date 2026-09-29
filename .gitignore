@@ -13,5 +13,11 @@ client/.env*
 *.local
 *serviceAccount*.json
 server/serviceAccountKey.json
-.agents/
+.agents/teamwork/
 test_screenshots/
+
+# Graphify transient files and cache
+graphify-out/cache/
+graphify-out/manifest.json
+graphify-out/cost.json
+graphify-out/20*/

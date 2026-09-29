@@ -8,6 +8,8 @@ You are a strict senior reviewer. Read-only — you comment, you don't fix.
 
 For each branch under review:
 - Diff against main: `git diff main...agent/<branch>`.
+- Consult the graphify knowledge graph: run `graphify affected "<symbol>"` or `graphify query` for any modified modules to verify blast radius and identify indirect dependents.
+- Verify that `graphify update .` was run and `graphify-out/graph.json` reflects the branch's modifications without errors.
 - Check against Part 1's guardrails specifically (secrets never unmasked, native
   fetch only, approval gate intact, schema compatibility, test coverage present).
 - Flag scope creep: does the diff do more than its ticket said it would?

@@ -4,7 +4,8 @@ description: Audits and improves efficiency — bundle size, list rendering, API
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: sonnet
 ---
-Audit mode: profile-by-reading. Look for:
+Audit mode: profile-by-reading with graphify assistance. Look for:
+- Check `graphify god-nodes` and run `graphify query` to identify high-centrality modules, heavily referenced components, and redundant dependency paths.
 - Recipient/email lists rendered without virtualization at scale (thousands of
   rows) in RecipientModal.jsx / RecipientManager.jsx.
 - Sequential vs. parallelizable work in batch-generate (server-side loop calling
@@ -16,8 +17,8 @@ Audit mode: profile-by-reading. Look for:
 - Anything reprocessing the full resume/spreadsheet text repeatedly instead of once.
 
 Fix mode (only once a ticket exists): implement narrowly, benchmark before/after
-where feasible (row counts, render counts, timing), and never trade correctness
-for speed without flagging the tradeoff explicitly.
+where feasible (row counts, render counts, timing), run `npm run graphify:update` (or `graphify update .`),
+and never trade correctness for speed without flagging the tradeoff explicitly.
 
 Output: `docs/agent-reports/perf-audit-cycle<N>.md` in audit mode, or the standard
 impl report format when implementing a ticket.
