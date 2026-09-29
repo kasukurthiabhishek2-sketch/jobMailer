@@ -44,18 +44,9 @@ describe('Tier 1: Feature Coverage (Features 1 to 10: Steps 1-3 & Wizard State)'
       expect(screen.getByText(/PDF \(\.pdf\) or Word \(\.docx\) • Up to 5MB/i)).toBeInTheDocument();
     });
 
-    it('1.2 loads sample resume on sample button click without network request', () => {
-      const onResumeUploaded = vi.fn();
-      const onShowToast = vi.fn();
-      render(<ResumeUpload resumeData={null} onResumeUploaded={onResumeUploaded} onShowToast={onShowToast} />);
-
-      fireEvent.click(screen.getByRole('button', { name: /Try with Sample Resume/i }));
-      expect(onResumeUploaded).toHaveBeenCalledTimes(1);
-      const payload = onResumeUploaded.mock.calls[0][0];
-      expect(payload.detectedName).toBe('Alex Mercer');
-      expect(payload.detectedEmail).toBe('alex.mercer.dev@example.com');
-      expect(payload.wordCount).toBeGreaterThan(100);
-      expect(onShowToast).toHaveBeenCalledWith(expect.objectContaining({ type: 'info', title: 'Sample Resume Loaded' }));
+    it('1.2 does not display sample resume button in dropzone', () => {
+      render(<ResumeUpload resumeData={null} onResumeUploaded={vi.fn()} onShowToast={vi.fn()} />);
+      expect(screen.queryByRole('button', { name: /Try with Sample Resume/i })).not.toBeInTheDocument();
     });
 
     it('1.3 toggles dragover and dragleave visual state on dropzone', () => {

@@ -41,14 +41,17 @@ describe('Tier 4: Real-World End-to-End Application Scenarios', () => {
   // =========================================================================
   describe('Scenario 2: Deduplication, Consent Gate & Intake Workflow (M1)', () => {
     it('4.1 verifies user intake, recipient duplicate detection badge, consent gate, and JD selection', () => {
-      // 1. Candidate intake with sample resume
+      // 1. Candidate intake with uploaded resume
+      const defaultResume = {
+        detectedName: 'Alex Mercer',
+        detectedEmail: 'alex.mercer.dev@example.com',
+        detectedPhone: '+1 (555) 382-9912',
+        wordCount: 350,
+        text: 'Alex Mercer Senior Engineer resume text'
+      };
       const onResumeUploaded = vi.fn();
-      render(<ResumeUpload resumeData={null} onResumeUploaded={onResumeUploaded} onShowToast={vi.fn()} />);
-      const sampleBtn = screen.getByRole('button', { name: /Try with Sample Resume/i });
-      fireEvent.click(sampleBtn);
-      expect(onResumeUploaded).toHaveBeenCalled();
-      const loadedResume = onResumeUploaded.mock.calls[0][0];
-      expect(loadedResume.detectedName).toBe('Alex Mercer');
+      render(<ResumeUpload resumeData={defaultResume} onResumeUploaded={onResumeUploaded} onShowToast={vi.fn()} />);
+      expect(screen.getByDisplayValue('Alex Mercer')).toBeInTheDocument();
 
       // 2. Recipient Ingestion with 30-day dedup badge
       const sheetData = {

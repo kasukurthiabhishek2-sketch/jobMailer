@@ -232,35 +232,18 @@ describe('ResumeUpload Component (M1)', () => {
     });
   });
 
-  // 3. Sample Resume Action
+  // 3. Sample Resume Action Removed
   describe('Try with Sample Resume Action', () => {
-    it('populates Alex Mercer mock profile data and fires informational toast', () => {
-      const onResumeUploaded = vi.fn();
-      const onShowToast = vi.fn();
-
+    it('does not render "Try with Sample Resume" button in the dropzone', () => {
       render(
         <ResumeUpload
           resumeData={null}
-          onResumeUploaded={onResumeUploaded}
-          onShowToast={onShowToast}
+          onResumeUploaded={vi.fn()}
+          onShowToast={vi.fn()}
         />
       );
 
-      const sampleBtn = screen.getByRole('button', { name: /Try with Sample Resume/i });
-      fireEvent.click(sampleBtn);
-
-      expect(onResumeUploaded).toHaveBeenCalledTimes(1);
-      const sampleData = onResumeUploaded.mock.calls[0][0];
-      expect(sampleData.detectedName).toBe('Alex Mercer');
-      expect(sampleData.detectedEmail).toBe('alex.mercer.dev@example.com');
-      expect(sampleData.detectedPhone).toBe('+1 (555) 382-9912');
-      expect(sampleData.originalFilename).toBe('Alex_Mercer_Resume.pdf');
-      expect(sampleData.text).toContain('Senior Full-Stack & AI Systems Engineer');
-
-      expect(onShowToast).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'info',
-        title: 'Sample Resume Loaded'
-      }));
+      expect(screen.queryByRole('button', { name: /Try with Sample Resume/i })).not.toBeInTheDocument();
     });
   });
 

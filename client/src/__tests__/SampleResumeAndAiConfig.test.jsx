@@ -26,38 +26,17 @@ describe('Sample Resume Workflow & AI Key Verification', () => {
     vi.clearAllMocks();
   });
 
-  // 1. Try with Sample Resume loads expected resume payload
-  it('loads Alex Mercer sample resume with complete payload when "Try with Sample Resume" is clicked', async () => {
-    const onResumeUploaded = vi.fn();
-    const onShowToast = vi.fn();
-
+  // 1. Verifies sample resume button is removed from ResumeUpload
+  it('does not display "Try with Sample Resume" button in candidate intake', () => {
     render(
       <ResumeUpload
         resumeData={null}
-        onResumeUploaded={onResumeUploaded}
-        onShowToast={onShowToast}
+        onResumeUploaded={vi.fn()}
+        onShowToast={vi.fn()}
       />
     );
 
-    const sampleBtn = screen.getByRole('button', { name: /Try with Sample Resume/i });
-    expect(sampleBtn).toBeInTheDocument();
-    fireEvent.click(sampleBtn);
-
-    expect(onResumeUploaded).toHaveBeenCalledTimes(1);
-    const uploaded = onResumeUploaded.mock.calls[0][0];
-
-    expect(uploaded.detectedName).toBe('Alex Mercer');
-    expect(uploaded.detectedEmail).toBe('alex.mercer.dev@example.com');
-    expect(uploaded.detectedPhone).toBe('+1 (555) 382-9912');
-    expect(uploaded.originalFilename).toBe('Alex_Mercer_Resume.pdf');
-    expect(uploaded.text).toContain('Alex Mercer');
-    expect(uploaded.text).toContain('Senior Full-Stack & AI Systems Engineer');
-    expect(uploaded.wordCount).toBeGreaterThan(100);
-
-    expect(onShowToast).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'info',
-      title: 'Sample Resume Loaded'
-    }));
+    expect(screen.queryByRole('button', { name: /Try with Sample Resume/i })).not.toBeInTheDocument();
   });
 
   // 2. EmailPreview works seamlessly with sample resume and server-configured AI

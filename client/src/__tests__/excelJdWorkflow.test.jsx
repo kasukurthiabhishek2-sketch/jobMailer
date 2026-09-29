@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
-import { getVisibleWizardSteps, WIZARD_STEPS } from '../constants/wizardSteps';
+import { getVisibleWizardSteps } from '../constants/wizardSteps';
 import StepIndicator from '../components/StepIndicator';
 import JobDescriptionModal from '../components/JobDescriptionModal';
 import JobDescriptionInput from '../components/JobDescriptionInput';

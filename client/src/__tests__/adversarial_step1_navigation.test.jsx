@@ -180,17 +180,11 @@ describe('Adversarial Stress Test: Step 1 Keystroke Isolation & Auto-Advance', (
   // ---------------------------------------------------------------------------
   // 4. Positive Auto-Advance Triggers (Sample Resume & File Upload)
   // ---------------------------------------------------------------------------
-  it('clicking "Try with Sample Resume" DOES advance to Step 2', async () => {
+  it('does not display "Try with Sample Resume" button on Step 1', () => {
     render(<WizardHarness initialResume={null} />);
 
     expect(screen.getByTestId('current-step-display')).toHaveTextContent('1');
-
-    const sampleBtn = screen.getByRole('button', { name: /Try with Sample Resume/i });
-    fireEvent.click(sampleBtn);
-
-    expect(screen.getByTestId('current-step-display')).toHaveTextContent('2');
-    expect(screen.getByTestId('step-2-container')).toBeInTheDocument();
-    expect(screen.getByTestId('candidate-name-display')).toHaveTextContent('Alex Mercer');
+    expect(screen.queryByRole('button', { name: /Try with Sample Resume/i })).not.toBeInTheDocument();
   });
 
   it('uploading a valid PDF file DOES advance to Step 2', async () => {
