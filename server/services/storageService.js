@@ -78,9 +78,23 @@ const DEFAULT_CONFIG = {
     }
   },
   smtpProfiles: [],
+  candidateProfile: {
+    fullName: '',
+    email: '',
+    phone: ''
+  },
+  preferences: {
+    outreachTone: 'direct',
+    delaySeconds: 3,
+    attachResume: true
+  },
   sendingPreferences: {
     delaySeconds: 3,
     attachResume: true
+  },
+  customPrompts: {
+    coldEmail: { enabled: false, content: '' },
+    jdParser: { enabled: false, content: '' }
   }
 };
 
@@ -99,9 +113,21 @@ function readConfigFile() {
         ...DEFAULT_CONFIG.aiProviders,
         ...parsed.aiProviders
       },
+      candidateProfile: {
+        ...DEFAULT_CONFIG.candidateProfile,
+        ...parsed.candidateProfile
+      },
+      preferences: {
+        ...DEFAULT_CONFIG.preferences,
+        ...parsed.preferences
+      },
       sendingPreferences: {
         ...DEFAULT_CONFIG.sendingPreferences,
         ...parsed.sendingPreferences
+      },
+      customPrompts: {
+        ...DEFAULT_CONFIG.customPrompts,
+        ...parsed.customPrompts
       }
     };
   } catch (err) {
@@ -224,6 +250,30 @@ function getPublicConfig() {
       };
     });
   }
+
+  publicConfig.candidateProfile = config.candidateProfile || { ...DEFAULT_CONFIG.candidateProfile };
+  publicConfig.preferences = {
+    outreachTone: config.preferences?.outreachTone || 'direct',
+    delaySeconds: config.sendingPreferences?.delaySeconds || 3,
+    attachResume: config.sendingPreferences?.attachResume !== false,
+    ...(config.preferences || {})
+  };
+  publicConfig.sendingPreferences = {
+    delaySeconds: publicConfig.preferences.delaySeconds,
+    attachResume: publicConfig.preferences.attachResume
+  };
+
+  const defaultSmtp = (publicConfig.smtpProfiles || []).find(p => p.isDefault) || publicConfig.smtpProfiles?.[0] || {};
+  publicConfig.smtp = {
+    provider: 'gmail',
+    email: defaultSmtp.username || defaultSmtp.fromEmail || '',
+    appPassword: defaultSmtp.maskedPassword || '',
+    password: defaultSmtp.maskedPassword || '',
+    host: defaultSmtp.host || 'smtp.gmail.com',
+    port: defaultSmtp.port || 465,
+    encryption: defaultSmtp.encryption || 'SSL',
+    fromName: defaultSmtp.fromName || ''
+  };
 
   return publicConfig;
 }
@@ -464,15 +514,98 @@ function setDefaultSmtpProfile(id) {
 }
 
 /**
+ * Update custom AI prompt overrides
+ */
+function updateCustomPrompts(prompts) {
+  const config = readConfigFile();
+  const VALID_KEYS = ['coldEmail', 'jdParser'];
+  const MAX_PROMPT_LENGTH = 8000;
+  const updated = { ...config.customPrompts };
+
+  for (const key of VALID_KEYS) {
+    if (prompts[key] !== undefined) {
+      const entry = prompts[key];
+      updated[key] = {
+        enabled: Boolean(entry.enabled),
+        content: typeof entry.content === 'string'
+          ? entry.content.slice(0, MAX_PROMPT_LENGTH)
+          : ''
+      };
+    }
+  }
+
+  config.customPrompts = updated;
+  saveConfigFile(config);
+  return getPublicConfig();
+}
+
+/**
  * Update preferences
  */
-function updatePreferences(prefs) {
+function updatePreferences(prefs = {}) {
   const config = readConfigFile();
   config.sendingPreferences = {
     ...config.sendingPreferences,
     ...prefs
   };
+  config.preferences = {
+    ...(config.preferences || {}),
+    ...config.sendingPreferences,
+    ...prefs
+  };
+  if (prefs.candidateProfile) {
+    config.candidateProfile = {
+      ...(config.candidateProfile || DEFAULT_CONFIG.candidateProfile),
+      ...prefs.candidateProfile
+    };
+  }
   saveConfigFile(config);
+  return getPublicConfig();
+}
+
+/**
+ * Update candidate profile
+ */
+function updateCandidateProfile(profile = {}) {
+  const config = readConfigFile();
+  config.candidateProfile = {
+    ...(config.candidateProfile || DEFAULT_CONFIG.candidateProfile),
+    ...profile
+  };
+  saveConfigFile(config);
+  return getPublicConfig();
+}
+
+/**
+ * Save / sync full settings partial
+ */
+function saveFullSettings(partial = {}) {
+  const config = readConfigFile();
+  if (partial.candidateProfile) {
+    config.candidateProfile = {
+      ...(config.candidateProfile || DEFAULT_CONFIG.candidateProfile),
+      ...partial.candidateProfile
+    };
+  }
+  if (partial.preferences || partial.sendingPreferences) {
+    const prefs = partial.preferences || partial.sendingPreferences;
+    config.sendingPreferences = {
+      ...config.sendingPreferences,
+      ...prefs
+    };
+    config.preferences = {
+      ...(config.preferences || {}),
+      ...config.sendingPreferences,
+      ...prefs
+    };
+  }
+  if (partial.activeProvider) {
+    config.activeProvider = partial.activeProvider;
+  }
+  saveConfigFile(config);
+  if (partial.customPrompts) {
+    updateCustomPrompts(partial.customPrompts);
+  }
   return getPublicConfig();
 }
 
@@ -563,6 +696,9 @@ module.exports = {
   deleteSmtpProfile,
   setDefaultSmtpProfile,
   updatePreferences,
+  updateCandidateProfile,
+  saveFullSettings,
+  updateCustomPrompts,
   addCampaignLogs,
   getCampaignLogs,
   clearCampaignLogs,

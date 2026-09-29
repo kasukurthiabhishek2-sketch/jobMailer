@@ -509,6 +509,36 @@ app.post('/api/config/preferences', (req, res) => {
   }
 });
 
+// Update custom AI prompts
+app.post('/api/config/prompts', (req, res) => {
+  try {
+    const updated = storage.updateCustomPrompts(req.body);
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update candidate profile
+app.post('/api/config/candidate-profile', (req, res) => {
+  try {
+    const updated = storage.updateCandidateProfile(req.body);
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Sync full or partial settings to server storage
+app.post('/api/config/sync', (req, res) => {
+  try {
+    const updated = storage.saveFullSettings(req.body);
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Reset all stored credentials, profiles, uploads, and logs (Danger Zone)
 app.post('/api/config/reset', (req, res) => {
   try {
@@ -521,8 +551,14 @@ app.post('/api/config/reset', (req, res) => {
     for (const profile of (publicConfig.smtpProfiles || [])) {
       storage.deleteSmtpProfile(profile.id);
     }
-    // Reset preferences to default
+    // Reset preferences and candidate profile to default
     storage.updatePreferences({ delaySeconds: 3, attachResume: true });
+    storage.updateCandidateProfile({ fullName: '', email: '', phone: '' });
+    // Reset custom AI prompts to default
+    storage.updateCustomPrompts({
+      coldEmail: { enabled: false, content: '' },
+      jdParser: { enabled: false, content: '' }
+    });
     // Clear outreach audit logs
     storage.clearCampaignLogs();
 
@@ -656,27 +692,53 @@ app.delete('/api/upload/resume', (req, res) => {
 // Helper to resolve AI provider configuration from saved storage & client overrides
 function resolveAiProviderConfig({ providerKey: requestedProvider, providerConfig: clientProviderConfig } = {}, callerUid) {
   const fullConfig = storage.getDecryptedConfig();
-  const providerKey = requestedProvider || clientProviderConfig?.providerKey || fullConfig.activeProvider;
+  const providerKey = requestedProvider || clientProviderConfig?.providerKey || fullConfig.activeProvider || 'gemini';
   const savedProvider = fullConfig.aiProviders?.[providerKey] || {};
 
   let apiKey = '';
-  if (clientProviderConfig?.apiKey && typeof clientProviderConfig.apiKey === 'string' && !clientProviderConfig.apiKey.includes('...')) {
+  if (clientProviderConfig?.apiKey && typeof clientProviderConfig.apiKey === 'string' && !clientProviderConfig.apiKey.includes('...') && !clientProviderConfig.apiKey.includes('••')) {
     apiKey = clientProviderConfig.apiKey.trim();
   }
 
-  // Fall back to saved local config only if unauthenticated or in test runner mode
-  if (!apiKey && (!callerUid || callerUid === 'test_user_offline')) {
-    apiKey = savedProvider.apiKey || '';
+  // Fall back to saved decrypted server configuration for all callers (authenticated and offline)
+  if (!apiKey) {
+    if (savedProvider.apiKey && !savedProvider.apiKey.includes('...') && !savedProvider.apiKey.includes('••')) {
+      apiKey = savedProvider.apiKey;
+    } else if (Array.isArray(savedProvider.savedKeys) && savedProvider.savedKeys.length > 0) {
+      const lookupId = clientProviderConfig?.selectedKeyId || savedProvider.selectedKeyId;
+      const selected = savedProvider.savedKeys.find(k => k.id === lookupId) || savedProvider.savedKeys[0];
+      if (selected?.apiKey && !selected.apiKey.includes('...') && !selected.apiKey.includes('••')) {
+        apiKey = selected.apiKey;
+      }
+    }
   }
+
+  const model = clientProviderConfig?.model || savedProvider.model || '';
+  const baseURL = clientProviderConfig?.baseURL || savedProvider.baseURL || '';
 
   return {
     providerKey,
     providerConfig: {
       ...savedProvider,
       ...clientProviderConfig,
-      apiKey
+      apiKey,
+      model: model || savedProvider.model,
+      baseURL: baseURL || savedProvider.baseURL
     }
   };
+}
+
+// Helper to resolve custom prompt override from request or saved configuration
+function resolveCustomPrompt(taskKey, explicitPrompt) {
+  if (explicitPrompt && typeof explicitPrompt === 'string' && explicitPrompt.trim().length > 0) {
+    return explicitPrompt.trim();
+  }
+  const config = storage.getDecryptedConfig();
+  const taskPrompt = config.customPrompts?.[taskKey];
+  if (taskPrompt?.enabled && typeof taskPrompt.content === 'string' && taskPrompt.content.trim().length > 0) {
+    return taskPrompt.content.trim();
+  }
+  return undefined;
 }
 
 // Generate single cold email
@@ -687,7 +749,9 @@ app.post('/api/ai/generate', async (req, res) => {
       jobDescription,
       recipient,
       customTone,
-      senderName
+      senderName,
+      customPrompt,
+      customSystemPrompt: explicitSystemPrompt
     } = req.body;
 
     const { providerKey, providerConfig } = resolveAiProviderConfig(req.body, req.uid);
@@ -696,6 +760,8 @@ app.post('/api/ai/generate', async (req, res) => {
       return res.status(400).json({ error: `Provider ${providerKey} is not configured with an API key.` });
     }
 
+    const customSystemPrompt = resolveCustomPrompt('coldEmail', explicitSystemPrompt || customPrompt);
+
     const emailContent = await generateColdEmail({
       providerKey,
       providerConfig,
@@ -703,7 +769,8 @@ app.post('/api/ai/generate', async (req, res) => {
       jobDescription,
       recipient,
       customTone,
-      senderName
+      senderName,
+      customSystemPrompt
     });
 
     res.json({
@@ -843,10 +910,13 @@ app.post('/api/ai/parse-jd', async (req, res) => {
       return res.status(400).json({ error: `AI provider ${providerKey} is not configured with an API key.` });
     }
 
+    const customSystemPrompt = resolveCustomPrompt('jdParser', req.body.customSystemPrompt || req.body.customPrompt);
+
     const parsed = await parseJobDescription({
       providerKey,
       providerConfig,
-      rawText: textToParse
+      rawText: textToParse,
+      customSystemPrompt
     });
 
     res.json({
@@ -870,7 +940,9 @@ app.post('/api/ai/batch-generate', async (req, res) => {
       jobDescription,
       recipients,
       customTone,
-      senderName
+      senderName,
+      customPrompt,
+      customSystemPrompt: explicitSystemPrompt
     } = req.body;
 
     if (!Array.isArray(recipients) || recipients.length === 0) {
@@ -882,6 +954,8 @@ app.post('/api/ai/batch-generate', async (req, res) => {
     if (!providerConfig || !providerConfig.apiKey) {
       return res.status(400).json({ error: `Provider ${providerKey} is not configured with an API key.` });
     }
+
+    const customSystemPrompt = resolveCustomPrompt('coldEmail', explicitSystemPrompt || customPrompt);
 
     // Inspect incoming recipients and partition them into:
     // a) Those with a specific Job Description
@@ -924,7 +998,8 @@ app.post('/api/ai/batch-generate', async (req, res) => {
               jobDescription: recipient.jobDescription.trim(),
               recipient,
               customTone,
-              senderName
+              senderName,
+              customSystemPrompt
             });
             results[index] = {
               recipientId: recipient.id,
@@ -971,7 +1046,8 @@ app.post('/api/ai/batch-generate', async (req, res) => {
             role: genericJd ? 'the open position' : 'relevant opportunities'
           },
           customTone,
-          senderName
+          senderName,
+          customSystemPrompt
         });
 
         // Adapt the single generic email for each recipient without a specific JD

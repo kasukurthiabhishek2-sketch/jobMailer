@@ -84,9 +84,9 @@ function runTests() {
     }
   })();
 
-  // Test 5: Firestore logs service exists
+  // Test 5: logs service exists
   (() => {
-    const name = 'logsService.js exists with Firestore-backed log functions';
+    const name = 'logsService.js exists with log persistence functions';
     try {
       const logsService = fs.readFileSync(
         path.join(__dirname, '..', 'client', 'src', 'lib', 'logsService.js'),
@@ -98,28 +98,22 @@ function runTests() {
         'fetchLogsFromFirestore function not found');
       assert(logsService.includes('clearLogsFromFirestore'),
         'clearLogsFromFirestore function not found');
-      assert(logsService.includes("'users'"),
-        'Should use users collection path');
-      assert(logsService.includes("'outreachLogs'"),
-        'Should use outreachLogs subcollection');
       results.push({ name, passed: true });
     } catch (err) {
       results.push({ name, passed: false, error: err.message });
     }
   })();
 
-  // Test 6: api.js fetchOutreachLogs has Firestore-first path
+  // Test 6: api.js fetchOutreachLogs uses backend /api/logs
   (() => {
-    const name = 'fetchOutreachLogs uses Firestore-first with backend fallback';
+    const name = 'fetchOutreachLogs uses backend /api/logs';
     try {
       const apiJs = fs.readFileSync(
         path.join(__dirname, '..', 'client', 'src', 'services', 'api.js'),
         'utf8'
       );
-      assert(apiJs.includes('fetchLogsFromFirestore'),
-        'Should import fetchLogsFromFirestore');
       assert(apiJs.includes("authFetch('/api/logs')"),
-        'Should fall back to backend /api/logs');
+        'Should query backend /api/logs');
       results.push({ name, passed: true });
     } catch (err) {
       results.push({ name, passed: false, error: err.message });
@@ -136,8 +130,6 @@ function runTests() {
       );
       assert(apiJs.includes('export async function saveOutreachLogs'),
         'saveOutreachLogs should be exported');
-      assert(apiJs.includes('saveLogsToFirestore'),
-        'saveOutreachLogs should use Firestore');
       results.push({ name, passed: true });
     } catch (err) {
       results.push({ name, passed: false, error: err.message });
@@ -146,7 +138,7 @@ function runTests() {
 
   // Test 8: useCampaignStream calls saveOutreachLogs on finish
   (() => {
-    const name = 'useCampaignStream saves logs to Firestore on campaign finish';
+    const name = 'useCampaignStream calls saveOutreachLogs on campaign finish';
     try {
       const hookJs = fs.readFileSync(
         path.join(__dirname, '..', 'client', 'src', 'hooks', 'useCampaignStream.js'),

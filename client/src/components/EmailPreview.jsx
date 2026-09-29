@@ -94,7 +94,13 @@ export default function EmailPreview({
   const configuredAiProviders = useMemo(() => {
     if (!config?.aiProviders) return [];
     return Object.entries(config.aiProviders)
-      .filter(([key, p]) => Boolean(p?.isConfigured || (p?.apiKey && p.apiKey.trim().length > 0) || (key === 'copilot' && (p?.connected || p?.isConfigured))))
+      .filter(([key, p]) => Boolean(
+        p?.isConfigured ||
+        (p?.apiKey && p.apiKey.trim().length > 0) ||
+        (p?.maskedKey && p.maskedKey.trim().length > 0) ||
+        (Array.isArray(p?.savedKeys) && p.savedKeys.length > 0) ||
+        (key === 'copilot' && (p?.connected || p?.isConfigured || (Array.isArray(p?.savedKeys) && p.savedKeys.length > 0)))
+      ))
       .map(([key, p]) => ({
         key,
         name: p.name || key,
@@ -107,7 +113,9 @@ export default function EmailPreview({
     const isActConfigured = Boolean(
       activeProviderObj?.isConfigured ||
       (activeProviderObj?.apiKey && activeProviderObj.apiKey.trim().length > 0) ||
-      (config?.activeProvider === 'copilot' && (activeProviderObj?.connected || activeProviderObj?.isConfigured))
+      (activeProviderObj?.maskedKey && activeProviderObj.maskedKey.trim().length > 0) ||
+      (Array.isArray(activeProviderObj?.savedKeys) && activeProviderObj.savedKeys.length > 0) ||
+      (config?.activeProvider === 'copilot' && (activeProviderObj?.connected || activeProviderObj?.isConfigured || (Array.isArray(activeProviderObj?.savedKeys) && activeProviderObj.savedKeys.length > 0)))
     );
     if (activeProviderObj && isActConfigured) {
       return config.activeProvider;
@@ -122,7 +130,9 @@ export default function EmailPreview({
   const isAiConfigured = Boolean(
     activeAi?.isConfigured ||
     (activeAi?.apiKey && activeAi.apiKey.trim().length > 0) ||
-    (effectiveAiKey === 'copilot' && (activeAi?.connected || activeAi?.isConfigured))
+    (activeAi?.maskedKey && activeAi.maskedKey.trim().length > 0) ||
+    (Array.isArray(activeAi?.savedKeys) && activeAi.savedKeys.length > 0) ||
+    (effectiveAiKey === 'copilot' && (activeAi?.connected || activeAi?.isConfigured || (Array.isArray(activeAi?.savedKeys) && activeAi.savedKeys.length > 0)))
   );
 
   const handleSwitchAiProvider = async (providerKey) => {

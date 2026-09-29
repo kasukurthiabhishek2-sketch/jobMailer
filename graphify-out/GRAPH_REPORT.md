@@ -1,17 +1,17 @@
-# Graph Report - JDMail  (2026-09-29)
+# Graph Report - JDMail  (2026-09-30)
 
 ## Corpus Check
-- 127 files · ~114,952 words
+- 134 files · ~124,162 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 8 file(s) not represented in the graph (top: (none) 4, .rules 2, .css 1)
 
 ## Summary
-- 823 nodes · 1553 edges · 66 communities (45 shown, 21 thin omitted)
-- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 74 edges (avg confidence: 0.88)
+- 899 nodes · 1673 edges · 72 communities (38 shown, 34 thin omitted)
+- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 85 edges (avg confidence: 0.88)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `439b372a`
+- Built from commit: `727462e6`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -20,13 +20,13 @@
 - test_graphify_integration.js
 - App.jsx
 - test_sheet_parser_full.js
-- devDependencies
-- auditDraftClaims
+- client/package.json
+- test_jd_parser.js
 - index.js
 - storageService.js
 - test_security_guardrails.js
 - test_firebase_migration.js
-- smtpService.js
+- ref_assert
 - resumeParser.js
 - server/package.json
 - dependencies
@@ -40,25 +40,33 @@
 - test_danger_zone.js
 - ref_fs
 - test_storage.js
-- ref_assert
-- copilotService.js
-- av
-- scripts
+- test_sample_resume_and_ai_keys.js
 - aiService.js
-- dependencies
-- scripts
-- callOpenAiCompatible
-- firebaseAdmin.js
-- 3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`)
+- av
+- Q: do a deep analysis of the project and find the improvements and additional features and create a detailed plan
+- users_manu19_desktop_jdmail_server_services_aiservice_cleanjsonoutput
+- users_manu19_desktop_jdmail_server_services_aiservice_generatecoldemail
+- users_manu19_desktop_jdmail_server_services_aiservice_listprovidermodels
+- users_manu19_desktop_jdmail_server_services_aiservice_parsejobdescription
+- users_manu19_desktop_jdmail_server_services_aiservice_testaiconnection
+- users_manu19_desktop_jdmail_server_services_firebaseadmin_requireauth
+- users_manu19_desktop_jdmail_server_services_resumeparser_parseresumefile
+- users_manu19_desktop_jdmail_server_services_sheetparser_parserecipientsheet
+- users_manu19_desktop_jdmail_server_services_smtpservice_classifysmtperror
+- users_manu19_desktop_jdmail_server_services_smtpservice_dispatchcampaign
+- users_manu19_desktop_jdmail_server_services_smtpservice_sendemailmessage
 - JDMail — Comprehensive Architecture Map & Technical Specification
 - What You Must Do When Invoked
+- users_manu19_desktop_jdmail_server_services_smtpservice_sendemailmessagewithretry
+- users_manu19_desktop_jdmail_server_services_smtpservice_testsmtpconnection
 - AGENTS.md
 - Hybrid Deployment Guide (Vercel + Render)
-- Codebase Debloat & Anti-Slop Rules
+- CLAUDE.md
+- GEMINI.md
+- users_manu19_desktop_jdmail_server_services_urlscraper_fetchurlastext
 - graphify reference: extra exports and benchmark
 - React + Vite
 - graphify reference: query, path, explain
-- sanitizeDraft.test.js
 - graphify reference: add a URL and watch a folder
 - graphify reference: commit hook and native CLAUDE.md integration
 - graphify reference: incremental update and cluster-only
@@ -69,90 +77,85 @@
 - workflows/graphify.md
 
 ## God Nodes (most connected - your core abstractions)
-1. `react` - 35 edges
-2. `authFetch()` - 26 edges
-3. `cleanJsonOutput()` - 21 edges
-4. `vitest` - 20 edges
-5. `App()` - 19 edges
-6. `parseRecipientSheet()` - 19 edges
-7. `lucide-react` - 19 edges
-8. `AiProvidersTab()` - 18 edges
-9. `@testing-library/react` - 17 edges
-10. `classifySmtpError()` - 16 edges
+1. `react` - 39 edges
+2. `authFetch()` - 37 edges
+3. `lucide-react` - 21 edges
+4. `vitest` - 21 edges
+5. `cleanJsonOutput()` - 21 edges
+6. `AiProvidersTab()` - 19 edges
+7. `parseRecipientSheet()` - 19 edges
+8. `@testing-library/react` - 18 edges
+9. `App()` - 18 edges
+10. `parseJsonResponse()` - 16 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `4-Worker Concurrent Batch Generation Pipeline` --references--> `batchGenerateColdEmails()`  [INFERRED]
   ARCHITECTURE.md → client/src/services/api.js
-- `3.5 SMTP Delivery & Anti-Spam Throttler (`smtpService.js`, SSE Stream)` --references--> `classifySmtpError()`  [INFERRED]
-  ARCHITECTURE.md → server/services/smtpService.js
-- `Parsing & Markdown Sanitization (`cleanJsonOutput`)` --references--> `cleanJsonOutput()`  [INFERRED]
+- `How to Add a New AI Provider` --references--> `callOpenAiCompatible()`  [INFERRED]
   ARCHITECTURE.md → server/services/aiService.js
 - `How to Add New Sheet Parsing Heuristics` --references--> `analyzeHeaders()`  [INFERRED]
   ARCHITECTURE.md → server/services/sheetParser.js
-- `How to Add a New AI Provider` --references--> `callOpenAiCompatible()`  [INFERRED]
-  ARCHITECTURE.md → server/services/aiService.js
+- `3.5 SMTP Delivery & Anti-Spam Throttler (`smtpService.js`, SSE Stream)` --references--> `classifySmtpError()`  [INFERRED]
+  ARCHITECTURE.md → server/services/smtpService.js
+- `3.6 Frontend Reactive Architecture (`App.jsx`, `api.js`, CSS Tokens)` --references--> `useCampaignStream()`  [INFERRED]
+  ARCHITECTURE.md → client/src/hooks/useCampaignStream.js
 
 ## Import Cycles
 - 2-file cycle: `server/services/aiService.js -> server/services/copilotService.js -> server/services/aiService.js`
 
-## Communities (66 total, 21 thin omitted)
+## Communities (72 total, 34 thin omitted)
 
 ### Community 0 - "api.js"
-Cohesion: 0.10
-Nodes (49): EmailPreview(), SPAM_TRIGGER_WORDS, TONE_OPTIONS, AiProvidersTab(), formatTimeAgo(), FRIENDLY_MODEL_NAMES, friendlyModelName(), getProviderSavedKeys() (+41 more)
+Cohesion: 0.08
+Nodes (59): EmailPreview(), SPAM_TRIGGER_WORDS, TONE_OPTIONS, AiProvidersTab(), formatTimeAgo(), FRIENDLY_MODEL_NAMES, friendlyModelName(), getProviderSavedKeys() (+51 more)
 
 ### Community 1 - "test_graphify_integration.js"
 Cohesion: 0.10
 Nodes (20): agentsMd, assert, claudeMd, { execSync, spawnSync }, expectedSymbolsOrFiles, fs, geminiMd, graphHtmlPath (+12 more)
 
 ### Community 2 - "App.jsx"
-Cohesion: 0.05
-Nodes (63): name, private, type, version, App(), AuthGate(), ErrorBoundary, Header() (+55 more)
+Cohesion: 0.07
+Nodes (44): App(), AiJdParserPanel(), AuthGate(), Header(), JobDescriptionInput(), SAMPLE_JDS, RecipientManager(), RecipientModal() (+36 more)
 
 ### Community 3 - "test_sheet_parser_full.js"
 Cohesion: 0.06
 Nodes (50): 3.2 Smart Recipient & Spreadsheet Engine (`sheetParser.js`), xlsx, analyzeHeaders(), cleanPersonName(), detectHeaderRowIndex(), extractEmail(), extractNameFromEmailCell(), findBestSheetName() (+42 more)
 
-### Community 4 - "devDependencies"
-Cohesion: 0.25
-Nodes (8): devDependencies, jsdom, oxlint, @testing-library/jest-dom, @testing-library/react, vite, @vitejs/plugin-react, vitest
+### Community 4 - "client/package.json"
+Cohesion: 0.05
+Nodes (31): dependencies, firebase, lucide-react, react, react-dom, devDependencies, jsdom, oxlint (+23 more)
 
-### Community 5 - "auditDraftClaims"
-Cohesion: 0.23
-Nodes (11): worker(), auditDraftClaims(), buildPrompts(), generateColdEmail(), assert, {
-  auditDraftClaims,
-  buildPrompts,
-  cleanJsonOutput,
-  generateColdEmail
-}, runTests(), assert (+3 more)
+### Community 5 - "test_jd_parser.js"
+Cohesion: 0.33
+Nodes (7): extractTextFromHtml(), extractTitle(), fetchUrlAsText(), validateUrl(), assert, { parseJobDescription }, { validateUrl, extractTextFromHtml, extractTitle }
 
 ### Community 6 - "index.js"
-Cohesion: 0.08
-Nodes (21): aiLimiter, app, copilotService, cors, express, fs, { generateColdEmail, testAiConnection, listProviderModels, cleanJsonOutput }, helmet (+13 more)
+Cohesion: 0.07
+Nodes (23): aiLimiter, app, copilotService, cors, express, { fetchUrlAsText }, fs, { generateColdEmail, parseJobDescription, testAiConnection, listProviderModels, cleanJsonOutput } (+15 more)
 
 ### Community 7 - "storageService.js"
 Cohesion: 0.06
-Nodes (59): 3.4 Security & Cryptographic Storage (`crypto.js`, `storageService.js`), ref_crypto, addCampaignLogs(), clearCampaignLogs(), CONFIG_FILE, DATA_DIR, DEFAULT_CONFIG, deleteSmtpProfile() (+51 more)
+Nodes (62): 3.4 Security & Cryptographic Storage (`crypto.js`, `storageService.js`), ref_crypto, addCampaignLogs(), clearCampaignLogs(), CONFIG_FILE, DATA_DIR, DEFAULT_CONFIG, deleteSmtpProfile() (+54 more)
 
 ### Community 8 - "test_security_guardrails.js"
-Cohesion: 0.20
-Nodes (10): isOriginAllowed(), validateCustomBaseUrl(), assert, copilotService, { isOriginAllowed }, RFC-1918, path, { requireAuth } (+2 more)
+Cohesion: 0.12
+Nodes (16): firebase-admin, isOriginAllowed(), admin, fs, path, requireAuth(), SERVICE_ACCOUNT_PATH, verifyIdToken() (+8 more)
 
 ### Community 9 - "test_firebase_migration.js"
 Cohesion: 0.11
 Nodes (17): assert, checkNoLocalStorageCredentials(), clientSrcDir, decrypted, firestoreDoc, fs, path, payloadWithUndefined (+9 more)
 
-### Community 10 - "smtpService.js"
-Cohesion: 0.17
-Nodes (21): nodemailer, classifySmtpError(), createTransporter(), dispatchCampaign(), worker(), extractSmtpCode(), fs, RFC-5321 (+13 more)
+### Community 10 - "ref_assert"
+Cohesion: 0.16
+Nodes (22): ref_assert, nodemailer, classifySmtpError(), createTransporter(), dispatchCampaign(), worker(), extractSmtpCode(), fs (+14 more)
 
 ### Community 11 - "resumeParser.js"
 Cohesion: 0.16
 Nodes (15): mammoth, pdf-parse, extractEmail(), extractName(), extractPhone(), fs, mammoth, parseResumeFile() (+7 more)
 
 ### Community 12 - "server/package.json"
-Cohesion: 0.17
-Nodes (11): cors, dotenv, exceljs, express, express-rate-limit, helmet, multer, description (+3 more)
+Cohesion: 0.12
+Nodes (15): cors, dotenv, exceljs, express, express-rate-limit, helmet, multer, description (+7 more)
 
 ### Community 13 - "dependencies"
 Cohesion: 0.15
@@ -198,45 +201,21 @@ Nodes (6): ref_fs, assert, fs, path, results, runTests()
 Cohesion: 0.33
 Nodes (4): assert, fs, path, storage
 
-### Community 24 - "ref_assert"
-Cohesion: 0.16
-Nodes (15): ref_assert, listProviderModels(), testAiConnection(), assert, runTests(), { testAiConnection, listProviderModels }, assert, copilotService (+7 more)
+### Community 24 - "test_sample_resume_and_ai_keys.js"
+Cohesion: 0.06
+Nodes (36): listProviderModels(), testAiConnection(), assert, runTests(), { testAiConnection, listProviderModels }, assert, copilotService, fs (+28 more)
 
-### Community 25 - "copilotService.js"
-Cohesion: 0.22
-Nodes (10): callCopilotChat(), checkDeviceStatus(), clearPendingDeviceFlow(), clearSessionCache(), defaultCache, getCopilotSessionToken(), getSessionCache(), RFC-8628 (+2 more)
+### Community 25 - "aiService.js"
+Cohesion: 0.05
+Nodes (55): 3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`), 4-Worker Concurrent Batch Generation Pipeline, Enforced JSON Contract, HTTP 429 Exponential Backoff & Retry Handling, Intelligent Key Prefix Mismatch Detection, Parsing & Markdown Sanitization (`cleanJsonOutput`), Provider Implementations, Uniform Interface (+47 more)
 
 ### Community 26 - "av"
-Cohesion: 0.17
-Nodes (27): argparse, datetime, glob, os, re, cmd_beat(), cmd_board(), cmd_claim() (+19 more)
+Cohesion: 0.13
+Nodes (31): AI-Slop Checklist (Review Before Committing), Codebase Debloat & Anti-Slop Rules, Core Rules, Non-Negotiable Guardrails, argparse, datetime, glob, os (+23 more)
 
-### Community 27 - "scripts"
-Cohesion: 0.33
-Nodes (6): scripts, build, dev, lint, preview, test
-
-### Community 28 - "aiService.js"
-Cohesion: 0.25
-Nodes (12): RFC-8259, cleanJsonOutput(), copilotService, extractFieldsViaRegex(), extractPlainTextFallback(), RFC-1918, normalizeControlCharacters(), sanitizeParsedEmail() (+4 more)
-
-### Community 29 - "dependencies"
+### Community 27 - "Q: do a deep analysis of the project and find the improvements and additional features and create a detailed plan"
 Cohesion: 0.40
-Nodes (5): dependencies, firebase, lucide-react, react, react-dom
-
-### Community 30 - "scripts"
-Cohesion: 0.50
-Nodes (4): scripts, dev, start, test
-
-### Community 32 - "callOpenAiCompatible"
-Cohesion: 0.43
-Nodes (6): HTTP 429 Exponential Backoff & Retry Handling, callGemini(), callOpenAiCompatible(), assert, { callGemini, callOpenAiCompatible }, runTests()
-
-### Community 35 - "firebaseAdmin.js"
-Cohesion: 0.25
-Nodes (7): firebase-admin, admin, fs, path, requireAuth(), SERVICE_ACCOUNT_PATH, verifyIdToken()
-
-### Community 39 - "3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`)"
-Cohesion: 0.25
-Nodes (8): 3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`), 4-Worker Concurrent Batch Generation Pipeline, Enforced JSON Contract, Intelligent Key Prefix Mismatch Detection, Parsing & Markdown Sanitization (`cleanJsonOutput`), Provider Implementations, Uniform Interface, Verifiable Fact-Grounding Guardrail (`auditDraftClaims`)
+Nodes (4): Answer, Outcome, Q: do a deep analysis of the project and find the improvements and additional features and create a detailed plan, Source Nodes
 
 ### Community 42 - "JDMail — Comprehensive Architecture Map & Technical Specification"
 Cohesion: 0.06
@@ -247,16 +226,12 @@ Cohesion: 0.08
 Nodes (24): For /graphify add and --watch, For /graphify query, For the commit hook and native CLAUDE.md integration, For --update and --cluster-only, /graphify, Honesty Rules, Interpreter guard for subcommands, Part A - Structural extraction for code files (+16 more)
 
 ### Community 46 - "AGENTS.md"
-Cohesion: 0.14
-Nodes (12): 0.5 Non-negotiable guardrails, 0. Prime directives, 1. Orient (cold start <= 4k tokens; stop as soon as you know enough), 2. Before / after every change (scaled by tier), 3. Coding rules, 4. Token discipline, 5. Handoff-ready at all times, 6. Multi-agent protocol (+4 more)
+Cohesion: 0.13
+Nodes (13): 0.5 Non-negotiable guardrails, 0. Prime directives, 1. Orient (cold start <= 4k tokens; stop as soon as you know enough), 2. Before / after every change (scaled by tier), 3. Coding rules, 4. Token discipline, 5. Handoff-ready at all times, 6. Multi-agent protocol (+5 more)
 
 ### Community 47 - "Hybrid Deployment Guide (Vercel + Render)"
 Cohesion: 0.18
 Nodes (10): 1. Architecture Topology, 2. CORS & Origin Normalization Pitfalls, 3. Environment Variable Invariants, 4. MCP Servers Configuration, 5. Verification Commands, Failure Symptom:, Hybrid Deployment Guide (Vercel + Render), Managing in Antigravity IDE: (+2 more)
-
-### Community 51 - "Codebase Debloat & Anti-Slop Rules"
-Cohesion: 0.40
-Nodes (4): AI-Slop Checklist (Review Before Committing), Codebase Debloat & Anti-Slop Rules, Core Rules, Non-Negotiable Guardrails
 
 ### Community 52 - "graphify reference: extra exports and benchmark"
 Cohesion: 0.22
@@ -283,24 +258,24 @@ Cohesion: 0.50
 Nodes (3): For --cluster-only, For --update (incremental re-extraction), graphify reference: incremental update and cluster-only
 
 ## Knowledge Gaps
-- **400 isolated node(s):** `Project facts`, `0. Prime directives`, `0.5 Non-negotiable guardrails`, `1. Orient (cold start <= 4k tokens; stop as soon as you know enough)`, `2. Before / after every change (scaled by tier)` (+395 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 465 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **21 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **437 isolated node(s):** `$schema`, `plugins`, `react/rules-of-hooks`, `react/only-export-components`, `name` (+432 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 521 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **34 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `react` connect `App.jsx` to `api.js`?**
-  _High betweenness centrality (0.084) - this node is a cross-community bridge._
-- **Why does `3. Subsystem Deep Dives` connect `JDMail — Comprehensive Architecture Map & Technical Specification` to `test_sheet_parser_full.js`, `storageService.js`, `3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`)`?**
-  _High betweenness centrality (0.045) - this node is a cross-community bridge._
-- **What connects `Project facts`, `0. Prime directives`, `0.5 Non-negotiable guardrails` to the rest of the system?**
-  _400 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Why does `react` connect `api.js` to `aiService.js`, `App.jsx`, `client/package.json`?**
+  _High betweenness centrality (0.082) - this node is a cross-community bridge._
+- **Why does `3. Subsystem Deep Dives` connect `JDMail — Comprehensive Architecture Map & Technical Specification` to `aiService.js`, `test_sheet_parser_full.js`, `storageService.js`?**
+  _High betweenness centrality (0.040) - this node is a cross-community bridge._
+- **What connects `$schema`, `plugins`, `react/rules-of-hooks` to the rest of the system?**
+  _437 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `api.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.09935710111046171 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08406361570918533 - nodes in this community are weakly interconnected._
 - **Should `test_graphify_integration.js` be split into smaller, more focused modules?**
   _Cohesion score 0.09523809523809523 - nodes in this community are weakly interconnected._
 - **Should `App.jsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.05431140892258861 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07182524990744169 - nodes in this community are weakly interconnected._
 - **Should `test_sheet_parser_full.js` be split into smaller, more focused modules?**
   _Cohesion score 0.0573025856044724 - nodes in this community are weakly interconnected._

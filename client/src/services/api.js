@@ -11,7 +11,7 @@ const API_BASE = import.meta.env.VITE_API_URL || '';
  * Authenticated fetch wrapper that automatically attaches Firebase ID token
  * to the Authorization header if the user is authenticated.
  */
-async function authFetch(url, options = {}) {
+export async function authFetch(url, options = {}) {
   let token = null;
   try {
     token = await getIdToken();
@@ -168,6 +168,15 @@ export async function savePreferences(preferences) {
   return res.json();
 }
 
+export async function saveCustomPrompts(customPrompts) {
+  const res = await authFetch('/api/config/prompts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(customPrompts)
+  });
+  return parseJsonResponse(res, 'Failed to save custom prompts');
+}
+
 export async function uploadResume(file) {
   const formData = new FormData();
   formData.append('resume', file);
@@ -189,7 +198,9 @@ export async function generateColdEmail({
   jobDescription,
   recipient,
   customTone,
-  senderName
+  senderName,
+  customPrompt,
+  customSystemPrompt
 }) {
   const res = await authFetch('/api/ai/generate', {
     method: 'POST',
@@ -201,7 +212,9 @@ export async function generateColdEmail({
       jobDescription,
       recipient,
       customTone,
-      senderName
+      senderName,
+      customPrompt,
+      customSystemPrompt
     })
   });
 
@@ -229,12 +242,14 @@ export async function parseJobDescriptionApi({
   rawText,
   url,
   providerKey,
-  providerConfig
+  providerConfig,
+  customPrompt,
+  customSystemPrompt
 }) {
   const res = await authFetch('/api/ai/parse-jd', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode, rawText, url, providerKey, providerConfig })
+    body: JSON.stringify({ mode, rawText, url, providerKey, providerConfig, customPrompt, customSystemPrompt })
   });
 
   const contentType = res.headers.get('content-type') || '';
@@ -258,7 +273,9 @@ export async function batchGenerateColdEmails({
   jobDescription,
   recipients,
   customTone,
-  senderName
+  senderName,
+  customPrompt,
+  customSystemPrompt
 }) {
   const res = await authFetch('/api/ai/batch-generate', {
     method: 'POST',
@@ -270,7 +287,9 @@ export async function batchGenerateColdEmails({
       jobDescription,
       recipients,
       customTone,
-      senderName
+      senderName,
+      customPrompt,
+      customSystemPrompt
     })
   });
 
@@ -379,58 +398,40 @@ export async function listAiModels({ providerKey, apiKey, selectedKeyId }) {
 }
 
 export async function fetchOutreachLogs() {
-  // Firestore-first for authenticated cloud users
-  try {
-    const { getAuth } = await import('firebase/auth');
-    const user = getAuth().currentUser;
-    if (user) {
-      const { fetchLogsFromFirestore } = await import('../lib/logsService');
-      return fetchLogsFromFirestore(user.uid);
-    }
-  } catch {
-    // Firebase unavailable — fall back to backend
-  }
-
   const res = await authFetch('/api/logs');
   return res.json();
 }
 
 export async function clearOutreachLogs() {
-  // Firestore-first for authenticated cloud users
-  try {
-    const { getAuth } = await import('firebase/auth');
-    const user = getAuth().currentUser;
-    if (user) {
-      const { clearLogsFromFirestore } = await import('../lib/logsService');
-      await clearLogsFromFirestore(user.uid);
-      return { success: true };
-    }
-  } catch {
-    // Firebase unavailable — fall back to backend
-  }
-
   const res = await authFetch('/api/logs', { method: 'DELETE' });
   return res.json();
 }
 
 /**
  * Persist campaign log entries after a successful send session.
- * Uses Firestore for cloud users, backend for self-hosted.
+ * Dispatched logs are automatically persisted server-side by /api/send and /api/send/stream.
  */
-export async function saveOutreachLogs(logEntries) {
-  if (!Array.isArray(logEntries) || logEntries.length === 0) return;
+export async function saveOutreachLogs() {
+  // Server-side audit log persistence is automatic during dispatch.
+  return;
+}
 
-  try {
-    const { getAuth } = await import('firebase/auth');
-    const user = getAuth().currentUser;
-    if (user) {
-      const { saveLogsToFirestore } = await import('../lib/logsService');
-      await saveLogsToFirestore(user.uid, logEntries);
-      return;
-    }
-  } catch {
-    // Firebase unavailable — backend saves logs server-side during dispatch
-  }
+export async function saveCandidateProfile(profile) {
+  const res = await authFetch('/api/config/candidate-profile', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(profile)
+  });
+  return parseJsonResponse(res, 'Failed to save candidate profile');
+}
+
+export async function syncSettings(settings) {
+  const res = await authFetch('/api/config/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings)
+  });
+  return parseJsonResponse(res, 'Failed to sync settings');
 }
 
 export async function startCopilotAuth() {

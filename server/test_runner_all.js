@@ -31,7 +31,9 @@ const testSuites = [
   { name: 'GitHub Copilot OAuth Device Flow & No-Key Invariants', file: 'test_copilot_device_flow.js' },
   { name: 'Hybrid Deployment Wiring (Vercel + Render)', file: 'test_hybrid_deployment.js' },
   { name: 'Graphify Knowledge Graph & Agent Invariants', file: 'test_graphify_integration.js' },
-  { name: 'AI JD Parser, URL Scraper & Recipient Extraction', file: 'test_jd_parser.js' }
+  { name: 'AI JD Parser, URL Scraper & Recipient Extraction', file: 'test_jd_parser.js' },
+  { name: 'Custom AI Prompts & Invariants', file: 'test_custom_prompts.js' },
+  { name: 'Sample Resume, AI Keys & Server Persistence', file: 'test_sample_resume_and_ai_keys.js' }
 ];
 
 console.log('====================================================');

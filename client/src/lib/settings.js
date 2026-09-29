@@ -1,16 +1,8 @@
 /**
- * Firestore-backed settings persistence — one settings document per user.
- *
- * Document path: users/{uid}/app/settings
- *
- * This module replaces the previous server-side config.json storage.
- * All settings (AI provider keys, SMTP profiles, candidateProfile, preferences)
- * are stored in Firestore with owner-only security rules.
+ * Server-backed settings persistence — settings stored securely on server with AES-256-GCM.
+ * Firebase is strictly used for Google authentication only.
  */
-import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from './firebase';
-
-const settingsRef = (uid) => doc(db, 'users', uid, 'app', 'settings');
+import { authFetch } from '../services/api';
 
 /**
  * Returns the default settings structure conforming to the master prompt schema.
@@ -97,6 +89,10 @@ export function getDefaultSettings() {
       outreachTone: 'direct',
       delaySeconds: 8,
       attachResume: true
+    },
+    customPrompts: {
+      coldEmail: { enabled: false, content: '' },
+      jdParser: { enabled: false, content: '' }
     }
   };
 }
@@ -189,7 +185,8 @@ export function formatForFirestore(legacyConfig) {
     smtp,
     smtpProfiles,
     candidateProfile: legacyConfig.candidateProfile || defaults.candidateProfile,
-    preferences
+    preferences,
+    customPrompts: legacyConfig.customPrompts || defaults.customPrompts
   });
 }
 
@@ -197,16 +194,27 @@ export function formatForFirestore(legacyConfig) {
  * Load the full settings document for a user.
  * Returns null if no settings exist yet (first-time user).
  */
-export async function loadSettings(uid) {
+export async function loadSettings() {
   if (typeof window !== 'undefined' && window.__E2E_MOCK_SETTINGS__) {
     return window.__E2E_MOCK_SETTINGS__;
   }
-  const snap = await getDoc(settingsRef(uid));
-  if (!snap.exists()) return null;
-  const data = stripSecrets(snap.data());
-  const defaults = stripSecrets(getDefaultSettings());
-  
-  // Merge defaults per-provider to ensure newly added keys & supportedModels are always preserved
+  let serverConfig = null;
+  try {
+    const res = await authFetch('/api/config');
+    if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        serverConfig = await res.json();
+      }
+    }
+  } catch (err) {
+    console.warn('Notice loading server config:', err.message);
+  }
+
+  const defaults = getDefaultSettings();
+  if (!serverConfig) return defaults;
+
+  const data = serverConfig;
   const mergedAiProviders = {};
 
   for (const [key, defaultProv] of Object.entries(defaults.aiProviders)) {
@@ -226,7 +234,7 @@ export async function loadSettings(uid) {
         createdAt: new Date().toISOString()
       }];
     }
-    const isConfigured = Boolean(p.isConfigured || hasKeys || hasSingleKey);
+    const isConfigured = Boolean(p.isConfigured || hasKeys || hasSingleKey || (key === 'copilot' && (p.isConfigured || p.connected || (savedKeys && savedKeys.length > 0))));
     const supportedModels = (Array.isArray(p.supportedModels) && p.supportedModels.length > 0)
       ? p.supportedModels
       : defaultProv.supportedModels;
@@ -241,13 +249,23 @@ export async function loadSettings(uid) {
     };
   }
 
+  const defaultSmtp = (data.smtpProfiles || []).find(p => p.isDefault) || data.smtpProfiles?.[0] || {};
+  const defaultPassword = defaultSmtp.maskedPassword || defaultSmtp.password || defaultSmtp.appPassword || '';
+
   return {
     ...defaults,
     ...data,
+    activeProvider: data.activeProvider || defaults.activeProvider,
     aiProviders: mergedAiProviders,
     smtp: {
-      ...defaults.smtp,
-      ...(data.smtp || {})
+      provider: 'gmail',
+      email: defaultSmtp.username || defaultSmtp.fromEmail || '',
+      appPassword: defaultPassword,
+      password: defaultPassword,
+      host: defaultSmtp.host || 'smtp.gmail.com',
+      port: defaultSmtp.port || 465,
+      encryption: defaultSmtp.encryption || 'SSL',
+      fromName: defaultSmtp.fromName || ''
     },
     smtpProfiles: data.smtpProfiles || defaults.smtpProfiles,
     candidateProfile: {
@@ -256,14 +274,17 @@ export async function loadSettings(uid) {
     },
     preferences: {
       ...defaults.preferences,
-      ...(data.preferences || {})
+      ...(data.preferences || data.sendingPreferences || {})
+    },
+    customPrompts: {
+      ...defaults.customPrompts,
+      ...(data.customPrompts || {})
     }
   };
 }
 
 /**
- * Recursively removes undefined values from objects and arrays so Firestore
- * setDoc/updateDoc never throws "Unsupported field value: undefined".
+ * Recursively removes undefined values from objects and arrays.
  */
 export function stripUndefined(value) {
   if (Array.isArray(value)) return value.map(stripUndefined);
@@ -278,9 +299,7 @@ export function stripUndefined(value) {
 }
 
 /**
- * Save (merge) partial settings for a user in Firestore.
- * Uses Firestore merge to avoid overwriting unrelated fields.
- * Scoped per-user with owner-only access rules.
+ * Save / sync partial settings on the server.
  */
 export async function saveSettings(uid, partial) {
   if (typeof window !== 'undefined' && window.__E2E_MOCK_SETTINGS__) {
@@ -288,12 +307,28 @@ export async function saveSettings(uid, partial) {
     return;
   }
   const sanitized = stripUndefined(partial);
-  await setDoc(settingsRef(uid), { ...sanitized, updatedAt: serverTimestamp() }, { merge: true });
+  try {
+    await authFetch('/api/config/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sanitized)
+    });
+  } catch (err) {
+    console.warn('Notice saving settings to server:', err.message);
+  }
 }
 
 /**
- * Delete the entire settings document (Danger Zone reset).
+ * Reset all settings on the server (Danger Zone reset).
  */
-export async function deleteSettings(uid) {
-  await deleteDoc(settingsRef(uid));
+export async function deleteSettings() {
+  if (typeof window !== 'undefined' && window.__E2E_MOCK_SETTINGS__) {
+    window.__E2E_MOCK_SETTINGS__ = null;
+    return;
+  }
+  try {
+    await authFetch('/api/config/reset', { method: 'POST' });
+  } catch (err) {
+    console.warn('Notice resetting server settings:', err.message);
+  }
 }

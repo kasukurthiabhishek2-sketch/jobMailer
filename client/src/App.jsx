@@ -10,7 +10,7 @@ import SettingsModal from './components/SettingsModal';
 import AuthGate from './components/AuthGate';
 import Toast from './components/Toast';
 import { watchAuthState, signOutUser } from './lib/firebase';
-import { loadSettings, saveSettings, getDefaultSettings } from './lib/settings';
+import { loadSettings, getDefaultSettings } from './lib/settings';
 import { useWizardState } from './hooks/useWizardState';
 import { useCampaignStream } from './hooks/useCampaignStream';
 import { ChevronLeft, ChevronRight, AlertCircle, RefreshCw } from 'lucide-react';
@@ -94,19 +94,10 @@ export default function App() {
       if (currentUser) {
         setAuthLoading(true);
         try {
-          let userSettings = await loadSettings(currentUser.uid);
-          if (!userSettings) {
-            userSettings = getDefaultSettings();
-            await saveSettings(currentUser.uid, userSettings);
-          }
-          setConfig(userSettings);
+          const userSettings = await loadSettings(currentUser.uid);
+          setConfig(userSettings || getDefaultSettings());
         } catch (err) {
-          console.error('Failed to load user settings from Firestore:', err);
-          addToast({
-            type: 'error',
-            title: 'Settings Issue',
-            message: 'Unable to connect to Firestore settings. Using default profile.'
-          });
+          console.error('Failed to load user settings from server:', err);
           setConfig(getDefaultSettings());
         } finally {
           setAuthLoading(false);

@@ -121,17 +121,17 @@ assert(firestoreDoc.candidateProfile, 'Doc must have candidateProfile');
 assert(firestoreDoc.preferences, 'Doc must have preferences');
 assert(firestoreDoc.preferences.outreachTone, 'Doc must specify outreachTone');
 
-// Verify Firebase storage: All API keys and settings are saved in Firebase Firestore per-user
+// Verify credential preservation: All API keys and settings are safely maintained with lossless migration format
 if (decrypted.aiProviders?.openai?.apiKey) {
   assert(firestoreDoc.aiProviders.openai.isConfigured, 'OpenAI must be marked configured');
-  assert.strictEqual(firestoreDoc.aiProviders.openai.apiKey, decrypted.aiProviders.openai.apiKey, 'OpenAI apiKey must be preserved in Firestore');
+  assert.strictEqual(firestoreDoc.aiProviders.openai.apiKey, decrypted.aiProviders.openai.apiKey, 'OpenAI apiKey must be preserved during format migration');
 }
 if (decrypted.aiProviders?.groq?.apiKey) {
   assert(firestoreDoc.aiProviders.groq.isConfigured, 'Groq must be marked configured');
-  assert.strictEqual(firestoreDoc.aiProviders.groq.apiKey, decrypted.aiProviders.groq.apiKey, 'Groq apiKey must be preserved in Firestore');
+  assert.strictEqual(firestoreDoc.aiProviders.groq.apiKey, decrypted.aiProviders.groq.apiKey, 'Groq apiKey must be preserved during format migration');
 }
 
-console.log('✓ Firebase storage verified: All settings and credentials preserved in Firestore without local safeguards.');
+console.log('✓ Server-backed persistence & migration verified: All settings and credentials preserved without loss.');
 
 // 3. Verify Candidate Profile and Preferences Invariants
 console.log('3. Checking candidateProfile & preferences schema...');

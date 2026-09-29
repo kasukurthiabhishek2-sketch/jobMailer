@@ -6,15 +6,18 @@ import {
   Sliders,
   FileText,
   AlertTriangle,
+  Terminal,
 } from 'lucide-react';
 import AiProvidersTab from './settings/AiProvidersTab';
 import SmtpAccountsTab from './settings/SmtpAccountsTab';
 import PreferencesTab from './settings/PreferencesTab';
 import AuditLogsTab from './settings/AuditLogsTab';
 import DangerZoneTab from './settings/DangerZoneTab';
+import CustomPromptsTab from './settings/CustomPromptsTab';
 
 const SETTINGS_TABS = [
   { key: 'ai', label: 'AI Providers', icon: Sparkles },
+  { key: 'prompts', label: 'AI Prompts', icon: Terminal },
   { key: 'smtp', label: 'Email (SMTP)', icon: Mail },
   { key: 'preferences', label: 'Preferences', icon: Sliders },
   { key: 'logs', label: 'Activity Logs', icon: FileText },
@@ -94,6 +97,14 @@ export default function SettingsModal({
             <div className="settings-content-body">
               {activeTab === 'ai' && (
                 <AiProvidersTab
+                  config={config}
+                  onRefreshConfig={onRefreshConfig}
+                  onShowToast={onShowToast}
+                  user={user}
+                />
+              )}
+              {activeTab === 'prompts' && (
+                <CustomPromptsTab
                   config={config}
                   onRefreshConfig={onRefreshConfig}
                   onShowToast={onShowToast}

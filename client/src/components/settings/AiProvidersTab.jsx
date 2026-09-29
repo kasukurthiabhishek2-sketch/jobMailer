@@ -1080,11 +1080,16 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
             ...prev[providerKey],
             status: 'connected',
             error: null,
-            message: res.message,
+            message: res.message || 'Connected successfully!',
             lastVerifiedAt: Date.now(),
             saving: false
           }
         }));
+        onShowToast?.({
+          type: 'success',
+          title: 'Connection Verified',
+          message: res.message || `Connected to ${PROVIDER_CONFIG[providerKey]?.name || providerKey} successfully!`
+        });
       } else {
         const errorMsg = res?.error || 'Connection test failed';
         const userFriendlyError = (errorMsg.includes('API key is required') && activeKeyObj)
@@ -1099,6 +1104,11 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
             saving: false
           }
         }));
+        onShowToast?.({
+          type: 'error',
+          title: 'Connection Failed',
+          message: userFriendlyError
+        });
       }
     } catch (err) {
       const errorMsg = err.message || 'Connection test failed';
@@ -1114,6 +1124,11 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
           saving: false
         }
       }));
+      onShowToast?.({
+        type: 'error',
+        title: 'Connection Failed',
+        message: userFriendlyError
+      });
     }
   };
 
@@ -1642,8 +1657,13 @@ export default function AiProvidersTab({ config, onRefreshConfig, onShowToast, u
           <div className="provider-actions-right">
              <div className="status-region" aria-live="polite">
               {providerStates[key]?.status === 'error' && (
-                <div style={{ color: 'var(--color-error)', fontSize: '0.8rem', maxWidth: '200px', textAlign: 'right' }}>
+                <div style={{ color: 'var(--color-error)', fontSize: '0.8rem', maxWidth: '240px', textAlign: 'right' }}>
                   {providerStates[key].error}
+                </div>
+              )}
+              {providerStates[key]?.status === 'connected' && (
+                <div style={{ color: 'var(--color-success, #10b981)', fontSize: '0.8rem', maxWidth: '240px', textAlign: 'right', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <CheckCircle2 size={13} /> {providerStates[key].message || 'Verified'}
                 </div>
               )}
              </div>

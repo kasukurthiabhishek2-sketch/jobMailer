@@ -133,7 +133,8 @@ function runTests() {
     'smtpProfiles',
     'candidateProfile',
     'sendingPreferences',
-    'preferences'
+    'preferences',
+    'customPrompts'
   ];
 
   for (const key of configKeys) {

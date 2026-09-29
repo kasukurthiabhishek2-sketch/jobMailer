@@ -47,7 +47,13 @@ export default function AiJdParserPanel({
   // Resolve active AI provider
   const activeProviderKey = config?.activeProvider || 'gemini';
   const activeProviderConfig = config?.aiProviders?.[activeProviderKey];
-  const isAiConfigured = Boolean(activeProviderConfig?.apiKey);
+  const isAiConfigured = Boolean(
+    activeProviderConfig?.isConfigured ||
+    activeProviderConfig?.apiKey ||
+    activeProviderConfig?.maskedKey ||
+    (Array.isArray(activeProviderConfig?.savedKeys) && activeProviderConfig.savedKeys.length > 0) ||
+    (activeProvider === 'copilot' && (activeProviderConfig?.connected || activeProviderConfig?.isConfigured))
+  );
 
   const inputValid = useMemo(() => {
     if (inputMode === 'url') return urlInput.trim().length > 10;

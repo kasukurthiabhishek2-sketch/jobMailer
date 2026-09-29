@@ -201,6 +201,24 @@ async function runTests() {
     console.log('✓ /api/config/smtp/test resolves passwords from storage for authenticated users.');
   }
 
+  // ---- Test 7: uid guard removed from resolveAiProviderConfig ----
+  {
+    const fnStart = indexContent.indexOf('function resolveAiProviderConfig');
+    assert.ok(fnStart > 0, 'resolveAiProviderConfig function must exist');
+    const fnEnd = indexContent.indexOf('// Helper to resolve custom prompt override', fnStart);
+    const fnBody = indexContent.substring(fnStart, fnEnd > fnStart ? fnEnd : fnStart + 1000);
+
+    assert.ok(
+      !fnBody.includes("callerUid === 'test_user_offline'"),
+      'resolveAiProviderConfig must not restrict storage fallback to offline users only'
+    );
+    assert.ok(
+      fnBody.includes('savedProvider.apiKey'),
+      'resolveAiProviderConfig must resolve savedProvider.apiKey'
+    );
+    console.log('✓ resolveAiProviderConfig resolves decrypted storage keys for authenticated users.');
+  }
+
   console.log('\n--- All Authenticated Key Resolution Tests PASSED ---');
 }
 

@@ -266,12 +266,12 @@ function cleanJsonOutput(text) {
 /**
  * Builds system prompt and user prompt for cold email generation
  */
-function buildPrompts({ resumeText, jobDescription, recipient, customTone, senderName }) {
+function buildPrompts({ resumeText, jobDescription, recipient, customTone, senderName, customSystemPrompt }) {
   const recipientName = recipient?.name || 'Hiring Manager / Team';
   const company = recipient?.company || 'your team';
   const role = recipient?.role || (jobDescription ? 'the open position' : 'relevant opportunities');
 
-  const systemPrompt = `You are an elite career strategist and executive cold-email copywriter.
+  const defaultSystemPrompt = `You are an elite career strategist and executive cold-email copywriter.
 Your goal is to craft high-converting, personalized cold outreach emails for job seekers reaching out to recruiters, hiring managers, or founders.
 
 Guidelines for cold emails:
@@ -288,6 +288,16 @@ Guidelines for cold emails:
   "subject": "The email subject line here",
   "body": "The email body text here with line breaks (\\n\\n) between paragraphs, ending with a warm professional sign-off and [Your Name / Sender Name]."
 }`;
+
+  let systemPrompt;
+  if (customSystemPrompt && typeof customSystemPrompt === 'string' && customSystemPrompt.trim().length > 0) {
+    const hasJsonFormat = customSystemPrompt.includes('"subject"') && customSystemPrompt.includes('"body"');
+    systemPrompt = hasJsonFormat
+      ? customSystemPrompt.trim()
+      : `${customSystemPrompt.trim()}\n\nOutput Format: You MUST reply strictly in valid JSON format with two keys:\n{\n  "subject": "The email subject line here",\n  "body": "The email body text here with line breaks (\\n\\n) between paragraphs, ending with a warm professional sign-off and [Your Name / Sender Name]."\n}`;
+  } else {
+    systemPrompt = defaultSystemPrompt;
+  }
 
   const userPrompt = `CANDIDATE INFORMATION:
 Sender Name: ${senderName || 'Candidate'}
@@ -592,13 +602,14 @@ function auditDraftClaims({ draftText, resumeText }) {
 /**
  * Main generate function dispatching to active provider
  */
-async function generateColdEmail({ providerKey, providerConfig, resumeText, jobDescription, recipient, customTone, senderName }) {
+async function generateColdEmail({ providerKey, providerConfig, resumeText, jobDescription, recipient, customTone, senderName, customSystemPrompt }) {
   const { systemPrompt, userPrompt } = buildPrompts({
     resumeText,
     jobDescription,
     recipient,
     customTone,
-    senderName
+    senderName,
+    customSystemPrompt
   });
 
   const apiKey = providerConfig.apiKey;
@@ -810,12 +821,12 @@ async function dispatchToProvider({ providerKey, providerConfig, systemPrompt, u
  * Parses raw job description text using AI to extract structured recipient data.
  * Returns: { contacts[], company, role, location, responsibilities[], requirements[], jobDescriptionClean, confidence }
  */
-async function parseJobDescription({ providerKey, providerConfig, rawText }) {
+async function parseJobDescription({ providerKey, providerConfig, rawText, customSystemPrompt }) {
   if (!rawText || typeof rawText !== 'string' || rawText.trim().length < 20) {
     throw new Error('Job description text is too short for AI parsing. Please provide more content.');
   }
 
-  const systemPrompt = `You are a precise job description parser. Extract structured data from job posting text.
+  const defaultSystemPrompt = `You are a precise job description parser. Extract structured data from job posting text.
 
 Rules:
 1. Extract ALL email addresses found in the text — these are typically HR, recruiter, hiring manager, or apply-to addresses. Look for patterns like name@domain.com, mailto: links, or "apply to:" / "contact:" sections.
@@ -837,6 +848,16 @@ Rules:
   "jobDescriptionClean": "Full cleaned job description text...",
   "confidence": { "emailFound": true, "companyFound": true, "roleFound": true }
 }`;
+
+  let systemPrompt;
+  if (customSystemPrompt && typeof customSystemPrompt === 'string' && customSystemPrompt.trim().length > 0) {
+    const hasSchema = customSystemPrompt.includes('"contacts"') && customSystemPrompt.includes('"company"');
+    systemPrompt = hasSchema
+      ? customSystemPrompt.trim()
+      : `${customSystemPrompt.trim()}\n\nReply ONLY in valid JSON format matching this exact schema:\n{\n  "contacts": [{ "name": "Person Name", "email": "email@example.com", "title": "Their Title" }],\n  "company": "Company Name",\n  "role": "Job Title",\n  "location": "Location",\n  "responsibilities": ["responsibility 1", "responsibility 2"],\n  "requirements": ["requirement 1", "requirement 2"],\n  "jobDescriptionClean": "Full cleaned job description text...",\n  "confidence": { "emailFound": true, "companyFound": true, "roleFound": true }\n}`;
+  } else {
+    systemPrompt = defaultSystemPrompt;
+  }
 
   const userPrompt = `Parse this job posting and extract structured data:\n\n${rawText.slice(0, 6000)}`;
 
