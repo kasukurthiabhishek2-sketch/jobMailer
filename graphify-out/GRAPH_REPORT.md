@@ -1,17 +1,17 @@
 # Graph Report - JDMail  (2026-09-30)
 
 ## Corpus Check
-- 137 files · ~130,663 words
+- 137 files · ~131,704 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 8 file(s) not represented in the graph (top: (none) 4, .rules 2, .css 1)
 
 ## Summary
-- 938 nodes · 1760 edges · 82 communities (43 shown, 39 thin omitted)
+- 938 nodes · 1761 edges · 82 communities (43 shown, 39 thin omitted)
 - Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 98 edges (avg confidence: 0.87)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `c7e1c9a2`
+- Built from commit: `6238c724`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -38,25 +38,25 @@
 - .oxlintrc.json
 - ref_path
 - test_danger_zone.js
-- urlScraper.js
+- aiService.js
 - test_storage.js
 - test_sample_resume_and_ai_keys.js
-- aiService.js
+- urlScraper.js
 - av
-- jdSchemaValidator.js
 - 3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`)
-- errorTaxonomy.js
+- jdSchemaValidator.js
+- callOpenAiCompatible
 - users_manu19_desktop_jdmail_server_services_aiservice_cleanjsonoutput
 - users_manu19_desktop_jdmail_server_services_aiservice_generatecoldemail
 - users_manu19_desktop_jdmail_server_services_aiservice_listprovidermodels
 - users_manu19_desktop_jdmail_server_services_aiservice_parsejobdescription
 - users_manu19_desktop_jdmail_server_services_aiservice_testaiconnection
 - copilotService.js
+- test_custom_prompts.js
+- errorTaxonomy.js
 - users_manu19_desktop_jdmail_server_services_firebaseadmin_requireauth
 - users_manu19_desktop_jdmail_server_services_resumeparser_parseresumefile
 - users_manu19_desktop_jdmail_server_services_sheetparser_parserecipientsheet
-- callOpenAiCompatible
-- test_custom_prompts.js
 - JDMail — Comprehensive Architecture Map & Technical Specification
 - What You Must Do When Invoked
 - users_manu19_desktop_jdmail_server_services_smtpservice_classifysmtperror
@@ -203,9 +203,9 @@ Nodes (12): SCREENSHOT_DIR, ref_fs, ref_path, ref_puppeteer_core, assert, fs, pa
 Cohesion: 0.33
 Nodes (4): assert, copilotService, fs, path
 
-### Community 22 - "urlScraper.js"
-Cohesion: 0.23
-Nodes (14): ref_dns, ref_net, ALLOWED_PORTS, assertPublicDnsResolution(), detectContentBarriers(), { ERROR_CODES, STAGES, ParsingError }, extractJsonLdJobPosting(), extractTextFromHtml() (+6 more)
+### Community 22 - "aiService.js"
+Cohesion: 0.19
+Nodes (15): RFC-8259, cleanJsonOutput(), copilotService, { ERROR_CODES, STAGES, ParsingError }, extractFieldsViaRegex(), { extractJsonObject }, extractPlainTextFallback(), RFC-1918 (+7 more)
 
 ### Community 23 - "test_storage.js"
 Cohesion: 0.33
@@ -215,37 +215,37 @@ Nodes (4): assert, fs, path, storage
 Cohesion: 0.06
 Nodes (36): listProviderModels(), testAiConnection(), assert, runTests(), { testAiConnection, listProviderModels }, assert, copilotService, fs (+28 more)
 
-### Community 25 - "aiService.js"
-Cohesion: 0.19
-Nodes (15): RFC-8259, cleanJsonOutput(), copilotService, { ERROR_CODES, STAGES, ParsingError }, extractFieldsViaRegex(), { extractJsonObject }, extractPlainTextFallback(), RFC-1918 (+7 more)
+### Community 25 - "urlScraper.js"
+Cohesion: 0.23
+Nodes (14): ref_dns, ref_net, ALLOWED_PORTS, assertPublicDnsResolution(), detectContentBarriers(), { ERROR_CODES, STAGES, ParsingError }, extractJsonLdJobPosting(), extractTextFromHtml() (+6 more)
 
 ### Community 26 - "av"
 Cohesion: 0.13
 Nodes (31): AI-Slop Checklist (Review Before Committing), Codebase Debloat & Anti-Slop Rules, Core Rules, Non-Negotiable Guardrails, argparse, datetime, glob, os (+23 more)
 
-### Community 27 - "jdSchemaValidator.js"
-Cohesion: 0.32
-Nodes (7): extractHeuristicJd(), isPlaceholder(), isValidEmail(), PLACEHOLDER_STRINGS, PLATFORM_DOMAINS, SYSTEM_EMAIL_PREFIXES, validateAndNormalizeJd()
-
-### Community 28 - "3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`)"
+### Community 27 - "3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`)"
 Cohesion: 0.25
 Nodes (8): 3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`), 4-Worker Concurrent Batch Generation Pipeline, Enforced JSON Contract, Intelligent Key Prefix Mismatch Detection, Parsing & Markdown Sanitization (`cleanJsonOutput`), Provider Implementations, Uniform Interface, Verifiable Fact-Grounding Guardrail (`auditDraftClaims`)
 
-### Community 29 - "errorTaxonomy.js"
-Cohesion: 0.33
-Nodes (4): ref_crypto, crypto, ERROR_CODES, STAGES
+### Community 28 - "jdSchemaValidator.js"
+Cohesion: 0.32
+Nodes (7): extractHeuristicJd(), isPlaceholder(), isValidEmail(), PLACEHOLDER_STRINGS, PLATFORM_DOMAINS, SYSTEM_EMAIL_PREFIXES, validateAndNormalizeJd()
+
+### Community 29 - "callOpenAiCompatible"
+Cohesion: 0.43
+Nodes (6): HTTP 429 Exponential Backoff & Retry Handling, callGemini(), callOpenAiCompatible(), assert, { callGemini, callOpenAiCompatible }, runTests()
 
 ### Community 36 - "copilotService.js"
 Cohesion: 0.14
 Nodes (15): callCopilotChat(), callCopilotChatRaw(), checkDeviceStatus(), clearPendingDeviceFlow(), clearSessionCache(), defaultCache, getCopilotSessionToken(), getSessionCache() (+7 more)
 
-### Community 40 - "callOpenAiCompatible"
-Cohesion: 0.43
-Nodes (6): HTTP 429 Exponential Backoff & Retry Handling, callGemini(), callOpenAiCompatible(), assert, { callGemini, callOpenAiCompatible }, runTests()
-
-### Community 41 - "test_custom_prompts.js"
+### Community 37 - "test_custom_prompts.js"
 Cohesion: 0.29
 Nodes (6): assert, { buildPrompts }, fs, path, runTests(), storage
+
+### Community 38 - "errorTaxonomy.js"
+Cohesion: 0.33
+Nodes (4): ref_crypto, crypto, ERROR_CODES, STAGES
 
 ### Community 42 - "JDMail — Comprehensive Architecture Map & Technical Specification"
 Cohesion: 0.07
@@ -297,14 +297,14 @@ _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `react` connect `react` to `api.js`, `client/package.json`?**
   _High betweenness centrality (0.080) - this node is a cross-community bridge._
-- **Why does `3. Subsystem Deep Dives` connect `react` to `JDMail — Comprehensive Architecture Map & Technical Specification`, `test_sheet_parser_full.js`, `3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`)`, `storageService.js`?**
+- **Why does `3. Subsystem Deep Dives` connect `react` to `test_sheet_parser_full.js`, `JDMail — Comprehensive Architecture Map & Technical Specification`, `3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`)`, `storageService.js`?**
   _High betweenness centrality (0.038) - this node is a cross-community bridge._
 - **Why does `JDMail — Comprehensive Architecture Map & Technical Specification` connect `JDMail — Comprehensive Architecture Map & Technical Specification` to `react`?**
   _High betweenness centrality (0.036) - this node is a cross-community bridge._
 - **What connects `$schema`, `plugins`, `react/rules-of-hooks` to the rest of the system?**
   _449 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `api.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.08990384615384615 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.09038461538461538 - nodes in this community are weakly interconnected._
 - **Should `test_graphify_integration.js` be split into smaller, more focused modules?**
   _Cohesion score 0.09523809523809523 - nodes in this community are weakly interconnected._
 - **Should `react` be split into smaller, more focused modules?**

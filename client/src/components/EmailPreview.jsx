@@ -380,11 +380,15 @@ export default function EmailPreview({
     const tonePrompt = selectedTone === 'custom' ? customToneText : chosenToneObj?.prompt;
 
     try {
+      const effectiveJd = (currentRecipient?.jobDescription && currentRecipient.jobDescription.trim())
+        || (jobDescription && jobDescription.trim())
+        || '';
+
       const res = await generateColdEmail({
         providerKey: effectiveAiKey,
         providerConfig: config?.aiProviders?.[effectiveAiKey],
         resumeText: resumeData.text,
-        jobDescription: jobDescription,
+        jobDescription: effectiveJd,
         recipient: currentRecipient,
         customTone: tonePrompt,
         senderName: resumeData.detectedName || defaultSmtp?.fromName || 'Candidate'

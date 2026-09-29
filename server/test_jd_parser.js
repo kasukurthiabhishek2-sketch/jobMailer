@@ -180,7 +180,13 @@ test('batch-generate partitions recipients with/without JDs correctly', () => {
       typeof recipient.jobDescription === 'string' &&
       recipient.jobDescription.trim().length > 0
     );
-    if (hasSpecificJd) {
+    const hasSpecificRole = Boolean(
+      recipient &&
+      recipient.role &&
+      typeof recipient.role === 'string' &&
+      recipient.role.trim().length > 0
+    );
+    if (hasSpecificJd || hasSpecificRole) {
       withJd.push({ recipient, index: idx });
     } else {
       withoutJd.push({ recipient, index: idx });
@@ -191,6 +197,41 @@ test('batch-generate partitions recipients with/without JDs correctly', () => {
   assert.strictEqual(withoutJd.length, 3, 'Should have 3 recipients without JDs');
   assert.strictEqual(withJd[0].recipient.id, '1');
   assert.strictEqual(withJd[1].recipient.id, '4');
+});
+
+test('batch-generate routes recipients with specific role into tailored generation', () => {
+  const recipients = [
+    { id: '1', email: 'dev@co.com', role: 'Staff Backend Engineer', jobDescription: '' },
+    { id: '2', email: 'pm@co.com', role: 'Product Lead' },
+    { id: '3', email: 'generic@co.com' } // no role, no JD
+  ];
+
+  const withJd = [];
+  const withoutJd = [];
+  recipients.forEach((recipient, idx) => {
+    const hasSpecificJd = Boolean(
+      recipient &&
+      recipient.jobDescription &&
+      typeof recipient.jobDescription === 'string' &&
+      recipient.jobDescription.trim().length > 0
+    );
+    const hasSpecificRole = Boolean(
+      recipient &&
+      recipient.role &&
+      typeof recipient.role === 'string' &&
+      recipient.role.trim().length > 0
+    );
+    if (hasSpecificJd || hasSpecificRole) {
+      withJd.push({ recipient, index: idx });
+    } else {
+      withoutJd.push({ recipient, index: idx });
+    }
+  });
+
+  assert.strictEqual(withJd.length, 2, 'Should route 2 role-specific recipients to tailored pool');
+  assert.strictEqual(withoutJd.length, 1, 'Should route 1 role-less recipient to generic pool');
+  assert.strictEqual(withJd[0].recipient.role, 'Staff Backend Engineer');
+  assert.strictEqual(withJd[1].recipient.role, 'Product Lead');
 });
 
 // ─── Duplicate Email Detection ──────────────────────────────────────

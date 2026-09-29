@@ -765,11 +765,15 @@ app.post('/api/ai/generate', async (req, res) => {
 
     const customSystemPrompt = resolveCustomPrompt('coldEmail', explicitSystemPrompt || customPrompt);
 
+    const effectiveJd = (jobDescription && typeof jobDescription === 'string' && jobDescription.trim())
+      || (recipient?.jobDescription && typeof recipient.jobDescription === 'string' && recipient.jobDescription.trim())
+      || '';
+
     const emailContent = await generateColdEmail({
       providerKey,
       providerConfig,
       resumeText,
-      jobDescription,
+      jobDescription: effectiveJd,
       recipient,
       customTone,
       senderName,
@@ -855,6 +859,9 @@ function adaptGenericEmailForRecipient(genericEmail, recipient, senderName) {
     }
   }
 
+  if (rawRole) {
+    body = body.replace(/\[(?:Role|Target\s*Role|Position|Job\s*Title)\]/gi, rawRole);
+  }
   if (firstName) {
     body = body.replace(/\[(?:Recipient\s*Name|Name|Hiring\s*Manager)\]/gi, firstName);
   }
@@ -1034,9 +1041,11 @@ app.post('/api/ai/batch-generate', async (req, res) => {
 
     const customSystemPrompt = resolveCustomPrompt('coldEmail', explicitSystemPrompt || customPrompt);
 
+    const fallbackJd = (typeof jobDescription === 'string' && jobDescription.trim()) ? jobDescription.trim() : '';
+
     // Inspect incoming recipients and partition them into:
-    // a) Those with a specific Job Description
-    // b) Those without a specific Job Description
+    // a) Those with specific tailoring (dedicated JD or specific target role)
+    // b) Those without any specific role or JD (pure generic outreach)
     const withJd = [];
     const withoutJd = [];
 
@@ -1047,7 +1056,14 @@ app.post('/api/ai/batch-generate', async (req, res) => {
         typeof recipient.jobDescription === 'string' &&
         recipient.jobDescription.trim().length > 0
       );
-      if (hasSpecificJd) {
+      const hasSpecificRole = Boolean(
+        recipient &&
+        recipient.role &&
+        typeof recipient.role === 'string' &&
+        recipient.role.trim().length > 0
+      );
+
+      if (hasSpecificJd || hasSpecificRole) {
         withJd.push({ recipient, index: idx });
       } else {
         withoutJd.push({ recipient, index: idx });
@@ -1056,7 +1072,7 @@ app.post('/api/ai/batch-generate', async (req, res) => {
 
     const results = Array.from({ length: recipients.length });
 
-    // 1. Process recipients WITH specific Job Descriptions using a 4-worker concurrency pool
+    // 1. Process tailored recipients (specific JD or target role) using a 4-worker concurrency pool
     const jdTask = (async () => {
       if (withJd.length === 0) return;
 
@@ -1068,11 +1084,15 @@ app.post('/api/ai/batch-generate', async (req, res) => {
           const item = withJd[nextIndex++];
           const { recipient, index } = item;
           try {
+            const recipientJd = (recipient.jobDescription && typeof recipient.jobDescription === 'string' && recipient.jobDescription.trim())
+              ? recipient.jobDescription.trim()
+              : fallbackJd;
+
             const emailContent = await generateColdEmail({
               providerKey,
               providerConfig,
               resumeText,
-              jobDescription: recipient.jobDescription.trim(),
+              jobDescription: recipientJd,
               recipient,
               customTone,
               senderName,
@@ -1103,13 +1123,13 @@ app.post('/api/ai/batch-generate', async (req, res) => {
       await Promise.all(workers);
     })();
 
-    // 2. For recipients WITHOUT specific Job Descriptions:
+    // 2. For recipients WITHOUT specific Job Descriptions or target roles:
     // Generate ONE generic cold email via generateColdEmail (focusing on candidate core strengths & achievements),
     // then adapt that single generic email for each recipient.
     const genericTask = (async () => {
       if (withoutJd.length === 0) return;
 
-      const genericJd = (typeof jobDescription === 'string' && jobDescription.trim()) ? jobDescription.trim() : '';
+      const genericJd = fallbackJd;
 
       try {
         const genericEmail = await generateColdEmail({

@@ -1,6 +1,24 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import EmailPreview from '../components/EmailPreview';
+
+vi.mock('../services/api', async () => {
+  const actual = await vi.importActual('../services/api');
+  return {
+    ...actual,
+    generateColdEmail: vi.fn().mockResolvedValue({
+      success: true,
+      email: {
+        subject: 'Regenerated Subject',
+        body: 'Regenerated Body',
+        groundingAudit: { isGroundingAudited: true, groundingScore: 100 }
+      }
+    }),
+    batchGenerateColdEmails: vi.fn(),
+    setActiveAiProvider: vi.fn(),
+    fetchDailySendingStats: vi.fn().mockResolvedValue({ sentToday: 0, dailyLimit: 100 })
+  };
+});
 
 describe('Unified EmailPreview Component (Step 4 Drafts & Send)', () => {
   const mockConfig = {
@@ -235,6 +253,51 @@ describe('Unified EmailPreview Component (Step 4 Drafts & Send)', () => {
     expect(onUpdateGeneratedEmails).toHaveBeenCalledWith(
       expect.objectContaining({
         'rec-1': expect.objectContaining({ body: 'Updated email body content' })
+      })
+    );
+  });
+
+  it('calls generateColdEmail with recipient tailored jobDescription when regenerating draft', async () => {
+    const api = await import('../services/api');
+    api.generateColdEmail.mockClear();
+
+    const recipientsWithTailoredJd = [
+      {
+        ...mockRecipients[0],
+        jobDescription: 'Tailored requirements for Engineering Director at TechCo'
+      }
+    ];
+
+    render(
+      <EmailPreview
+        config={mockConfig}
+        resumeData={mockResumeData}
+        jobDescription="Global fallback JD"
+        recipients={recipientsWithTailoredJd}
+        generatedEmails={{
+          'rec-1': {
+            subject: 'Existing Draft Subject',
+            body: 'Existing draft body content...'
+          }
+        }}
+        onUpdateGeneratedEmails={() => {}}
+      />
+    );
+
+    const regenBtn = screen.getByRole('button', { name: /Regenerate Draft/i });
+    fireEvent.click(regenBtn);
+
+    await waitFor(() => {
+      expect(api.generateColdEmail).toHaveBeenCalledTimes(1);
+    });
+
+    expect(api.generateColdEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobDescription: 'Tailored requirements for Engineering Director at TechCo',
+        recipient: expect.objectContaining({
+          id: 'rec-1',
+          role: 'Engineering Director'
+        })
       })
     );
   });

@@ -315,7 +315,7 @@
       "file_type": "code",
       "norm_label": "batchgeneratecoldemails()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L311"
+      "source_location": "L314"
     },
     {
       "id": "client_src_services_api_cancelcopilotauth",
@@ -327,7 +327,7 @@
       "file_type": "code",
       "norm_label": "cancelcopilotauth()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L494"
+      "source_location": "L497"
     },
     {
       "id": "client_src_services_api_checkcopilotstatus",
@@ -339,7 +339,7 @@
       "file_type": "code",
       "norm_label": "checkcopilotstatus()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L503"
+      "source_location": "L506"
     },
     {
       "id": "client_src_services_api_clearoutreachlogs",
@@ -351,7 +351,7 @@
       "file_type": "code",
       "norm_label": "clearoutreachlogs()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L447"
+      "source_location": "L450"
     },
     {
       "id": "client_src_services_api_deletesmtpprofile",
@@ -363,7 +363,7 @@
       "file_type": "code",
       "norm_label": "deletesmtpprofile()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L133"
+      "source_location": "L136"
     },
     {
       "id": "client_src_services_api_fetchdailysendingstats",
@@ -375,7 +375,7 @@
       "file_type": "code",
       "norm_label": "fetchdailysendingstats()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L517"
+      "source_location": "L520"
     },
     {
       "id": "client_src_services_api_fetchmigrationconfig",
@@ -387,7 +387,7 @@
       "file_type": "code",
       "norm_label": "fetchmigrationconfig()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L57"
+      "source_location": "L60"
     },
     {
       "id": "client_src_services_api_generatecoldemail",
@@ -399,7 +399,7 @@
       "file_type": "code",
       "norm_label": "generatecoldemail()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L194"
+      "source_location": "L197"
     },
     {
       "id": "client_src_services_api_getcurrentcopilotflow",
@@ -411,7 +411,7 @@
       "file_type": "code",
       "norm_label": "getcurrentcopilotflow()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L484"
+      "source_location": "L487"
     },
     {
       "id": "client_src_services_api_listaimodels",
@@ -423,7 +423,7 @@
       "file_type": "code",
       "norm_label": "listaimodels()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L425"
+      "source_location": "L428"
     },
     {
       "id": "client_src_services_api_parsejobdescriptionapi",
@@ -435,7 +435,7 @@
       "file_type": "code",
       "norm_label": "parsejobdescriptionapi()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L240"
+      "source_location": "L243"
     },
     {
       "id": "client_src_services_api_parsejsonresponse",
@@ -447,7 +447,7 @@
       "file_type": "code",
       "norm_label": "parsejsonresponse()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L36"
+      "source_location": "L39"
     },
     {
       "id": "client_src_services_api_resetalldata",
@@ -459,7 +459,7 @@
       "file_type": "code",
       "norm_label": "resetalldata()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L512"
+      "source_location": "L515"
     },
     {
       "id": "client_src_services_api_saveaiproviderconfig",
@@ -471,7 +471,7 @@
       "file_type": "code",
       "norm_label": "saveaiproviderconfig()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L69"
+      "source_location": "L72"
     },
     {
       "id": "client_src_services_api_savecandidateprofile",
@@ -483,7 +483,7 @@
       "file_type": "code",
       "norm_label": "savecandidateprofile()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L461"
+      "source_location": "L464"
     },
     {
       "id": "client_src_services_api_savecustomprompts",
@@ -495,7 +495,7 @@
       "file_type": "code",
       "norm_label": "savecustomprompts()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L171"
+      "source_location": "L174"
     },
     {
       "id": "client_src_services_api_savepreferences",
@@ -507,7 +507,7 @@
       "file_type": "code",
       "norm_label": "savepreferences()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L162"
+      "source_location": "L165"
     },
     {
       "id": "client_src_services_api_savesmtpprofile",
@@ -519,7 +519,7 @@
       "file_type": "code",
       "norm_label": "savesmtpprofile()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L124"
+      "source_location": "L127"
     },
     {
       "id": "client_src_services_api_setactiveaiprovider",
@@ -531,7 +531,7 @@
       "file_type": "code",
       "norm_label": "setactiveaiprovider()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L78"
+      "source_location": "L81"
     },
     {
       "id": "client_src_services_api_setdefaultsmtpprofile",
@@ -543,7 +543,7 @@
       "file_type": "code",
       "norm_label": "setdefaultsmtpprofile()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L138"
+      "source_location": "L141"
     },
     {
       "id": "client_src_services_api_startcopilotauth",
@@ -555,7 +555,7 @@
       "file_type": "code",
       "norm_label": "startcopilotauth()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L479"
+      "source_location": "L482"
     },
     {
       "id": "client_src_services_api_syncsettings",
@@ -567,7 +567,7 @@
       "file_type": "code",
       "norm_label": "syncsettings()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L470"
+      "source_location": "L473"
     },
     {
       "id": "client_src_services_api_testaiconnection",
@@ -579,7 +579,7 @@
       "file_type": "code",
       "norm_label": "testaiconnection()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L88"
+      "source_location": "L91"
     },
     {
       "id": "client_src_services_api_testsmtpconnection",
@@ -591,7 +591,7 @@
       "file_type": "code",
       "norm_label": "testsmtpconnection()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L143"
+      "source_location": "L146"
     },
     {
       "id": "client_src_services_api_uploadrecipientssheet",
@@ -603,7 +603,7 @@
       "file_type": "code",
       "norm_label": "uploadrecipientssheet()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L187"
+      "source_location": "L190"
     },
     {
       "id": "server_services_smtpservice_classifysmtperror",
@@ -795,7 +795,7 @@
       "file_type": "code",
       "norm_label": "adaptgenericemailforrecipient()",
       "source_file": "server/index.js",
-      "source_location": "L797"
+      "source_location": "L801"
     },
     {
       "id": "server_test_batch_concurrency_runconcurrentbatch",
@@ -843,7 +843,7 @@
       "file_type": "code",
       "norm_label": "worker()",
       "source_file": "server/test_batch_concurrency.js",
-      "source_location": "L73"
+      "source_location": "L79"
     },
     {
       "id": "server_test_batch_concurrency_runtests",
@@ -855,7 +855,7 @@
       "file_type": "code",
       "norm_label": "runtests()",
       "source_file": "server/test_batch_concurrency.js",
-      "source_location": "L138"
+      "source_location": "L147"
     },
     {
       "id": "client_src_app_app",
@@ -1107,7 +1107,7 @@
       "file_type": "code",
       "norm_label": "getstepbyid()",
       "source_file": "client/src/constants/wizardSteps.js",
-      "source_location": "L69"
+      "source_location": "L80"
     },
     {
       "id": "client_src_constants_wizardsteps_getsteplockreason",
@@ -1119,7 +1119,7 @@
       "file_type": "code",
       "norm_label": "getsteplockreason()",
       "source_file": "client/src/constants/wizardSteps.js",
-      "source_location": "L83"
+      "source_location": "L94"
     },
     {
       "id": "client_src_constants_wizardsteps_getstepnumber",
@@ -1131,7 +1131,7 @@
       "file_type": "code",
       "norm_label": "getstepnumber()",
       "source_file": "client/src/constants/wizardSteps.js",
-      "source_location": "L73"
+      "source_location": "L84"
     },
     {
       "id": "client_src_constants_wizardsteps_isstepunlocked",
@@ -1143,7 +1143,7 @@
       "file_type": "code",
       "norm_label": "isstepunlocked()",
       "source_file": "client/src/constants/wizardSteps.js",
-      "source_location": "L78"
+      "source_location": "L89"
     },
     {
       "id": "client_src_hooks_usecampaignstream_usecampaignstream",
@@ -1215,7 +1215,7 @@
       "file_type": "code",
       "norm_label": "deleteephemeralresume()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L523"
+      "source_location": "L526"
     },
     {
       "id": "client_src_services_api_fetchoutreachlogs",
@@ -1227,7 +1227,7 @@
       "file_type": "code",
       "norm_label": "fetchoutreachlogs()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L442"
+      "source_location": "L445"
     },
     {
       "id": "client_src_services_api_saveoutreachlogs",
@@ -1239,7 +1239,7 @@
       "file_type": "code",
       "norm_label": "saveoutreachlogs()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L456"
+      "source_location": "L459"
     },
     {
       "id": "client_src_services_api_streamemailsending",
@@ -1251,7 +1251,7 @@
       "file_type": "code",
       "norm_label": "streamemailsending()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L356"
+      "source_location": "L359"
     },
     {
       "id": "client_src_services_api_uploadresume",
@@ -1263,7 +1263,7 @@
       "file_type": "code",
       "norm_label": "uploadresume()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L180"
+      "source_location": "L183"
     },
     {
       "id": "client_src_tests_adversarial_step1_navigation_test_wizardharness",
@@ -1386,112 +1386,88 @@
       "source_location": "L6"
     },
     {
-      "id": "server_services_urlscraper_assertpublicdnsresolution",
-      "label": "assertPublicDnsResolution()",
+      "id": "server_services_aiservice_cleanjsonoutput",
+      "label": "cleanJsonOutput()",
       "_callable": true,
       "_origin": "ast",
       "community": 22,
-      "community_name": "urlScraper.js",
+      "community_name": "aiService.js",
       "file_type": "code",
-      "norm_label": "assertpublicdnsresolution()",
-      "source_file": "server/services/urlScraper.js",
-      "source_location": "L184"
+      "norm_label": "cleanjsonoutput()",
+      "source_file": "server/services/aiService.js",
+      "source_location": "L176"
     },
     {
-      "id": "server_services_urlscraper_detectcontentbarriers",
-      "label": "detectContentBarriers()",
+      "id": "server_services_aiservice_extractfieldsviaregex",
+      "label": "extractFieldsViaRegex()",
       "_callable": true,
       "_origin": "ast",
       "community": 22,
-      "community_name": "urlScraper.js",
+      "community_name": "aiService.js",
       "file_type": "code",
-      "norm_label": "detectcontentbarriers()",
-      "source_file": "server/services/urlScraper.js",
-      "source_location": "L408"
+      "norm_label": "extractfieldsviaregex()",
+      "source_file": "server/services/aiService.js",
+      "source_location": "L65"
     },
     {
-      "id": "server_services_urlscraper_extractjsonldjobposting",
-      "label": "extractJsonLdJobPosting()",
+      "id": "server_services_aiservice_extractplaintextfallback",
+      "label": "extractPlainTextFallback()",
       "_callable": true,
       "_origin": "ast",
       "community": 22,
-      "community_name": "urlScraper.js",
+      "community_name": "aiService.js",
       "file_type": "code",
-      "norm_label": "extractjsonldjobposting()",
-      "source_file": "server/services/urlScraper.js",
-      "source_location": "L257"
+      "norm_label": "extractplaintextfallback()",
+      "source_file": "server/services/aiService.js",
+      "source_location": "L106"
     },
     {
-      "id": "server_services_urlscraper_extracttextfromhtml",
-      "label": "extractTextFromHtml()",
+      "id": "server_services_aiservice_normalizecontrolcharacters",
+      "label": "normalizeControlCharacters()",
       "_callable": true,
       "_origin": "ast",
       "community": 22,
-      "community_name": "urlScraper.js",
+      "community_name": "aiService.js",
       "file_type": "code",
-      "norm_label": "extracttextfromhtml()",
-      "source_file": "server/services/urlScraper.js",
-      "source_location": "L329"
+      "norm_label": "normalizecontrolcharacters()",
+      "source_file": "server/services/aiService.js",
+      "source_location": "L15"
     },
     {
-      "id": "server_services_urlscraper_extracttitle",
-      "label": "extractTitle()",
+      "id": "server_services_aiservice_sanitizeparsedemail",
+      "label": "sanitizeParsedEmail()",
       "_callable": true,
       "_origin": "ast",
       "community": 22,
-      "community_name": "urlScraper.js",
+      "community_name": "aiService.js",
       "file_type": "code",
-      "norm_label": "extracttitle()",
-      "source_file": "server/services/urlScraper.js",
-      "source_location": "L396"
+      "norm_label": "sanitizeparsedemail()",
+      "source_file": "server/services/aiService.js",
+      "source_location": "L148"
     },
     {
-      "id": "server_services_urlscraper_fetchurlastext",
-      "label": "fetchUrlAsText()",
+      "id": "server_services_aiservice_unescapejsonstring",
+      "label": "unescapeJsonString()",
       "_callable": true,
       "_origin": "ast",
       "community": 22,
-      "community_name": "urlScraper.js",
+      "community_name": "aiService.js",
       "file_type": "code",
-      "norm_label": "fetchurlastext()",
-      "source_file": "server/services/urlScraper.js",
-      "source_location": "L462"
+      "norm_label": "unescapejsonstring()",
+      "source_file": "server/services/aiService.js",
+      "source_location": "L50"
     },
     {
-      "id": "server_services_urlscraper_isprivateorrestrictedip",
-      "label": "isPrivateOrRestrictedIp()",
+      "id": "server_test_ai_json_recovery_runtests",
+      "label": "runTests()",
       "_callable": true,
       "_origin": "ast",
       "community": 22,
-      "community_name": "urlScraper.js",
+      "community_name": "aiService.js",
       "file_type": "code",
-      "norm_label": "isprivateorrestrictedip()",
-      "source_file": "server/services/urlScraper.js",
-      "source_location": "L25"
-    },
-    {
-      "id": "server_services_urlscraper_safereadresponsebody",
-      "label": "safeReadResponseBody()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 22,
-      "community_name": "urlScraper.js",
-      "file_type": "code",
-      "norm_label": "safereadresponsebody()",
-      "source_file": "server/services/urlScraper.js",
-      "source_location": "L225"
-    },
-    {
-      "id": "server_services_urlscraper_validateurl",
-      "label": "validateUrl()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 22,
-      "community_name": "urlScraper.js",
-      "file_type": "code",
-      "norm_label": "validateurl()",
-      "source_file": "server/services/urlScraper.js",
-      "source_location": "L88"
+      "norm_label": "runtests()",
+      "source_file": "server/test_ai_json_recovery.js",
+      "source_location": "L4"
     },
     {
       "id": "server_test_storage_runtests",
@@ -1578,88 +1554,112 @@
       "source_location": "L74"
     },
     {
-      "id": "server_services_aiservice_cleanjsonoutput",
-      "label": "cleanJsonOutput()",
+      "id": "server_services_urlscraper_assertpublicdnsresolution",
+      "label": "assertPublicDnsResolution()",
       "_callable": true,
       "_origin": "ast",
       "community": 25,
-      "community_name": "aiService.js",
+      "community_name": "urlScraper.js",
       "file_type": "code",
-      "norm_label": "cleanjsonoutput()",
-      "source_file": "server/services/aiService.js",
-      "source_location": "L176"
+      "norm_label": "assertpublicdnsresolution()",
+      "source_file": "server/services/urlScraper.js",
+      "source_location": "L184"
     },
     {
-      "id": "server_services_aiservice_extractfieldsviaregex",
-      "label": "extractFieldsViaRegex()",
+      "id": "server_services_urlscraper_detectcontentbarriers",
+      "label": "detectContentBarriers()",
       "_callable": true,
       "_origin": "ast",
       "community": 25,
-      "community_name": "aiService.js",
+      "community_name": "urlScraper.js",
       "file_type": "code",
-      "norm_label": "extractfieldsviaregex()",
-      "source_file": "server/services/aiService.js",
-      "source_location": "L65"
+      "norm_label": "detectcontentbarriers()",
+      "source_file": "server/services/urlScraper.js",
+      "source_location": "L408"
     },
     {
-      "id": "server_services_aiservice_extractplaintextfallback",
-      "label": "extractPlainTextFallback()",
+      "id": "server_services_urlscraper_extractjsonldjobposting",
+      "label": "extractJsonLdJobPosting()",
       "_callable": true,
       "_origin": "ast",
       "community": 25,
-      "community_name": "aiService.js",
+      "community_name": "urlScraper.js",
       "file_type": "code",
-      "norm_label": "extractplaintextfallback()",
-      "source_file": "server/services/aiService.js",
-      "source_location": "L106"
+      "norm_label": "extractjsonldjobposting()",
+      "source_file": "server/services/urlScraper.js",
+      "source_location": "L257"
     },
     {
-      "id": "server_services_aiservice_normalizecontrolcharacters",
-      "label": "normalizeControlCharacters()",
+      "id": "server_services_urlscraper_extracttextfromhtml",
+      "label": "extractTextFromHtml()",
       "_callable": true,
       "_origin": "ast",
       "community": 25,
-      "community_name": "aiService.js",
+      "community_name": "urlScraper.js",
       "file_type": "code",
-      "norm_label": "normalizecontrolcharacters()",
-      "source_file": "server/services/aiService.js",
-      "source_location": "L15"
+      "norm_label": "extracttextfromhtml()",
+      "source_file": "server/services/urlScraper.js",
+      "source_location": "L329"
     },
     {
-      "id": "server_services_aiservice_sanitizeparsedemail",
-      "label": "sanitizeParsedEmail()",
+      "id": "server_services_urlscraper_extracttitle",
+      "label": "extractTitle()",
       "_callable": true,
       "_origin": "ast",
       "community": 25,
-      "community_name": "aiService.js",
+      "community_name": "urlScraper.js",
       "file_type": "code",
-      "norm_label": "sanitizeparsedemail()",
-      "source_file": "server/services/aiService.js",
-      "source_location": "L148"
+      "norm_label": "extracttitle()",
+      "source_file": "server/services/urlScraper.js",
+      "source_location": "L396"
     },
     {
-      "id": "server_services_aiservice_unescapejsonstring",
-      "label": "unescapeJsonString()",
+      "id": "server_services_urlscraper_fetchurlastext",
+      "label": "fetchUrlAsText()",
       "_callable": true,
       "_origin": "ast",
       "community": 25,
-      "community_name": "aiService.js",
+      "community_name": "urlScraper.js",
       "file_type": "code",
-      "norm_label": "unescapejsonstring()",
-      "source_file": "server/services/aiService.js",
-      "source_location": "L50"
+      "norm_label": "fetchurlastext()",
+      "source_file": "server/services/urlScraper.js",
+      "source_location": "L462"
     },
     {
-      "id": "server_test_ai_json_recovery_runtests",
-      "label": "runTests()",
+      "id": "server_services_urlscraper_isprivateorrestrictedip",
+      "label": "isPrivateOrRestrictedIp()",
       "_callable": true,
       "_origin": "ast",
       "community": 25,
-      "community_name": "aiService.js",
+      "community_name": "urlScraper.js",
       "file_type": "code",
-      "norm_label": "runtests()",
-      "source_file": "server/test_ai_json_recovery.js",
-      "source_location": "L4"
+      "norm_label": "isprivateorrestrictedip()",
+      "source_file": "server/services/urlScraper.js",
+      "source_location": "L25"
+    },
+    {
+      "id": "server_services_urlscraper_safereadresponsebody",
+      "label": "safeReadResponseBody()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 25,
+      "community_name": "urlScraper.js",
+      "file_type": "code",
+      "norm_label": "safereadresponsebody()",
+      "source_file": "server/services/urlScraper.js",
+      "source_location": "L225"
+    },
+    {
+      "id": "server_services_urlscraper_validateurl",
+      "label": "validateUrl()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 25,
+      "community_name": "urlScraper.js",
+      "file_type": "code",
+      "norm_label": "validateurl()",
+      "source_file": "server/services/urlScraper.js",
+      "source_location": "L88"
     },
     {
       "id": "scripts_av_cmd_beat",
@@ -1906,7 +1906,7 @@
       "label": "extractHeuristicJd()",
       "_callable": true,
       "_origin": "ast",
-      "community": 27,
+      "community": 28,
       "community_name": "jdSchemaValidator.js",
       "file_type": "code",
       "norm_label": "extractheuristicjd()",
@@ -1918,7 +1918,7 @@
       "label": "isPlaceholder()",
       "_callable": true,
       "_origin": "ast",
-      "community": 27,
+      "community": 28,
       "community_name": "jdSchemaValidator.js",
       "file_type": "code",
       "norm_label": "isplaceholder()",
@@ -1930,7 +1930,7 @@
       "label": "isValidEmail()",
       "_callable": true,
       "_origin": "ast",
-      "community": 27,
+      "community": 28,
       "community_name": "jdSchemaValidator.js",
       "file_type": "code",
       "norm_label": "isvalidemail()",
@@ -1942,7 +1942,7 @@
       "label": "validateAndNormalizeJd()",
       "_callable": true,
       "_origin": "ast",
-      "community": 27,
+      "community": 28,
       "community_name": "jdSchemaValidator.js",
       "file_type": "code",
       "norm_label": "validateandnormalizejd()",
@@ -1950,16 +1950,40 @@
       "source_location": "L57"
     },
     {
-      "id": "server_utils_errortaxonomy_isparsingerror",
-      "label": "isParsingError()",
+      "id": "server_services_aiservice_callgemini",
+      "label": "callGemini()",
       "_callable": true,
       "_origin": "ast",
       "community": 29,
-      "community_name": "errorTaxonomy.js",
+      "community_name": "callOpenAiCompatible",
       "file_type": "code",
-      "norm_label": "isparsingerror()",
-      "source_file": "server/utils/errorTaxonomy.js",
-      "source_location": "L143"
+      "norm_label": "callgemini()",
+      "source_file": "server/services/aiService.js",
+      "source_location": "L330"
+    },
+    {
+      "id": "server_services_aiservice_callopenaicompatible",
+      "label": "callOpenAiCompatible()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 29,
+      "community_name": "callOpenAiCompatible",
+      "file_type": "code",
+      "norm_label": "callopenaicompatible()",
+      "source_file": "server/services/aiService.js",
+      "source_location": "L468"
+    },
+    {
+      "id": "server_test_ai_retry_runtests",
+      "label": "runTests()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 29,
+      "community_name": "callOpenAiCompatible",
+      "file_type": "code",
+      "norm_label": "runtests()",
+      "source_file": "server/test_ai_retry.js",
+      "source_location": "L7"
     },
     {
       "id": "server_services_sheetparser_analyzeheaders",
@@ -2238,52 +2262,28 @@
       "source_location": "L5"
     },
     {
-      "id": "server_services_aiservice_callgemini",
-      "label": "callGemini()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 40,
-      "community_name": "callOpenAiCompatible",
-      "file_type": "code",
-      "norm_label": "callgemini()",
-      "source_file": "server/services/aiService.js",
-      "source_location": "L330"
-    },
-    {
-      "id": "server_services_aiservice_callopenaicompatible",
-      "label": "callOpenAiCompatible()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 40,
-      "community_name": "callOpenAiCompatible",
-      "file_type": "code",
-      "norm_label": "callopenaicompatible()",
-      "source_file": "server/services/aiService.js",
-      "source_location": "L468"
-    },
-    {
-      "id": "server_test_ai_retry_runtests",
-      "label": "runTests()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 40,
-      "community_name": "callOpenAiCompatible",
-      "file_type": "code",
-      "norm_label": "runtests()",
-      "source_file": "server/test_ai_retry.js",
-      "source_location": "L7"
-    },
-    {
       "id": "server_test_custom_prompts_runtests",
       "label": "runTests()",
       "_callable": true,
       "_origin": "ast",
-      "community": 41,
+      "community": 37,
       "community_name": "test_custom_prompts.js",
       "file_type": "code",
       "norm_label": "runtests()",
       "source_file": "server/test_custom_prompts.js",
       "source_location": "L7"
+    },
+    {
+      "id": "server_utils_errortaxonomy_isparsingerror",
+      "label": "isParsingError()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 38,
+      "community_name": "errorTaxonomy.js",
+      "file_type": "code",
+      "norm_label": "isparsingerror()",
+      "source_file": "server/utils/errorTaxonomy.js",
+      "source_location": "L143"
     },
     {
       "id": "client_src_lib_sanitizedraft_sanitizedraft",
@@ -2427,7 +2427,7 @@
       "file_type": "code",
       "norm_label": "resolveresumeattachment()",
       "source_file": "server/index.js",
-      "source_location": "L1197"
+      "source_location": "L1217"
     },
     {
       "id": "server_index_resolvesmtpprofile",
@@ -2439,7 +2439,7 @@
       "file_type": "code",
       "norm_label": "resolvesmtpprofile()",
       "source_file": "server/index.js",
-      "source_location": "L1167"
+      "source_location": "L1187"
     },
     {
       "id": "server_index_safeunlink",
@@ -2463,7 +2463,7 @@
       "file_type": "code",
       "norm_label": "worker()",
       "source_file": "server/index.js",
-      "source_location": "L1066"
+      "source_location": "L1082"
     },
     {
       "id": "server_services_aiservice_auditdraftclaims",
@@ -5695,48 +5695,114 @@
       "source_location": "L3"
     },
     {
-      "id": "server_services_urlscraper",
-      "label": "urlScraper.js",
+      "id": "server_services_aiservice",
+      "label": "aiService.js",
       "_origin": "ast",
       "community": 22,
-      "community_name": "urlScraper.js",
+      "community_name": "aiService.js",
       "file_type": "code",
-      "norm_label": "urlscraper.js",
-      "source_file": "server/services/urlScraper.js",
+      "norm_label": "aiservice.js",
+      "source_file": "server/services/aiService.js",
       "source_location": "L1"
     },
     {
-      "id": "server_services_urlscraper_allowed_ports",
-      "label": "ALLOWED_PORTS",
+      "id": "server_services_aiservice_copilotservice",
+      "label": "copilotService",
       "_origin": "ast",
       "community": 22,
-      "community_name": "urlScraper.js",
+      "community_name": "aiService.js",
       "file_type": "code",
-      "norm_label": "allowed_ports",
-      "source_file": "server/services/urlScraper.js",
-      "source_location": "L15"
+      "norm_label": "copilotservice",
+      "source_file": "server/services/aiService.js",
+      "source_location": "L5"
     },
     {
-      "id": "server_services_urlscraper_error_codes_stages_parsingerror",
+      "id": "server_services_aiservice_error_codes_stages_parsingerror",
       "label": "{ ERROR_CODES, STAGES, ParsingError }",
       "_origin": "ast",
       "community": 22,
-      "community_name": "urlScraper.js",
+      "community_name": "aiService.js",
       "file_type": "code",
       "norm_label": "{ error_codes, stages, parsingerror }",
-      "source_file": "server/services/urlScraper.js",
-      "source_location": "L9"
+      "source_file": "server/services/aiService.js",
+      "source_location": "L6"
     },
     {
-      "id": "server_services_urlscraper_net",
-      "label": "net",
+      "id": "server_services_aiservice_extractjsonobject",
+      "label": "{ extractJsonObject }",
       "_origin": "ast",
       "community": 22,
-      "community_name": "urlScraper.js",
+      "community_name": "aiService.js",
       "file_type": "code",
-      "norm_label": "net",
-      "source_file": "server/services/urlScraper.js",
+      "norm_label": "{ extractjsonobject }",
+      "source_file": "server/services/aiService.js",
       "source_location": "L8"
+    },
+    {
+      "id": "server_services_aiservice_validateandnormalizejd_isvalidemail",
+      "label": "{ validateAndNormalizeJd, isValidEmail }",
+      "_origin": "ast",
+      "community": 22,
+      "community_name": "aiService.js",
+      "file_type": "code",
+      "norm_label": "{ validateandnormalizejd, isvalidemail }",
+      "source_file": "server/services/aiService.js",
+      "source_location": "L7"
+    },
+    {
+      "id": "server_test_ai_json_recovery",
+      "label": "test_ai_json_recovery.js",
+      "_origin": "ast",
+      "community": 22,
+      "community_name": "aiService.js",
+      "file_type": "code",
+      "norm_label": "test_ai_json_recovery.js",
+      "source_file": "server/test_ai_json_recovery.js",
+      "source_location": "L1"
+    },
+    {
+      "id": "server_test_ai_json_recovery_assert",
+      "label": "assert",
+      "_origin": "ast",
+      "community": 22,
+      "community_name": "aiService.js",
+      "file_type": "code",
+      "norm_label": "assert",
+      "source_file": "server/test_ai_json_recovery.js",
+      "source_location": "L1"
+    },
+    {
+      "id": "server_test_ai_json_recovery_cleanjsonoutput",
+      "label": "{ cleanJsonOutput }",
+      "_origin": "ast",
+      "community": 22,
+      "community_name": "aiService.js",
+      "file_type": "code",
+      "norm_label": "{ cleanjsonoutput }",
+      "source_file": "server/test_ai_json_recovery.js",
+      "source_location": "L2"
+    },
+    {
+      "id": "docref_rfc_8259",
+      "label": "RFC-8259",
+      "_origin": "ast",
+      "community": 22,
+      "community_name": "aiService.js",
+      "file_type": "concept",
+      "norm_label": "rfc-8259",
+      "source_file": "server/services/aiService.js",
+      "source_location": "L13"
+    },
+    {
+      "id": "server_services_aiservice_js_docref_rfc_1918",
+      "label": "RFC-1918",
+      "_origin": "ast",
+      "community": 22,
+      "community_name": "aiService.js",
+      "file_type": "concept",
+      "norm_label": "rfc-1918",
+      "source_file": "server/services/aiService.js",
+      "source_location": "L436"
     },
     {
       "id": "server_test_storage",
@@ -6179,114 +6245,48 @@
       "source_location": "L264"
     },
     {
-      "id": "server_services_aiservice",
-      "label": "aiService.js",
+      "id": "server_services_urlscraper",
+      "label": "urlScraper.js",
       "_origin": "ast",
       "community": 25,
-      "community_name": "aiService.js",
+      "community_name": "urlScraper.js",
       "file_type": "code",
-      "norm_label": "aiservice.js",
-      "source_file": "server/services/aiService.js",
+      "norm_label": "urlscraper.js",
+      "source_file": "server/services/urlScraper.js",
       "source_location": "L1"
     },
     {
-      "id": "server_services_aiservice_copilotservice",
-      "label": "copilotService",
+      "id": "server_services_urlscraper_allowed_ports",
+      "label": "ALLOWED_PORTS",
       "_origin": "ast",
       "community": 25,
-      "community_name": "aiService.js",
+      "community_name": "urlScraper.js",
       "file_type": "code",
-      "norm_label": "copilotservice",
-      "source_file": "server/services/aiService.js",
-      "source_location": "L5"
+      "norm_label": "allowed_ports",
+      "source_file": "server/services/urlScraper.js",
+      "source_location": "L15"
     },
     {
-      "id": "server_services_aiservice_error_codes_stages_parsingerror",
+      "id": "server_services_urlscraper_error_codes_stages_parsingerror",
       "label": "{ ERROR_CODES, STAGES, ParsingError }",
       "_origin": "ast",
       "community": 25,
-      "community_name": "aiService.js",
+      "community_name": "urlScraper.js",
       "file_type": "code",
       "norm_label": "{ error_codes, stages, parsingerror }",
-      "source_file": "server/services/aiService.js",
-      "source_location": "L6"
+      "source_file": "server/services/urlScraper.js",
+      "source_location": "L9"
     },
     {
-      "id": "server_services_aiservice_extractjsonobject",
-      "label": "{ extractJsonObject }",
+      "id": "server_services_urlscraper_net",
+      "label": "net",
       "_origin": "ast",
       "community": 25,
-      "community_name": "aiService.js",
+      "community_name": "urlScraper.js",
       "file_type": "code",
-      "norm_label": "{ extractjsonobject }",
-      "source_file": "server/services/aiService.js",
+      "norm_label": "net",
+      "source_file": "server/services/urlScraper.js",
       "source_location": "L8"
-    },
-    {
-      "id": "server_services_aiservice_validateandnormalizejd_isvalidemail",
-      "label": "{ validateAndNormalizeJd, isValidEmail }",
-      "_origin": "ast",
-      "community": 25,
-      "community_name": "aiService.js",
-      "file_type": "code",
-      "norm_label": "{ validateandnormalizejd, isvalidemail }",
-      "source_file": "server/services/aiService.js",
-      "source_location": "L7"
-    },
-    {
-      "id": "server_test_ai_json_recovery",
-      "label": "test_ai_json_recovery.js",
-      "_origin": "ast",
-      "community": 25,
-      "community_name": "aiService.js",
-      "file_type": "code",
-      "norm_label": "test_ai_json_recovery.js",
-      "source_file": "server/test_ai_json_recovery.js",
-      "source_location": "L1"
-    },
-    {
-      "id": "server_test_ai_json_recovery_assert",
-      "label": "assert",
-      "_origin": "ast",
-      "community": 25,
-      "community_name": "aiService.js",
-      "file_type": "code",
-      "norm_label": "assert",
-      "source_file": "server/test_ai_json_recovery.js",
-      "source_location": "L1"
-    },
-    {
-      "id": "server_test_ai_json_recovery_cleanjsonoutput",
-      "label": "{ cleanJsonOutput }",
-      "_origin": "ast",
-      "community": 25,
-      "community_name": "aiService.js",
-      "file_type": "code",
-      "norm_label": "{ cleanjsonoutput }",
-      "source_file": "server/test_ai_json_recovery.js",
-      "source_location": "L2"
-    },
-    {
-      "id": "docref_rfc_8259",
-      "label": "RFC-8259",
-      "_origin": "ast",
-      "community": 25,
-      "community_name": "aiService.js",
-      "file_type": "concept",
-      "norm_label": "rfc-8259",
-      "source_file": "server/services/aiService.js",
-      "source_location": "L13"
-    },
-    {
-      "id": "server_services_aiservice_js_docref_rfc_1918",
-      "label": "RFC-1918",
-      "_origin": "ast",
-      "community": 25,
-      "community_name": "aiService.js",
-      "file_type": "concept",
-      "norm_label": "rfc-1918",
-      "source_file": "server/services/aiService.js",
-      "source_location": "L436"
     },
     {
       "id": "scripts_av",
@@ -6360,54 +6360,10 @@
       "source_location": "L5"
     },
     {
-      "id": "server_utils_jdschemavalidator",
-      "label": "jdSchemaValidator.js",
-      "_origin": "ast",
-      "community": 27,
-      "community_name": "jdSchemaValidator.js",
-      "file_type": "code",
-      "norm_label": "jdschemavalidator.js",
-      "source_file": "server/utils/jdSchemaValidator.js",
-      "source_location": "L1"
-    },
-    {
-      "id": "server_utils_jdschemavalidator_placeholder_strings",
-      "label": "PLACEHOLDER_STRINGS",
-      "_origin": "ast",
-      "community": 27,
-      "community_name": "jdSchemaValidator.js",
-      "file_type": "code",
-      "norm_label": "placeholder_strings",
-      "source_file": "server/utils/jdSchemaValidator.js",
-      "source_location": "L19"
-    },
-    {
-      "id": "server_utils_jdschemavalidator_platform_domains",
-      "label": "PLATFORM_DOMAINS",
-      "_origin": "ast",
-      "community": 27,
-      "community_name": "jdSchemaValidator.js",
-      "file_type": "code",
-      "norm_label": "platform_domains",
-      "source_file": "server/utils/jdSchemaValidator.js",
-      "source_location": "L13"
-    },
-    {
-      "id": "server_utils_jdschemavalidator_system_email_prefixes",
-      "label": "SYSTEM_EMAIL_PREFIXES",
-      "_origin": "ast",
-      "community": 27,
-      "community_name": "jdSchemaValidator.js",
-      "file_type": "code",
-      "norm_label": "system_email_prefixes",
-      "source_file": "server/utils/jdSchemaValidator.js",
-      "source_location": "L8"
-    },
-    {
       "id": "architecture_3_1_multi_provider_ai_studio_aiservice_js_copilotservice_js",
       "label": "3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`)",
       "_origin": "ast",
-      "community": 28,
+      "community": 27,
       "community_name": "3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`)",
       "file_type": "document",
       "node_kind": "heading",
@@ -6419,7 +6375,7 @@
       "id": "architecture_4_worker_concurrent_batch_generation_pipeline",
       "label": "4-Worker Concurrent Batch Generation Pipeline",
       "_origin": "ast",
-      "community": 28,
+      "community": 27,
       "community_name": "3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`)",
       "file_type": "document",
       "node_kind": "heading",
@@ -6431,7 +6387,7 @@
       "id": "architecture_enforced_json_contract",
       "label": "Enforced JSON Contract",
       "_origin": "ast",
-      "community": 28,
+      "community": 27,
       "community_name": "3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`)",
       "file_type": "document",
       "node_kind": "heading",
@@ -6443,7 +6399,7 @@
       "id": "architecture_intelligent_key_prefix_mismatch_detection",
       "label": "Intelligent Key Prefix Mismatch Detection",
       "_origin": "ast",
-      "community": 28,
+      "community": 27,
       "community_name": "3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`)",
       "file_type": "document",
       "node_kind": "heading",
@@ -6455,7 +6411,7 @@
       "id": "architecture_parsing_markdown_sanitization_cleanjsonoutput",
       "label": "Parsing & Markdown Sanitization (`cleanJsonOutput`)",
       "_origin": "ast",
-      "community": 28,
+      "community": 27,
       "community_name": "3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`)",
       "file_type": "document",
       "node_kind": "heading",
@@ -6467,7 +6423,7 @@
       "id": "architecture_provider_implementations",
       "label": "Provider Implementations",
       "_origin": "ast",
-      "community": 28,
+      "community": 27,
       "community_name": "3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`)",
       "file_type": "document",
       "node_kind": "heading",
@@ -6479,7 +6435,7 @@
       "id": "architecture_uniform_interface",
       "label": "Uniform Interface",
       "_origin": "ast",
-      "community": 28,
+      "community": 27,
       "community_name": "3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`)",
       "file_type": "document",
       "node_kind": "heading",
@@ -6491,7 +6447,7 @@
       "id": "architecture_verifiable_fact_grounding_guardrail_auditdraftclaims",
       "label": "Verifiable Fact-Grounding Guardrail (`auditDraftClaims`)",
       "_origin": "ast",
-      "community": 28,
+      "community": 27,
       "community_name": "3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`)",
       "file_type": "document",
       "node_kind": "heading",
@@ -6500,48 +6456,93 @@
       "source_location": "L433"
     },
     {
-      "id": "server_utils_errortaxonomy",
-      "label": "errorTaxonomy.js",
+      "id": "server_utils_jdschemavalidator",
+      "label": "jdSchemaValidator.js",
       "_origin": "ast",
-      "community": 29,
-      "community_name": "errorTaxonomy.js",
+      "community": 28,
+      "community_name": "jdSchemaValidator.js",
       "file_type": "code",
-      "norm_label": "errortaxonomy.js",
-      "source_file": "server/utils/errorTaxonomy.js",
+      "norm_label": "jdschemavalidator.js",
+      "source_file": "server/utils/jdSchemaValidator.js",
       "source_location": "L1"
     },
     {
-      "id": "server_utils_errortaxonomy_crypto",
-      "label": "crypto",
+      "id": "server_utils_jdschemavalidator_placeholder_strings",
+      "label": "PLACEHOLDER_STRINGS",
       "_origin": "ast",
-      "community": 29,
-      "community_name": "errorTaxonomy.js",
+      "community": 28,
+      "community_name": "jdSchemaValidator.js",
       "file_type": "code",
-      "norm_label": "crypto",
-      "source_file": "server/utils/errorTaxonomy.js",
-      "source_location": "L6"
+      "norm_label": "placeholder_strings",
+      "source_file": "server/utils/jdSchemaValidator.js",
+      "source_location": "L19"
     },
     {
-      "id": "server_utils_errortaxonomy_error_codes",
-      "label": "ERROR_CODES",
+      "id": "server_utils_jdschemavalidator_platform_domains",
+      "label": "PLATFORM_DOMAINS",
       "_origin": "ast",
-      "community": 29,
-      "community_name": "errorTaxonomy.js",
+      "community": 28,
+      "community_name": "jdSchemaValidator.js",
       "file_type": "code",
-      "norm_label": "error_codes",
-      "source_file": "server/utils/errorTaxonomy.js",
+      "norm_label": "platform_domains",
+      "source_file": "server/utils/jdSchemaValidator.js",
+      "source_location": "L13"
+    },
+    {
+      "id": "server_utils_jdschemavalidator_system_email_prefixes",
+      "label": "SYSTEM_EMAIL_PREFIXES",
+      "_origin": "ast",
+      "community": 28,
+      "community_name": "jdSchemaValidator.js",
+      "file_type": "code",
+      "norm_label": "system_email_prefixes",
+      "source_file": "server/utils/jdSchemaValidator.js",
       "source_location": "L8"
     },
     {
-      "id": "server_utils_errortaxonomy_stages",
-      "label": "STAGES",
+      "id": "server_test_ai_retry",
+      "label": "test_ai_retry.js",
       "_origin": "ast",
       "community": 29,
-      "community_name": "errorTaxonomy.js",
+      "community_name": "callOpenAiCompatible",
       "file_type": "code",
-      "norm_label": "stages",
-      "source_file": "server/utils/errorTaxonomy.js",
-      "source_location": "L58"
+      "norm_label": "test_ai_retry.js",
+      "source_file": "server/test_ai_retry.js",
+      "source_location": "L1"
+    },
+    {
+      "id": "server_test_ai_retry_assert",
+      "label": "assert",
+      "_origin": "ast",
+      "community": 29,
+      "community_name": "callOpenAiCompatible",
+      "file_type": "code",
+      "norm_label": "assert",
+      "source_file": "server/test_ai_retry.js",
+      "source_location": "L1"
+    },
+    {
+      "id": "server_test_ai_retry_callgemini_callopenaicompatible",
+      "label": "{ callGemini, callOpenAiCompatible }",
+      "_origin": "ast",
+      "community": 29,
+      "community_name": "callOpenAiCompatible",
+      "file_type": "code",
+      "norm_label": "{ callgemini, callopenaicompatible }",
+      "source_file": "server/test_ai_retry.js",
+      "source_location": "L2"
+    },
+    {
+      "id": "architecture_http_429_exponential_backoff_retry_handling",
+      "label": "HTTP 429 Exponential Backoff & Retry Handling",
+      "_origin": "ast",
+      "community": 29,
+      "community_name": "callOpenAiCompatible",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "http 429 exponential backoff & retry handling",
+      "source_file": "ARCHITECTURE.md",
+      "source_location": "L443"
     },
     {
       "id": "server_services_sheetparser",
@@ -7107,6 +7108,116 @@
       "source_location": "L3"
     },
     {
+      "id": "server_test_custom_prompts",
+      "label": "test_custom_prompts.js",
+      "_origin": "ast",
+      "community": 37,
+      "community_name": "test_custom_prompts.js",
+      "file_type": "code",
+      "norm_label": "test_custom_prompts.js",
+      "source_file": "server/test_custom_prompts.js",
+      "source_location": "L1"
+    },
+    {
+      "id": "server_test_custom_prompts_assert",
+      "label": "assert",
+      "_origin": "ast",
+      "community": 37,
+      "community_name": "test_custom_prompts.js",
+      "file_type": "code",
+      "norm_label": "assert",
+      "source_file": "server/test_custom_prompts.js",
+      "source_location": "L1"
+    },
+    {
+      "id": "server_test_custom_prompts_buildprompts",
+      "label": "{ buildPrompts }",
+      "_origin": "ast",
+      "community": 37,
+      "community_name": "test_custom_prompts.js",
+      "file_type": "code",
+      "norm_label": "{ buildprompts }",
+      "source_file": "server/test_custom_prompts.js",
+      "source_location": "L5"
+    },
+    {
+      "id": "server_test_custom_prompts_fs",
+      "label": "fs",
+      "_origin": "ast",
+      "community": 37,
+      "community_name": "test_custom_prompts.js",
+      "file_type": "code",
+      "norm_label": "fs",
+      "source_file": "server/test_custom_prompts.js",
+      "source_location": "L2"
+    },
+    {
+      "id": "server_test_custom_prompts_path",
+      "label": "path",
+      "_origin": "ast",
+      "community": 37,
+      "community_name": "test_custom_prompts.js",
+      "file_type": "code",
+      "norm_label": "path",
+      "source_file": "server/test_custom_prompts.js",
+      "source_location": "L3"
+    },
+    {
+      "id": "server_test_custom_prompts_storage",
+      "label": "storage",
+      "_origin": "ast",
+      "community": 37,
+      "community_name": "test_custom_prompts.js",
+      "file_type": "code",
+      "norm_label": "storage",
+      "source_file": "server/test_custom_prompts.js",
+      "source_location": "L4"
+    },
+    {
+      "id": "server_utils_errortaxonomy",
+      "label": "errorTaxonomy.js",
+      "_origin": "ast",
+      "community": 38,
+      "community_name": "errorTaxonomy.js",
+      "file_type": "code",
+      "norm_label": "errortaxonomy.js",
+      "source_file": "server/utils/errorTaxonomy.js",
+      "source_location": "L1"
+    },
+    {
+      "id": "server_utils_errortaxonomy_crypto",
+      "label": "crypto",
+      "_origin": "ast",
+      "community": 38,
+      "community_name": "errorTaxonomy.js",
+      "file_type": "code",
+      "norm_label": "crypto",
+      "source_file": "server/utils/errorTaxonomy.js",
+      "source_location": "L6"
+    },
+    {
+      "id": "server_utils_errortaxonomy_error_codes",
+      "label": "ERROR_CODES",
+      "_origin": "ast",
+      "community": 38,
+      "community_name": "errorTaxonomy.js",
+      "file_type": "code",
+      "norm_label": "error_codes",
+      "source_file": "server/utils/errorTaxonomy.js",
+      "source_location": "L8"
+    },
+    {
+      "id": "server_utils_errortaxonomy_stages",
+      "label": "STAGES",
+      "_origin": "ast",
+      "community": 38,
+      "community_name": "errorTaxonomy.js",
+      "file_type": "code",
+      "norm_label": "stages",
+      "source_file": "server/utils/errorTaxonomy.js",
+      "source_location": "L58"
+    },
+    {
       "id": "client_package",
       "label": "client/package.json",
       "_origin": "ast",
@@ -7446,117 +7557,6 @@
       "norm_label": "@vitejs/plugin-react",
       "source_file": "client/package.json",
       "source_location": "L22"
-    },
-    {
-      "id": "server_test_ai_retry",
-      "label": "test_ai_retry.js",
-      "_origin": "ast",
-      "community": 40,
-      "community_name": "callOpenAiCompatible",
-      "file_type": "code",
-      "norm_label": "test_ai_retry.js",
-      "source_file": "server/test_ai_retry.js",
-      "source_location": "L1"
-    },
-    {
-      "id": "server_test_ai_retry_assert",
-      "label": "assert",
-      "_origin": "ast",
-      "community": 40,
-      "community_name": "callOpenAiCompatible",
-      "file_type": "code",
-      "norm_label": "assert",
-      "source_file": "server/test_ai_retry.js",
-      "source_location": "L1"
-    },
-    {
-      "id": "server_test_ai_retry_callgemini_callopenaicompatible",
-      "label": "{ callGemini, callOpenAiCompatible }",
-      "_origin": "ast",
-      "community": 40,
-      "community_name": "callOpenAiCompatible",
-      "file_type": "code",
-      "norm_label": "{ callgemini, callopenaicompatible }",
-      "source_file": "server/test_ai_retry.js",
-      "source_location": "L2"
-    },
-    {
-      "id": "architecture_http_429_exponential_backoff_retry_handling",
-      "label": "HTTP 429 Exponential Backoff & Retry Handling",
-      "_origin": "ast",
-      "community": 40,
-      "community_name": "callOpenAiCompatible",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "http 429 exponential backoff & retry handling",
-      "source_file": "ARCHITECTURE.md",
-      "source_location": "L443"
-    },
-    {
-      "id": "server_test_custom_prompts",
-      "label": "test_custom_prompts.js",
-      "_origin": "ast",
-      "community": 41,
-      "community_name": "test_custom_prompts.js",
-      "file_type": "code",
-      "norm_label": "test_custom_prompts.js",
-      "source_file": "server/test_custom_prompts.js",
-      "source_location": "L1"
-    },
-    {
-      "id": "server_test_custom_prompts_assert",
-      "label": "assert",
-      "_origin": "ast",
-      "community": 41,
-      "community_name": "test_custom_prompts.js",
-      "file_type": "code",
-      "norm_label": "assert",
-      "source_file": "server/test_custom_prompts.js",
-      "source_location": "L1"
-    },
-    {
-      "id": "server_test_custom_prompts_buildprompts",
-      "label": "{ buildPrompts }",
-      "_origin": "ast",
-      "community": 41,
-      "community_name": "test_custom_prompts.js",
-      "file_type": "code",
-      "norm_label": "{ buildprompts }",
-      "source_file": "server/test_custom_prompts.js",
-      "source_location": "L5"
-    },
-    {
-      "id": "server_test_custom_prompts_fs",
-      "label": "fs",
-      "_origin": "ast",
-      "community": 41,
-      "community_name": "test_custom_prompts.js",
-      "file_type": "code",
-      "norm_label": "fs",
-      "source_file": "server/test_custom_prompts.js",
-      "source_location": "L2"
-    },
-    {
-      "id": "server_test_custom_prompts_path",
-      "label": "path",
-      "_origin": "ast",
-      "community": 41,
-      "community_name": "test_custom_prompts.js",
-      "file_type": "code",
-      "norm_label": "path",
-      "source_file": "server/test_custom_prompts.js",
-      "source_location": "L3"
-    },
-    {
-      "id": "server_test_custom_prompts_storage",
-      "label": "storage",
-      "_origin": "ast",
-      "community": 41,
-      "community_name": "test_custom_prompts.js",
-      "file_type": "code",
-      "norm_label": "storage",
-      "source_file": "server/test_custom_prompts.js",
-      "source_location": "L4"
     },
     {
       "id": "architecture",
@@ -8615,7 +8615,7 @@
       "file_type": "code",
       "norm_label": "{ error_codes, parsingerror, generaterequestid }",
       "source_file": "server/test_jd_parser.js",
-      "source_location": "L437"
+      "source_location": "L478"
     },
     {
       "id": "server_test_jd_parser_extractjsonobject",
@@ -8626,7 +8626,7 @@
       "file_type": "code",
       "norm_label": "{ extractjsonobject }",
       "source_file": "server/test_jd_parser.js",
-      "source_location": "L415"
+      "source_location": "L456"
     },
     {
       "id": "server_test_jd_parser_isprivateorrestrictedip_extractjsonldjobposting_detectcontentbarriers",
@@ -8637,7 +8637,7 @@
       "file_type": "code",
       "norm_label": "{ isprivateorrestrictedip, extractjsonldjobposting, detectcontentbarriers }",
       "source_file": "server/test_jd_parser.js",
-      "source_location": "L224"
+      "source_location": "L265"
     },
     {
       "id": "server_test_jd_parser_parsejobdescription",
@@ -8659,7 +8659,7 @@
       "file_type": "code",
       "norm_label": "{ validateandnormalizejd, isvalidemail }",
       "source_file": "server/test_jd_parser.js",
-      "source_location": "L365"
+      "source_location": "L406"
     },
     {
       "id": "server_test_jd_parser_validateurl_extracttextfromhtml_extracttitle",
@@ -10553,6 +10553,30 @@
       "type": "external"
     },
     {
+      "id": "ref_dns",
+      "label": "ref_dns",
+      "_origin": "semantic",
+      "community": 25,
+      "community_name": "urlScraper.js",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "ref_dns",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "ref_net",
+      "label": "ref_net",
+      "_origin": "semantic",
+      "community": 25,
+      "community_name": "urlScraper.js",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "ref_net",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "argparse",
       "label": "argparse",
       "_origin": "semantic",
@@ -10637,18 +10661,6 @@
       "type": "external"
     },
     {
-      "id": "ref_crypto",
-      "label": "ref_crypto",
-      "_origin": "semantic",
-      "community": 29,
-      "community_name": "errorTaxonomy.js",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "ref_crypto",
-      "source_file": "",
-      "type": "external"
-    },
-    {
       "id": "users_manu19_desktop_jdmail_server_services_aiservice_cleanjsonoutput",
       "label": "users_manu19_desktop_jdmail_server_services_aiservice_cleanjsonoutput",
       "_origin": "semantic",
@@ -10709,10 +10721,22 @@
       "type": "external"
     },
     {
+      "id": "ref_crypto",
+      "label": "ref_crypto",
+      "_origin": "semantic",
+      "community": 38,
+      "community_name": "errorTaxonomy.js",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "ref_crypto",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "users_manu19_desktop_jdmail_server_services_firebaseadmin_requireauth",
       "label": "users_manu19_desktop_jdmail_server_services_firebaseadmin_requireauth",
       "_origin": "semantic",
-      "community": 37,
+      "community": 39,
       "community_name": "users_manu19_desktop_jdmail_server_services_firebaseadmin_requireauth",
       "external": true,
       "file_type": "concept",
@@ -10724,7 +10748,7 @@
       "id": "users_manu19_desktop_jdmail_server_services_resumeparser_parseresumefile",
       "label": "users_manu19_desktop_jdmail_server_services_resumeparser_parseresumefile",
       "_origin": "semantic",
-      "community": 38,
+      "community": 40,
       "community_name": "users_manu19_desktop_jdmail_server_services_resumeparser_parseresumefile",
       "external": true,
       "file_type": "concept",
@@ -10736,7 +10760,7 @@
       "id": "users_manu19_desktop_jdmail_server_services_sheetparser_parserecipientsheet",
       "label": "users_manu19_desktop_jdmail_server_services_sheetparser_parserecipientsheet",
       "_origin": "semantic",
-      "community": 39,
+      "community": 41,
       "community_name": "users_manu19_desktop_jdmail_server_services_sheetparser_parserecipientsheet",
       "external": true,
       "file_type": "concept",
@@ -10863,28 +10887,6 @@
       "norm_label": "users_manu19_desktop_jdmail_server_utils_crypto_maskpassword",
       "source_file": "",
       "type": "external"
-    },
-    {
-      "id": "ref_dns",
-      "label": "ref_dns",
-      "community": 22,
-      "community_name": "urlScraper.js",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "ref_dns",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "ref_net",
-      "label": "ref_net",
-      "community": 22,
-      "community_name": "urlScraper.js",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "ref_net",
-      "source_file": "",
-      "type": "external"
     }
   ],
   "links": [
@@ -10897,7 +10899,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/App.jsx",
-      "source_location": "L146",
+      "source_location": "L147",
       "weight": 1.0
     },
     {
@@ -10909,7 +10911,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/App.jsx",
-      "source_location": "L197",
+      "source_location": "L198",
       "weight": 1.0
     },
     {
@@ -10921,7 +10923,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/App.jsx",
-      "source_location": "L206",
+      "source_location": "L207",
       "weight": 1.0
     },
     {
@@ -10933,7 +10935,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/App.jsx",
-      "source_location": "L213",
+      "source_location": "L214",
       "weight": 1.0
     },
     {
@@ -10945,7 +10947,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/App.jsx",
-      "source_location": "L224",
+      "source_location": "L225",
       "weight": 1.0
     },
     {
@@ -10957,7 +10959,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/App.jsx",
-      "source_location": "L241",
+      "source_location": "L242",
       "weight": 1.0
     },
     {
@@ -10969,7 +10971,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/App.jsx",
-      "source_location": "L264",
+      "source_location": "L265",
       "weight": 1.0
     },
     {
@@ -10981,7 +10983,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/App.jsx",
-      "source_location": "L294",
+      "source_location": "L308",
       "weight": 1.0
     },
     {
@@ -10993,7 +10995,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/App.jsx",
-      "source_location": "L323",
+      "source_location": "L338",
       "weight": 1.0
     },
     {
@@ -11005,7 +11007,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/App.jsx",
-      "source_location": "L356",
+      "source_location": "L371",
       "weight": 1.0
     },
     {
@@ -11017,7 +11019,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/App.jsx",
-      "source_location": "L367",
+      "source_location": "L382",
       "weight": 1.0
     },
     {
@@ -11029,7 +11031,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/App.jsx",
-      "source_location": "L43",
+      "source_location": "L44",
       "weight": 1.0
     },
     {
@@ -11041,7 +11043,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/App.jsx",
-      "source_location": "L54",
+      "source_location": "L55",
       "weight": 1.0
     },
     {
@@ -11053,7 +11055,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/App.jsx",
-      "source_location": "L90",
+      "source_location": "L91",
       "weight": 1.0
     },
     {
@@ -11065,7 +11067,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/App.jsx",
-      "source_location": "L97",
+      "source_location": "L98",
       "weight": 1.0
     },
     {
@@ -11077,7 +11079,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/App.jsx",
-      "source_location": "L98",
+      "source_location": "L99",
       "weight": 1.0
     },
     {
@@ -11161,7 +11163,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/components/EmailPreview.jsx",
-      "source_location": "L383",
+      "source_location": "L387",
       "weight": 1.0
     },
     {
@@ -11185,7 +11187,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/components/RecipientManager.jsx",
-      "source_location": "L151",
+      "source_location": "L152",
       "weight": 1.0
     },
     {
@@ -11209,7 +11211,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/components/RecipientManager.jsx",
-      "source_location": "L483",
+      "source_location": "L485",
       "weight": 1.0
     },
     {
@@ -11221,7 +11223,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/components/RecipientManager.jsx",
-      "source_location": "L863",
+      "source_location": "L866",
       "weight": 1.0
     },
     {
@@ -11725,7 +11727,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/constants/wizardSteps.js",
-      "source_location": "L74",
+      "source_location": "L85",
       "weight": 1.0
     },
     {
@@ -11929,7 +11931,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L322",
+      "source_location": "L325",
       "weight": 1.0
     },
     {
@@ -11941,7 +11943,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L496",
+      "source_location": "L499",
       "weight": 1.0
     },
     {
@@ -11953,7 +11955,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L504",
+      "source_location": "L507",
       "weight": 1.0
     },
     {
@@ -11965,7 +11967,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L509",
+      "source_location": "L512",
       "weight": 1.0
     },
     {
@@ -11977,7 +11979,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L448",
+      "source_location": "L451",
       "weight": 1.0
     },
     {
@@ -11989,7 +11991,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L524",
+      "source_location": "L527",
       "weight": 1.0
     },
     {
@@ -12001,7 +12003,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L529",
+      "source_location": "L532",
       "weight": 1.0
     },
     {
@@ -12013,7 +12015,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L134",
+      "source_location": "L137",
       "weight": 1.0
     },
     {
@@ -12025,7 +12027,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L135",
+      "source_location": "L138",
       "weight": 1.0
     },
     {
@@ -12037,7 +12039,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L519",
+      "source_location": "L522",
       "weight": 1.0
     },
     {
@@ -12049,7 +12051,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L520",
+      "source_location": "L523",
       "weight": 1.0
     },
     {
@@ -12061,7 +12063,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L59",
+      "source_location": "L62",
       "weight": 1.0
     },
     {
@@ -12073,7 +12075,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L443",
+      "source_location": "L446",
       "weight": 1.0
     },
     {
@@ -12085,7 +12087,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L205",
+      "source_location": "L208",
       "weight": 1.0
     },
     {
@@ -12097,7 +12099,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L486",
+      "source_location": "L489",
       "weight": 1.0
     },
     {
@@ -12109,7 +12111,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L427",
+      "source_location": "L430",
       "weight": 1.0
     },
     {
@@ -12121,7 +12123,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L253",
+      "source_location": "L256",
       "weight": 1.0
     },
     {
@@ -12133,7 +12135,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L513",
+      "source_location": "L516",
       "weight": 1.0
     },
     {
@@ -12145,7 +12147,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L514",
+      "source_location": "L517",
       "weight": 1.0
     },
     {
@@ -12157,7 +12159,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L70",
+      "source_location": "L73",
       "weight": 1.0
     },
     {
@@ -12169,7 +12171,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L75",
+      "source_location": "L78",
       "weight": 1.0
     },
     {
@@ -12181,7 +12183,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L462",
+      "source_location": "L465",
       "weight": 1.0
     },
     {
@@ -12193,7 +12195,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L467",
+      "source_location": "L470",
       "weight": 1.0
     },
     {
@@ -12205,7 +12207,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L172",
+      "source_location": "L175",
       "weight": 1.0
     },
     {
@@ -12217,7 +12219,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L177",
+      "source_location": "L180",
       "weight": 1.0
     },
     {
@@ -12229,7 +12231,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L163",
+      "source_location": "L166",
       "weight": 1.0
     },
     {
@@ -12241,7 +12243,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L125",
+      "source_location": "L128",
       "weight": 1.0
     },
     {
@@ -12253,7 +12255,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L130",
+      "source_location": "L133",
       "weight": 1.0
     },
     {
@@ -12265,7 +12267,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L79",
+      "source_location": "L82",
       "weight": 1.0
     },
     {
@@ -12277,7 +12279,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L85",
+      "source_location": "L88",
       "weight": 1.0
     },
     {
@@ -12289,7 +12291,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L139",
+      "source_location": "L142",
       "weight": 1.0
     },
     {
@@ -12301,7 +12303,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L140",
+      "source_location": "L143",
       "weight": 1.0
     },
     {
@@ -12313,7 +12315,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L480",
+      "source_location": "L483",
       "weight": 1.0
     },
     {
@@ -12325,7 +12327,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L481",
+      "source_location": "L484",
       "weight": 1.0
     },
     {
@@ -12337,7 +12339,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L368",
+      "source_location": "L371",
       "weight": 1.0
     },
     {
@@ -12349,7 +12351,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L471",
+      "source_location": "L474",
       "weight": 1.0
     },
     {
@@ -12361,7 +12363,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L476",
+      "source_location": "L479",
       "weight": 1.0
     },
     {
@@ -12373,7 +12375,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L90",
+      "source_location": "L93",
       "weight": 1.0
     },
     {
@@ -12385,7 +12387,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L145",
+      "source_location": "L148",
       "weight": 1.0
     },
     {
@@ -12397,7 +12399,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L190",
+      "source_location": "L193",
       "weight": 1.0
     },
     {
@@ -12409,7 +12411,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L191",
+      "source_location": "L194",
       "weight": 1.0
     },
     {
@@ -12421,7 +12423,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L183",
+      "source_location": "L186",
       "weight": 1.0
     },
     {
@@ -12433,7 +12435,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "client/src/services/api.js",
-      "source_location": "L184",
+      "source_location": "L187",
       "weight": 1.0
     },
     {
@@ -12973,7 +12975,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "server/index.js",
-      "source_location": "L807",
+      "source_location": "L811",
       "weight": 1.0
     },
     {
@@ -12985,7 +12987,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "server/index.js",
-      "source_location": "L1071",
+      "source_location": "L1091",
       "weight": 1.0
     },
     {
@@ -14449,7 +14451,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "server/test_batch_concurrency.js",
-      "source_location": "L113",
+      "source_location": "L122",
       "weight": 1.0
     },
     {
@@ -14461,7 +14463,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "server/test_batch_concurrency.js",
-      "source_location": "L176",
+      "source_location": "L185",
       "weight": 1.0
     },
     {
@@ -14473,7 +14475,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "server/test_batch_concurrency.js",
-      "source_location": "L206",
+      "source_location": "L215",
       "weight": 1.0
     },
     {
@@ -14485,7 +14487,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "server/test_batch_concurrency.js",
-      "source_location": "L267",
+      "source_location": "L276",
       "weight": 1.0
     },
     {
@@ -15169,7 +15171,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "server/index.js",
-      "source_location": "L1066",
+      "source_location": "L1082",
       "weight": 1.0
     },
     {
@@ -15181,7 +15183,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "server/index.js",
-      "source_location": "L1167",
+      "source_location": "L1187",
       "weight": 1.0
     },
     {
@@ -15193,7 +15195,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "server/index.js",
-      "source_location": "L1197",
+      "source_location": "L1217",
       "weight": 1.0
     },
     {
@@ -15241,7 +15243,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "server/index.js",
-      "source_location": "L797",
+      "source_location": "L801",
       "weight": 1.0
     },
     {
@@ -15277,7 +15279,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "server/test_batch_concurrency.js",
-      "source_location": "L73",
+      "source_location": "L79",
       "weight": 1.0
     },
     {
@@ -15314,6 +15316,19 @@
       "context": "call",
       "source_file": "server/test_security_guardrails.js",
       "source_location": "L115",
+      "weight": 1.0
+    },
+    {
+      "source": "client_src_tests_emailpreview_test",
+      "target": "client_src_services_api",
+      "relation": "imports_from",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "deferred": true,
+      "source_file": "client/src/__tests__/EmailPreview.test.jsx",
+      "source_location": "L261",
       "weight": 1.0
     },
     {
@@ -18205,7 +18220,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "server/test_jd_parser.js",
-      "source_location": "L224",
+      "source_location": "L265",
       "weight": 1.0
     },
     {
@@ -18217,7 +18232,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "server/test_jd_parser.js",
-      "source_location": "L224",
+      "source_location": "L265",
       "weight": 1.0
     },
     {
@@ -18229,7 +18244,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "server/test_jd_parser.js",
-      "source_location": "L224",
+      "source_location": "L265",
       "weight": 1.0
     },
     {
@@ -18241,7 +18256,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "server/test_jd_parser.js",
-      "source_location": "L365",
+      "source_location": "L406",
       "weight": 1.0
     },
     {
@@ -18253,7 +18268,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "server/test_jd_parser.js",
-      "source_location": "L365",
+      "source_location": "L406",
       "weight": 1.0
     },
     {
@@ -18265,7 +18280,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "server/test_jd_parser.js",
-      "source_location": "L415",
+      "source_location": "L456",
       "weight": 1.0
     },
     {
@@ -18277,7 +18292,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "server/test_jd_parser.js",
-      "source_location": "L437",
+      "source_location": "L478",
       "weight": 1.0
     },
     {
@@ -18289,7 +18304,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "server/test_jd_parser.js",
-      "source_location": "L437",
+      "source_location": "L478",
       "weight": 1.0
     },
     {
@@ -18301,7 +18316,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "server/test_jd_parser.js",
-      "source_location": "L437",
+      "source_location": "L478",
       "weight": 1.0
     },
     {
@@ -22405,7 +22420,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "server/test_jd_parser.js",
-      "source_location": "L224",
+      "source_location": "L265",
       "weight": 1.0
     },
     {
@@ -22417,7 +22432,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "server/test_jd_parser.js",
-      "source_location": "L365",
+      "source_location": "L406",
       "weight": 1.0
     },
     {
@@ -22429,7 +22444,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "server/test_jd_parser.js",
-      "source_location": "L415",
+      "source_location": "L456",
       "weight": 1.0
     },
     {
@@ -22441,7 +22456,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "server/test_jd_parser.js",
-      "source_location": "L437",
+      "source_location": "L478",
       "weight": 1.0
     },
     {
@@ -25190,7 +25205,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/constants/wizardSteps.js",
-      "source_location": "L69",
+      "source_location": "L80",
       "weight": 1.0
     },
     {
@@ -25201,7 +25216,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/constants/wizardSteps.js",
-      "source_location": "L73",
+      "source_location": "L84",
       "weight": 1.0
     },
     {
@@ -25212,7 +25227,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/constants/wizardSteps.js",
-      "source_location": "L78",
+      "source_location": "L89",
       "weight": 1.0
     },
     {
@@ -25223,7 +25238,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/constants/wizardSteps.js",
-      "source_location": "L83",
+      "source_location": "L94",
       "weight": 1.0
     },
     {
@@ -25476,7 +25491,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L124",
+      "source_location": "L127",
       "weight": 1.0
     },
     {
@@ -25487,18 +25502,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L133",
-      "weight": 1.0
-    },
-    {
-      "source": "client_src_services_api",
-      "target": "client_src_services_api_setdefaultsmtpprofile",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "client/src/services/api.js",
-      "source_location": "L138",
+      "source_location": "L136",
       "weight": 1.0
     },
     {
@@ -25514,13 +25518,24 @@
     },
     {
       "source": "client_src_services_api",
+      "target": "client_src_services_api_setdefaultsmtpprofile",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "client/src/services/api.js",
+      "source_location": "L141",
+      "weight": 1.0
+    },
+    {
+      "source": "client_src_services_api",
       "target": "client_src_services_api_testsmtpconnection",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L143",
+      "source_location": "L146",
       "weight": 1.0
     },
     {
@@ -25531,7 +25546,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L162",
+      "source_location": "L165",
       "weight": 1.0
     },
     {
@@ -25542,7 +25557,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L171",
+      "source_location": "L174",
       "weight": 1.0
     },
     {
@@ -25553,7 +25568,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L180",
+      "source_location": "L183",
       "weight": 1.0
     },
     {
@@ -25564,7 +25579,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L187",
+      "source_location": "L190",
       "weight": 1.0
     },
     {
@@ -25575,7 +25590,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L194",
+      "source_location": "L197",
       "weight": 1.0
     },
     {
@@ -25586,7 +25601,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L240",
+      "source_location": "L243",
       "weight": 1.0
     },
     {
@@ -25597,7 +25612,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L311",
+      "source_location": "L314",
       "weight": 1.0
     },
     {
@@ -25608,7 +25623,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L356",
+      "source_location": "L359",
       "weight": 1.0
     },
     {
@@ -25619,7 +25634,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L36",
+      "source_location": "L39",
       "weight": 1.0
     },
     {
@@ -25630,7 +25645,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L425",
+      "source_location": "L428",
       "weight": 1.0
     },
     {
@@ -25641,7 +25656,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L442",
+      "source_location": "L445",
       "weight": 1.0
     },
     {
@@ -25652,7 +25667,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L447",
+      "source_location": "L450",
       "weight": 1.0
     },
     {
@@ -25663,7 +25678,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L456",
+      "source_location": "L459",
       "weight": 1.0
     },
     {
@@ -25674,7 +25689,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L461",
+      "source_location": "L464",
       "weight": 1.0
     },
     {
@@ -25685,7 +25700,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L470",
+      "source_location": "L473",
       "weight": 1.0
     },
     {
@@ -25696,7 +25711,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L479",
+      "source_location": "L482",
       "weight": 1.0
     },
     {
@@ -25707,7 +25722,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L484",
+      "source_location": "L487",
       "weight": 1.0
     },
     {
@@ -25718,7 +25733,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L494",
+      "source_location": "L497",
       "weight": 1.0
     },
     {
@@ -25729,7 +25744,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L503",
+      "source_location": "L506",
       "weight": 1.0
     },
     {
@@ -25740,7 +25755,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L512",
+      "source_location": "L515",
       "weight": 1.0
     },
     {
@@ -25751,7 +25766,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L517",
+      "source_location": "L520",
       "weight": 1.0
     },
     {
@@ -25762,7 +25777,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L523",
+      "source_location": "L526",
       "weight": 1.0
     },
     {
@@ -25773,7 +25788,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L57",
+      "source_location": "L60",
       "weight": 1.0
     },
     {
@@ -25784,7 +25799,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L69",
+      "source_location": "L72",
       "weight": 1.0
     },
     {
@@ -25795,7 +25810,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L78",
+      "source_location": "L81",
       "weight": 1.0
     },
     {
@@ -25806,7 +25821,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "client/src/services/api.js",
-      "source_location": "L88",
+      "source_location": "L91",
       "weight": 1.0
     },
     {
@@ -27731,7 +27746,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "server/test_batch_concurrency.js",
-      "source_location": "L138",
+      "source_location": "L147",
       "weight": 1.0
     },
     {
@@ -29007,7 +29022,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "server/test_jd_parser.js",
-      "source_location": "L224",
+      "source_location": "L265",
       "weight": 1.0
     },
     {
@@ -29018,7 +29033,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "server/test_jd_parser.js",
-      "source_location": "L365",
+      "source_location": "L406",
       "weight": 1.0
     },
     {
@@ -29029,7 +29044,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "server/test_jd_parser.js",
-      "source_location": "L415",
+      "source_location": "L456",
       "weight": 1.0
     },
     {
@@ -29040,7 +29055,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "server/test_jd_parser.js",
-      "source_location": "L437",
+      "source_location": "L478",
       "weight": 1.0
     },
     {
@@ -31354,5 +31369,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "c7e1c9a2dcb371934cfd44a9e730b3a869f611e5"
+  "built_at_commit": "6238c7243c53c3ab65e08c2db5b33d0ed72218ab"
 }

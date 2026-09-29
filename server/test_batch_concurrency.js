@@ -56,7 +56,13 @@ async function runPartitionedBatch({
       typeof recipient.jobDescription === 'string' &&
       recipient.jobDescription.trim().length > 0
     );
-    if (hasSpecificJd) {
+    const hasSpecificRole = Boolean(
+      recipient &&
+      recipient.role &&
+      typeof recipient.role === 'string' &&
+      recipient.role.trim().length > 0
+    );
+    if (hasSpecificJd || hasSpecificRole) {
       withJd.push({ recipient, index: idx });
     } else {
       withoutJd.push({ recipient, index: idx });
@@ -65,7 +71,7 @@ async function runPartitionedBatch({
 
   const results = Array.from({ length: recipients.length });
 
-  // 1. Process recipients WITH specific Job Descriptions using concurrency pool
+  // 1. Process recipients WITH specific Job Descriptions or roles using concurrency pool
   const jdTask = (async () => {
     if (withJd.length === 0) return;
 
@@ -75,7 +81,10 @@ async function runPartitionedBatch({
         const item = withJd[nextIndex++];
         const { recipient, index } = item;
         try {
-          const emailContent = await mockJdGenerator(recipient, recipient.jobDescription.trim());
+          const effectiveJd = (recipient.jobDescription && typeof recipient.jobDescription === 'string' && recipient.jobDescription.trim())
+            ? recipient.jobDescription.trim()
+            : fallbackJd;
+          const emailContent = await mockJdGenerator(recipient, effectiveJd);
           results[index] = {
             recipientId: recipient.id,
             recipientEmail: recipient.email,
@@ -330,6 +339,44 @@ async function runTests() {
   assert.strictEqual(failGenResults[4].success, false);
   assert.strictEqual(failGenResults[5].success, true, 'JD recipient succeeded');
   console.log('✓ Fault isolation verified (individual JD failures and generic failures isolated without crashing queue).');
+
+  // -------------------------------------------------------------
+  // Test 5: Role-Aware Tailoring & Shared Fallback JD Propagation
+  // -------------------------------------------------------------
+  console.log('\n--- 5. Role-Aware Tailoring & Fallback JD Propagation ---');
+  const roleRecipients = [
+    { id: 'r_backend', name: 'Alice', email: 'alice@stripe.com', company: 'Stripe', role: 'Staff Backend Engineer', jobDescription: '' },
+    { id: 'r_frontend', name: 'Bob', email: 'bob@meta.com', company: 'Meta', role: 'Frontend Lead', jobDescription: '' },
+    { id: 'r_generic', name: 'Charlie', email: 'charlie@open.com', company: 'OpenAI' } // no role, no JD
+  ];
+
+  const roleCalls = [];
+  const roleResults = await runPartitionedBatch({
+    recipients: roleRecipients,
+    fallbackJd: 'Shared engineering requirements: high scalability and microservices',
+    mockJdGenerator: async (rec, jd) => {
+      roleCalls.push({ id: rec.id, role: rec.role, jd });
+      return {
+        subject: `Tailored for ${rec.role} at ${rec.company}`,
+        body: `Hi ${rec.name},\n\nSpecifically tailored for ${rec.role} using JD: ${jd}`
+      };
+    },
+    mockGenericGenerator: async (fallback) => ({
+      subject: 'Inquiry: Opportunities at your team',
+      body: 'Hi Hiring Manager,\n\nCore strengths pitch.'
+    })
+  });
+
+  // Verify Alice and Bob with roles get tailored calls with the fallback JD
+  assert.strictEqual(roleCalls.length, 2, 'Expected 2 tailored calls for recipients with roles');
+  assert.strictEqual(roleCalls[0].role, 'Staff Backend Engineer');
+  assert.strictEqual(roleCalls[0].jd, 'Shared engineering requirements: high scalability and microservices');
+  assert.strictEqual(roleCalls[1].role, 'Frontend Lead');
+  assert.ok(roleResults[0].email.body.includes('Staff Backend Engineer'));
+  assert.ok(roleResults[1].email.body.includes('Frontend Lead'));
+  // Verify Charlie without role got the adapted generic email
+  assert.ok(roleResults[2].email.body.startsWith('Hi Charlie,'));
+  console.log('✓ Role-aware batch tailoring verified (role recipients get tailored calls with fallback JD; role-less gets adapted generic).');
 
   console.log('\n====================================================');
   console.log('ALL BATCH CONCURRENCY & PARTITIONING TESTS PASSED!');
