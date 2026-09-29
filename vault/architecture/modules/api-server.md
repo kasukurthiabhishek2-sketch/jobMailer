@@ -1,7 +1,7 @@
 ---
 title: API Server
 summary: Express app with routes, CORS, SSE streaming, and middleware
-updated: 2026-09-29
+updated: 2026-09-30
 tags: [module]
 paths: [server/index.js]
 ---
@@ -13,6 +13,8 @@ All `/api/*` endpoints defined in `index.js`
 
 ## Invariants / contracts
 - CORS origin matching normalizes trailing slashes on both sides.
+- Firebase authentication always verifies tokens outside explicitly opted-in tests.
+- Offline bypass requires both `NODE_ENV=test` and `DISABLE_AUTH=true`; test UID headers have no authority otherwise.
 - Rate limiting via `express-rate-limit`.
 - File uploads are ephemeral (cleaned after processing).
 

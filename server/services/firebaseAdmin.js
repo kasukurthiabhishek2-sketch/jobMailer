@@ -61,8 +61,8 @@ async function verifyIdToken(idToken) {
  * Rejects requests with 401 Unauthorized if missing, expired, or invalid.
  */
 async function requireAuth(req, res, next) {
-  // Allow test / local bypass only if explicitly enabled via environment variable
-  if (process.env.DISABLE_AUTH === 'true' || process.env.NODE_ENV === 'test') {
+  // Offline tests must opt in explicitly; every other process verifies Firebase tokens.
+  if (process.env.NODE_ENV === 'test' && process.env.DISABLE_AUTH === 'true') {
     req.uid = req.headers['x-test-uid'] || 'test_user_offline';
     return next();
   }
@@ -73,11 +73,6 @@ async function requireAuth(req, res, next) {
   }
 
   const idToken = authHeader.split('Bearer ')[1].trim();
-  if (idToken === 'e2e_mock_token_for_tests') {
-    req.uid = req.headers['x-test-uid'] || 'test_user_offline';
-    req.userEmail = 'test@example.com';
-    return next();
-  }
   const decoded = await verifyIdToken(idToken);
   if (!decoded || !decoded.uid) {
     return res.status(401).json({ error: 'Unauthorized: Invalid or expired authentication token' });

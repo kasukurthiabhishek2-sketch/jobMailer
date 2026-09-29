@@ -2,7 +2,7 @@ const assert = require('assert');
 const path = require('path');
 const { validateCustomBaseUrl } = require('./services/aiService');
 const copilotService = require('./services/copilotService');
-const { requireAuth } = require('./services/firebaseAdmin');
+const { requireAuth, admin } = require('./services/firebaseAdmin');
 const { isOriginAllowed } = require('./index');
 
 async function runTests() {
@@ -135,6 +135,8 @@ async function runTests() {
   console.log('\n--- 4. Authentication Middleware Guardrails ---');
   const prevDisableAuth = process.env.DISABLE_AUTH;
   const prevNodeEnv = process.env.NODE_ENV;
+  const firebaseAuth = admin.auth();
+  const originalVerifyIdToken = firebaseAuth.verifyIdToken;
 
   try {
     delete process.env.DISABLE_AUTH;
@@ -186,10 +188,52 @@ async function runTests() {
     assert.strictEqual(mock3.wasNextCalled(), false);
     assert.ok(mock3.getJson().error.includes('Invalid or expired authentication token'));
 
+    const verifiedTokens = [];
+    firebaseAuth.verifyIdToken = async (token) => {
+      verifiedTokens.push(token);
+      if (token === 'verified-firebase-token') return { uid: 'verified-owner', email: 'owner@example.com' };
+      throw new Error('Invalid token');
+    };
+
+    // Neither the historical test token nor DISABLE_AUTH can bypass non-test auth.
+    for (const environment of ['production', 'development', undefined, 'test']) {
+      if (environment === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = environment;
+      for (const flag of ['true', 'false']) {
+        process.env.DISABLE_AUTH = flag;
+        if (environment === 'test' && flag === 'true') continue;
+        for (const authorization of [undefined, 'Bearer e2e_mock_token_for_tests', 'Bearer invalid']) {
+          const mock = createMocks({ authorization, 'x-test-uid': 'forged-owner' });
+          await requireAuth(mock.req, mock.res, mock.next);
+          assert.strictEqual(mock.getStatusCode(), 401, `${environment}/${flag} must reject test credentials`);
+          assert.strictEqual(mock.wasNextCalled(), false);
+          assert.strictEqual(mock.req.uid, undefined);
+        }
+      }
+    }
+    assert.ok(verifiedTokens.includes('e2e_mock_token_for_tests'), 'Test token must reach Firebase verification');
+
+    process.env.NODE_ENV = 'production';
+    process.env.DISABLE_AUTH = 'true';
+    const valid = createMocks({ authorization: 'Bearer verified-firebase-token', 'x-test-uid': 'forged-owner' });
+    await requireAuth(valid.req, valid.res, valid.next);
+    assert.strictEqual(valid.wasNextCalled(), true);
+    assert.strictEqual(valid.req.uid, 'verified-owner');
+    assert.strictEqual(valid.req.userEmail, 'owner@example.com');
+
+    process.env.NODE_ENV = 'test';
+    const offline = createMocks({ 'x-test-uid': 'isolated-test-owner' });
+    await requireAuth(offline.req, offline.res, offline.next);
+    assert.strictEqual(offline.wasNextCalled(), true);
+    assert.strictEqual(offline.req.uid, 'isolated-test-owner');
+
     console.log('✓ requireAuth middleware strictly rejects unauthenticated and invalid tokens with 401.');
   } finally {
-    process.env.DISABLE_AUTH = prevDisableAuth;
-    process.env.NODE_ENV = prevNodeEnv;
+    firebaseAuth.verifyIdToken = originalVerifyIdToken;
+    if (prevDisableAuth === undefined) delete process.env.DISABLE_AUTH;
+    else process.env.DISABLE_AUTH = prevDisableAuth;
+    if (prevNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = prevNodeEnv;
   }
 
   // ---------------------------------------------------------
