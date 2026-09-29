@@ -44,8 +44,8 @@ export default function AuthGate({ onSignInError }) {
         <div className="auth-gate-divider" />
 
         <p className="auth-gate-desc">
-          Sign in with your Google account to access your AI providers, SMTP accounts,
-          and outreach settings — all securely stored in the cloud.
+          Sign in with Google to keep your profile and preferences with your account.
+          AI provider keys and SMTP passwords stay encrypted on this device.
         </p>
 
         {error && (
@@ -74,7 +74,7 @@ export default function AuthGate({ onSignInError }) {
 
 
         <p className="auth-gate-footer">
-          Your settings are encrypted and stored per-account in Firestore.
+          Credentials are encrypted locally and never synced to Firestore.
         </p>
       </div>
     </div>

@@ -1,9 +1,8 @@
 /**
  * Test: Server-side API key resolution for authenticated users
  *
- * Validates that the /api/config/ai/test and /api/config/ai/models routes
- * resolve API keys from encrypted storage for ALL users (not just unauthenticated),
- * and honor client-supplied selectedKeyId for multi-key scenarios.
+ * Validates that credential-bearing routes resolve API keys and SMTP passwords
+ * from encrypted local storage for every user, never from client-side config.
  */
 const assert = require('assert');
 const fs = require('fs');
@@ -199,6 +198,39 @@ async function runTests() {
     );
 
     console.log('✓ /api/config/smtp/test resolves passwords from storage for authenticated users.');
+  }
+
+  // ---- Test 7: generation and send paths ignore client-provided credentials ----
+  {
+    const resolveAiStart = indexContent.indexOf('function resolveAiProviderConfig');
+    const generateRouteStart = indexContent.indexOf("app.post('/api/ai/generate'");
+    assert.ok(resolveAiStart > 0 && generateRouteStart > resolveAiStart, 'AI resolver must precede generate route');
+    const resolveAiBody = indexContent.substring(resolveAiStart, generateRouteStart);
+
+    assert.ok(
+      resolveAiBody.includes('apiKey: savedProvider.apiKey ||'),
+      'AI generation must resolve its key from encrypted local storage'
+    );
+    assert.ok(
+      !resolveAiBody.includes('clientProviderConfig?.apiKey'),
+      'AI generation must not accept an API key from the client config'
+    );
+
+    const resolveSmtpStart = indexContent.indexOf('function resolveSmtpProfile');
+    const dailyStatsStart = indexContent.indexOf("app.get('/api/send/daily-stats'");
+    assert.ok(resolveSmtpStart > 0 && dailyStatsStart > resolveSmtpStart, 'SMTP resolver must precede send routes');
+    const resolveSmtpBody = indexContent.substring(resolveSmtpStart, dailyStatsStart);
+
+    assert.ok(
+      resolveSmtpBody.includes('password: profile?.password || profile?.appPassword ||'),
+      'Email dispatch must resolve its password from encrypted local storage'
+    );
+    assert.ok(
+      !resolveSmtpBody.includes('clientSmtpProfile.password'),
+      'Email dispatch must not accept an SMTP password from the client config'
+    );
+
+    console.log('✓ Generation and dispatch ignore client-provided credentials.');
   }
 
   console.log('\n--- All Authenticated Key Resolution Tests PASSED ---');

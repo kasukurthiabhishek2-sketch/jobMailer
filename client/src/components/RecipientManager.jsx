@@ -17,12 +17,14 @@ import {
 } from 'lucide-react';
 import { uploadRecipientsSheet, fetchOutreachLogs } from '../services/api';
 import RecipientModal from './RecipientModal';
+import AiJdParserPanel from './AiJdParserPanel';
 
 export default function RecipientManager({
   recipients = [],
   onUpdateRecipients,
   onShowToast,
-  _generatedEmails = {}
+  _generatedEmails = {},
+  config
 }) {
   const fileInputRef = useRef(null);
   const [activeTab, setActiveTab] = useState('sheet'); // 'sheet' | 'single'
@@ -271,6 +273,14 @@ export default function RecipientManager({
           <UserPlus size={15} />
           Add Manually
         </button>
+        <button
+          type="button"
+          className={`tab-pill ${activeTab === 'aiparse' ? 'active' : ''}`}
+          onClick={() => setActiveTab('aiparse')}
+        >
+          <Sparkles size={15} />
+          AI Parse JD
+        </button>
       </div>
 
       {/* 2-Column Side-by-Side Layout */}
@@ -331,7 +341,7 @@ export default function RecipientManager({
                 </div>
               </div>
             </div>
-          ) : (
+          ) : activeTab === 'single' ? (
             <form onSubmit={handleAddSingle} style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
               <div className="recipient-panel-header">
                 <h3 className="recipient-panel-title">Add Contact Manually</h3>
@@ -469,7 +479,30 @@ export default function RecipientManager({
                 </button>
               </div>
             </form>
-          )}
+          ) : activeTab === 'aiparse' ? (
+            <AiJdParserPanel
+              config={config}
+              onShowToast={onShowToast}
+              existingEmails={recipients.map(r => r.email)}
+              onAddRecipient={({ name, email, company, role, jobDescription }) => {
+                const newRecipient = {
+                  id: 'rec_ai_' + Date.now(),
+                  name,
+                  email,
+                  company,
+                  role,
+                  jobDescription,
+                  isValidEmail: true,
+                  isSelected: true,
+                  isApproved: true,
+                  isPreviouslyContacted: false,
+                  lastContactedDate: null,
+                  status: 'pending'
+                };
+                onUpdateRecipients([...recipients, newRecipient]);
+              }}
+            />
+          ) : null}
         </div>
 
         {/* Right Column: Recipients List Queue (In BOTH tabs, placed beside the action container) */}

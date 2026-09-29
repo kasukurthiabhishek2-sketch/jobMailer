@@ -6,9 +6,10 @@ const fs = require('fs');
 
 const storage = require('./services/storageService');
 const copilotService = require('./services/copilotService');
-const { generateColdEmail, testAiConnection, listProviderModels, cleanJsonOutput } = require('./services/aiService');
+const { generateColdEmail, parseJobDescription, testAiConnection, listProviderModels, cleanJsonOutput } = require('./services/aiService');
 const { parseResumeFile } = require('./services/resumeParser');
 const { parseRecipientSheet } = require('./services/sheetParser');
+const { fetchUrlAsText } = require('./services/urlScraper');
 const { testSmtpConnection, sendEmailMessage, sendEmailMessageWithRetry, classifySmtpError, dispatchCampaign } = require('./services/smtpService');
 
 const app = express();
@@ -657,23 +658,14 @@ function resolveAiProviderConfig({ providerKey: requestedProvider, providerConfi
   const fullConfig = storage.getDecryptedConfig();
   const providerKey = requestedProvider || clientProviderConfig?.providerKey || fullConfig.activeProvider;
   const savedProvider = fullConfig.aiProviders?.[providerKey] || {};
-
-  let apiKey = '';
-  if (clientProviderConfig?.apiKey && typeof clientProviderConfig.apiKey === 'string' && !clientProviderConfig.apiKey.includes('...')) {
-    apiKey = clientProviderConfig.apiKey.trim();
-  }
-
-  // Fall back to saved local config only if unauthenticated or in test runner mode
-  if (!apiKey && (!callerUid || callerUid === 'test_user_offline')) {
-    apiKey = savedProvider.apiKey || '';
-  }
+  const { apiKey: _clientApiKey, savedKeys: _clientSavedKeys, ...safeClientConfig } = clientProviderConfig || {};
 
   return {
     providerKey,
     providerConfig: {
       ...savedProvider,
-      ...clientProviderConfig,
-      apiKey
+      ...safeClientConfig,
+      apiKey: savedProvider.apiKey || ''
     }
   };
 }
@@ -803,6 +795,61 @@ function adaptGenericEmailForRecipient(genericEmail, recipient, senderName) {
     groundingAudit: genericEmail.groundingAudit || null
   };
 }
+
+// Parse a raw job description (text or URL) using AI to extract structured recipient data
+app.post('/api/ai/parse-jd', async (req, res) => {
+  try {
+    const { mode, rawText, url } = req.body;
+
+    if (!mode || (mode !== 'text' && mode !== 'url')) {
+      return res.status(400).json({ error: 'Invalid mode. Must be "text" or "url".' });
+    }
+
+    let textToParse;
+    let sourceUrl = null;
+
+    if (mode === 'url') {
+      if (!url || typeof url !== 'string' || !url.trim()) {
+        return res.status(400).json({ error: 'URL is required when mode is "url".' });
+      }
+      try {
+        const scraped = await fetchUrlAsText(url.trim());
+        textToParse = scraped.text;
+        sourceUrl = scraped.sourceUrl;
+      } catch (scrapeErr) {
+        return res.status(400).json({
+          error: `Could not fetch URL: ${scrapeErr.message}. Try pasting the job description text directly.`
+        });
+      }
+    } else {
+      if (!rawText || typeof rawText !== 'string' || rawText.trim().length < 20) {
+        return res.status(400).json({ error: 'Job description text is too short (minimum 20 characters).' });
+      }
+      textToParse = rawText.trim();
+    }
+
+    const { providerKey, providerConfig } = resolveAiProviderConfig(req.body, req.uid);
+
+    if (!providerConfig || !providerConfig.apiKey) {
+      return res.status(400).json({ error: `AI provider ${providerKey} is not configured with an API key.` });
+    }
+
+    const parsed = await parseJobDescription({
+      providerKey,
+      providerConfig,
+      rawText: textToParse
+    });
+
+    res.json({
+      success: true,
+      parsed,
+      sourceUrl
+    });
+  } catch (err) {
+    console.error('JD parse error:', err);
+    res.status(500).json({ error: err.message || 'Failed to parse job description.' });
+  }
+});
 
 // Batch generate cold emails for multiple recipients:
 // - Generates tailored emails individually (4-worker pool) for recipients with specific JDs
@@ -961,20 +1008,18 @@ function resolveSmtpProfile({ smtpProfileId, smtpProfile: clientSmtpProfile } = 
   if (targetId && Array.isArray(fullConfig.smtpProfiles)) {
     profile = fullConfig.smtpProfiles.find(p => p.id === targetId);
   }
-  if (!profile && (!callerUid || callerUid === 'test_user_offline') && Array.isArray(fullConfig.smtpProfiles) && fullConfig.smtpProfiles.length > 0) {
+  if (!profile && Array.isArray(fullConfig.smtpProfiles) && fullConfig.smtpProfiles.length > 0) {
     profile = fullConfig.smtpProfiles.find(p => p.isDefault) || fullConfig.smtpProfiles[0];
   }
 
-  // Prioritize and merge client-provided SMTP profile (from user's Firebase config)
+  // The client can choose a profile and send non-secret display metadata, but
+  // credentials are always resolved from encrypted local storage.
   if (clientSmtpProfile) {
+    const { password: _clientPassword, appPassword: _clientAppPassword, ...safeClientProfile } = clientSmtpProfile;
     profile = {
       ...(profile || {}),
-      ...clientSmtpProfile,
-      password: (clientSmtpProfile.password && !clientSmtpProfile.password.includes('•••'))
-        ? clientSmtpProfile.password
-        : (clientSmtpProfile.appPassword && !clientSmtpProfile.appPassword.includes('•••'))
-          ? clientSmtpProfile.appPassword
-          : (profile?.password || profile?.appPassword || '')
+      ...safeClientProfile,
+      password: profile?.password || profile?.appPassword || ''
     };
   }
 
@@ -1156,4 +1201,3 @@ if (require.main === module) {
 }
 
 module.exports = { app, isOriginAllowed, adaptGenericEmailForRecipient };
-

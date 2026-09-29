@@ -219,6 +219,38 @@ export async function generateColdEmail({
   return data;
 }
 
+/**
+ * Parses a raw job description (text or URL) using AI to extract structured recipient data.
+ * @param {{ mode: 'text'|'url', rawText?: string, url?: string, providerKey: string, providerConfig: object }} params
+ * @returns {Promise<{ success: boolean, parsed: object, sourceUrl?: string }>}
+ */
+export async function parseJobDescriptionApi({
+  mode,
+  rawText,
+  url,
+  providerKey,
+  providerConfig
+}) {
+  const res = await authFetch('/api/ai/parse-jd', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode, rawText, url, providerKey, providerConfig })
+  });
+
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const text = await res.text();
+    console.error('[parseJobDescription] Non-JSON error:', res.status, text.slice(0, 300));
+    throw new Error('Server error — check logs');
+  }
+
+  const data = await res.json();
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || 'Failed to parse job description');
+  }
+  return data;
+}
+
 export async function batchGenerateColdEmails({
   providerKey,
   providerConfig,

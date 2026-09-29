@@ -711,6 +711,194 @@ async function generateColdEmail({ providerKey, providerConfig, resumeText, jobD
 }
 
 /**
+ * Dispatches a system+user prompt to the active AI provider and returns raw text.
+ * Shared helper for parseJobDescription (avoids duplicating the provider switch).
+ */
+async function dispatchToProvider({ providerKey, providerConfig, systemPrompt, userPrompt }) {
+  const apiKey = providerConfig.apiKey;
+  if (!apiKey || apiKey.trim() === '') {
+    throw new Error('AI provider API key is not configured. Please add your key in Settings.');
+  }
+
+  const model = providerConfig.model;
+  let rawText;
+
+  switch (providerKey) {
+    case 'gemini': {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model || 'gemini-1.5-flash'}:generateContent?key=${apiKey}`;
+      const payload = {
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ parts: [{ text: userPrompt }] }],
+        generationConfig: { temperature: 0.3, maxOutputTokens: 2000 }
+      };
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), CONNECTION_TIMEOUT_MS);
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`Gemini API error (${response.status}): ${errText.slice(0, 200)}`);
+        }
+        const data = await response.json();
+        rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      } finally {
+        clearTimeout(timeout);
+      }
+      break;
+    }
+
+    case 'copilot':
+      rawText = await copilotService.callCopilotChat({
+        githubAccessToken: apiKey,
+        model: model || 'gpt-4o',
+        systemPrompt,
+        userPrompt
+      }).then(r => JSON.stringify(r));
+      break;
+
+    default: {
+      // OpenAI-compatible: openai, groq, grok, nvidia, custom
+      const baseURLs = {
+        openai: 'https://api.openai.com/v1',
+        groq: 'https://api.groq.com/openai/v1',
+        grok: 'https://api.x.ai/v1',
+        nvidia: 'https://integrate.api.nvidia.com/v1',
+        custom: (providerConfig.baseURL || 'https://api.openai.com/v1').replace(/\/+$/, '')
+      };
+      const baseURL = baseURLs[providerKey];
+      if (!baseURL) throw new Error(`Unsupported AI provider: ${providerKey}`);
+
+      const endpoint = `${baseURL.replace(/\/+$/, '')}/chat/completions`;
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: model || 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.3,
+          max_tokens: 2000
+        })
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`API error (${response.status}): ${errText.slice(0, 200)}`);
+      }
+      const data = await response.json();
+      rawText = data?.choices?.[0]?.message?.content;
+      break;
+    }
+  }
+
+  if (!rawText) {
+    throw new Error('AI provider returned an empty response.');
+  }
+  return rawText;
+}
+
+/**
+ * Parses raw job description text using AI to extract structured recipient data.
+ * Returns: { contacts[], company, role, location, responsibilities[], requirements[], jobDescriptionClean, confidence }
+ */
+async function parseJobDescription({ providerKey, providerConfig, rawText }) {
+  if (!rawText || typeof rawText !== 'string' || rawText.trim().length < 20) {
+    throw new Error('Job description text is too short for AI parsing. Please provide more content.');
+  }
+
+  const systemPrompt = `You are a precise job description parser. Extract structured data from job posting text.
+
+Rules:
+1. Extract ALL email addresses found in the text — these are typically HR, recruiter, hiring manager, or apply-to addresses. Look for patterns like name@domain.com, mailto: links, or "apply to:" / "contact:" sections.
+2. For each email found, also extract the associated person's name and title if mentioned nearby.
+3. Extract the company name, job title/role, and location.
+4. Extract the top responsibilities and requirements as concise bullet points (max 6 each).
+5. Preserve the full job description text in jobDescriptionClean — cleaned and formatted but complete.
+6. Set confidence flags to indicate what was successfully found.
+7. If a field cannot be determined, use an empty string or empty array — never fabricate data.
+8. Reply ONLY in valid JSON format matching this exact schema:
+
+{
+  "contacts": [{ "name": "Person Name", "email": "email@example.com", "title": "Their Title" }],
+  "company": "Company Name",
+  "role": "Job Title",
+  "location": "Location",
+  "responsibilities": ["responsibility 1", "responsibility 2"],
+  "requirements": ["requirement 1", "requirement 2"],
+  "jobDescriptionClean": "Full cleaned job description text...",
+  "confidence": { "emailFound": true, "companyFound": true, "roleFound": true }
+}`;
+
+  const userPrompt = `Parse this job posting and extract structured data:\n\n${rawText.slice(0, 6000)}`;
+
+  const rawResponse = await dispatchToProvider({ providerKey, providerConfig, systemPrompt, userPrompt });
+
+  // Parse the JSON response using existing recovery pipeline
+  let parsed;
+  try {
+    // Strip markdown code fences if present
+    const cleaned = rawResponse.replace(/^```(?:json)?\s*/gi, '').replace(/\s*```\s*$/gi, '').trim();
+    const normalized = normalizeControlCharacters(cleaned);
+    parsed = JSON.parse(normalized);
+  } catch {
+    // Attempt regex extraction for key fields
+    try {
+      const companyMatch = rawResponse.match(/"company"\s*:\s*"([^"]+)"/);
+      const roleMatch = rawResponse.match(/"role"\s*:\s*"([^"]+)"/);
+      const locationMatch = rawResponse.match(/"location"\s*:\s*"([^"]+)"/);
+      const emailMatch = rawResponse.match(/"email"\s*:\s*"([^"]+@[^"]+)"/);
+      const nameMatch = rawResponse.match(/"name"\s*:\s*"([^"]+)"/);
+
+      parsed = {
+        contacts: emailMatch ? [{ name: nameMatch?.[1] || '', email: emailMatch[1], title: '' }] : [],
+        company: companyMatch?.[1] || '',
+        role: roleMatch?.[1] || '',
+        location: locationMatch?.[1] || '',
+        responsibilities: [],
+        requirements: [],
+        jobDescriptionClean: rawText.slice(0, 4000),
+        confidence: {
+          emailFound: Boolean(emailMatch),
+          companyFound: Boolean(companyMatch),
+          roleFound: Boolean(roleMatch)
+        }
+      };
+    } catch {
+      throw new Error('Failed to parse AI response as structured data. Please try again.');
+    }
+  }
+
+  // Normalize and validate the parsed result
+  const result = {
+    contacts: Array.isArray(parsed.contacts) ? parsed.contacts.filter(c => c && c.email) : [],
+    company: typeof parsed.company === 'string' ? parsed.company.trim() : '',
+    role: typeof parsed.role === 'string' ? parsed.role.trim() : '',
+    location: typeof parsed.location === 'string' ? parsed.location.trim() : '',
+    responsibilities: Array.isArray(parsed.responsibilities) ? parsed.responsibilities.filter(Boolean).slice(0, 6) : [],
+    requirements: Array.isArray(parsed.requirements) ? parsed.requirements.filter(Boolean).slice(0, 6) : [],
+    jobDescriptionClean: typeof parsed.jobDescriptionClean === 'string'
+      ? parsed.jobDescriptionClean.trim().slice(0, 5000)
+      : rawText.slice(0, 4000),
+    confidence: {
+      emailFound: Boolean(parsed.confidence?.emailFound || (parsed.contacts && parsed.contacts.length > 0)),
+      companyFound: Boolean(parsed.confidence?.companyFound || parsed.company),
+      roleFound: Boolean(parsed.confidence?.roleFound || parsed.role)
+    }
+  };
+
+  return result;
+}
+
+/**
  * Test Connection for a given provider
  */
 async function testAiConnection(providerKey, config) {
@@ -953,6 +1141,7 @@ async function listProviderModels(providerKey, apiKey) {
 
 module.exports = {
   generateColdEmail,
+  parseJobDescription,
   testAiConnection,
   listProviderModels,
   cleanJsonOutput,
@@ -960,5 +1149,6 @@ module.exports = {
   auditDraftClaims,
   validateCustomBaseUrl,
   callGemini,
-  callOpenAiCompatible
+  callOpenAiCompatible,
+  dispatchToProvider
 };

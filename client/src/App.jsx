@@ -275,6 +275,7 @@ export default function App() {
                     onUpdateRecipients={setRecipients}
                     onShowToast={addToast}
                     generatedEmails={generatedEmails}
+                    config={config}
                   />
                   <div className="wizard-nav-footer">
                     <button

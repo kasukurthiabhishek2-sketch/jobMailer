@@ -30,7 +30,8 @@ const testSuites = [
   { name: 'Authenticated User Key Resolution for AI Routes', file: 'test_key_resolution.js' },
   { name: 'GitHub Copilot OAuth Device Flow & No-Key Invariants', file: 'test_copilot_device_flow.js' },
   { name: 'Hybrid Deployment Wiring (Vercel + Render)', file: 'test_hybrid_deployment.js' },
-  { name: 'Graphify Knowledge Graph & Agent Invariants', file: 'test_graphify_integration.js' }
+  { name: 'Graphify Knowledge Graph & Agent Invariants', file: 'test_graphify_integration.js' },
+  { name: 'AI JD Parser, URL Scraper & Recipient Extraction', file: 'test_jd_parser.js' }
 ];
 
 console.log('====================================================');
