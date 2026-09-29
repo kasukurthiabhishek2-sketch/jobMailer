@@ -15,6 +15,8 @@ All `/api/*` endpoints defined in `index.js`
 - CORS origin matching normalizes trailing slashes on both sides.
 - Firebase authentication always verifies tokens outside explicitly opted-in tests.
 - Offline bypass requires both `NODE_ENV=test` and `DISABLE_AUTH=true`; test UID headers have no authority otherwise.
+- Both send endpoints require `sendApproved === true` and every recipient `isApproved === true` before credentials or dispatch.
+- Approval contract: [[ADR-0002-send-approval]].
 - Rate limiting via `express-rate-limit`.
 - File uploads are ephemeral (cleaned after processing).
 

@@ -2,6 +2,45 @@ import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useWizardState } from '../hooks/useWizardState';
 import { useCampaignStream } from '../hooks/useCampaignStream';
+import { streamEmailSending } from '../services/api';
+
+vi.mock('../lib/firebase', () => ({ getIdToken: vi.fn().mockResolvedValue('verified-token') }));
+
+describe('Send approval request contract', () => {
+  it('preserves recipient approval and confirms sending through the hook and HTTP client', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true, body: { getReader: () => ({ read: async () => ({ done: true }) }) }
+    });
+    try {
+      const { result } = renderHook(() => useCampaignStream());
+      await act(async () => {
+        await result.current.triggerSend({
+          config: { smtpProfiles: [{ id: 'p1', isDefault: true, isConfigured: true }] },
+          resumeData: { fileId: 'res-1' },
+          recipients: [{ id: 'r1', email: 'recipient@example.com', isApproved: true }],
+          generatedEmails: { r1: { subject: 'Role', body: 'Hello' } }
+        });
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, options] = fetchMock.mock.calls[0];
+      expect(url).toMatch(/\/api\/send\/stream$/);
+      expect(JSON.parse(options.body)).toMatchObject({
+        sendApproved: true,
+        recipients: [{ id: 'r1', isApproved: true, subject: 'Role', body: 'Hello' }]
+      });
+    } finally { fetchMock.mockRestore(); }
+  });
+
+  it('does not infer explicit confirmation from recipient approval alone', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true, body: { getReader: () => ({ read: async () => ({ done: true }) }) }
+    });
+    try {
+      await streamEmailSending({ recipients: [{ isApproved: true }] });
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body).sendApproved).toBe(false);
+    } finally { fetchMock.mockRestore(); }
+  });
+});
 
 describe('useWizardState Hook (TICK-CYC3-08 / B2)', () => {
   it('initializes with default step 1 and empty state', () => {

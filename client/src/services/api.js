@@ -358,6 +358,7 @@ export async function batchGenerateColdEmails({
  */
 export async function streamEmailSending({
   recipients,
+  sendApproved = false,
   resumeFileId,
   smtpProfileId,
   smtpProfile,
@@ -373,6 +374,7 @@ export async function streamEmailSending({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         recipients,
+        sendApproved,
         resumeFileId,
         smtpProfileId,
         smtpProfile,

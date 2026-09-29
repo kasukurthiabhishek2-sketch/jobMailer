@@ -1251,6 +1251,9 @@ app.post('/api/send/stream', async (req, res) => {
   if (!Array.isArray(recipients) || recipients.length === 0) {
     return res.status(400).json({ error: 'No recipients provided for sending.' });
   }
+  if (req.body.sendApproved !== true || recipients.some(recipient => recipient?.isApproved !== true)) {
+    return res.status(400).json({ error: 'Explicit send confirmation and approval for every recipient are required.' });
+  }
 
   const fullConfig = storage.getDecryptedConfig();
   const profile = resolveSmtpProfile(req.body, fullConfig, req.uid);
@@ -1310,6 +1313,9 @@ app.post('/api/send', async (req, res) => {
 
   if (!Array.isArray(recipients) || recipients.length === 0) {
     return res.status(400).json({ error: 'No recipients provided.' });
+  }
+  if (req.body.sendApproved !== true || recipients.some(recipient => recipient?.isApproved !== true)) {
+    return res.status(400).json({ error: 'Explicit send confirmation and approval for every recipient are required.' });
   }
 
   const fullConfig = storage.getDecryptedConfig();

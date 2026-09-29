@@ -9,6 +9,7 @@
 - [[architecture/modules/storage-service|Storage Service]] - Encrypted JSON persistence for config and logs
 - [[architecture/overview|Architecture Overview]] - Top-level system architecture and data flow for JDMail
 - [[decisions/ADR-0001-agent-workflow|ADR-0001 Agent Workflow]] - Bootstrap decision — graph is code map, vault holds intent and state, CLI-only graphify
+- [[decisions/ADR-0002-send-approval|ADR-0002 Server-Enforced Send Approval]] - Both send endpoints reject batches without strict recipient approval and explicit send confirmation
 - [[lessons|Lessons Learned]] - Patterns, pitfalls, and reusable insights from past tasks
 - [[playbooks/graph-cheatsheet|Graph Cheatsheet]] - Quick reference for graphify CLI commands and their behaviour
 - [[playbooks/merge-and-release|Merge and Release]] - How to merge a completed task branch back to main

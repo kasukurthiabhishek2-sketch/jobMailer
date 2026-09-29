@@ -3,7 +3,7 @@ const path = require('path');
 const { validateCustomBaseUrl } = require('./services/aiService');
 const copilotService = require('./services/copilotService');
 const { requireAuth, admin } = require('./services/firebaseAdmin');
-const { isOriginAllowed } = require('./index');
+const { app, isOriginAllowed } = require('./index');
 
 async function runTests() {
   console.log('Testing Comprehensive Security Guardrails...');
@@ -294,6 +294,41 @@ async function runTests() {
     if (prevAllowedOrigins !== undefined) process.env.ALLOWED_ORIGINS = prevAllowedOrigins;
     else delete process.env.ALLOWED_ORIGINS;
     process.env.NODE_ENV = prevNodeEnvCors;
+  }
+
+  const storage = require('./services/storageService');
+  const originalGetConfig = storage.getDecryptedConfig;
+  let configReads = 0;
+  storage.getDecryptedConfig = () => { configReads++; return { smtpProfiles: [] }; };
+  try {
+    for (const routePath of ['/api/send', '/api/send/stream']) {
+      const handler = app._router.stack.find(layer => layer.route?.path === routePath && layer.route.methods.post).route.stack[0].handle;
+      const invoke = async (body) => {
+        const res = { status(code) { this.statusCode = code; return this; }, json(data) { this.data = data; return this; } };
+        await handler({ body, uid: 'verified-owner' }, res);
+        return res;
+      };
+      const approved = { email: 'recipient@example.com', subject: 'Role', body: 'Hello', isApproved: true };
+      for (const isApproved of [undefined, false, 'true', 1]) {
+        const res = await invoke({ sendApproved: true, recipients: [approved, { ...approved, isApproved }] });
+        assert.strictEqual(res.statusCode, 400);
+        assert.match(res.data.error, /approval/i);
+      }
+      for (const sendApproved of [undefined, false, 'true', 1]) {
+        const res = await invoke({ sendApproved, recipients: [approved] });
+        assert.strictEqual(res.statusCode, 400);
+        assert.match(res.data.error, /approval/i);
+      }
+      const malformed = await invoke({ sendApproved: true, recipients: [null] });
+      assert.strictEqual(malformed.statusCode, 400);
+      assert.strictEqual(configReads, 0, 'Rejected batches must not access credentials or dispatch');
+      const valid = await invoke({ sendApproved: true, recipients: [approved] });
+      assert.match(valid.data.error, /SMTP account configured/, 'Approved batches must reach SMTP resolution');
+      assert.strictEqual(configReads, 1);
+      configReads = 0;
+    }
+  } finally {
+    storage.getDecryptedConfig = originalGetConfig;
   }
 
   console.log('\nALL SECURITY GUARDRAIL TESTS PASSED CLEANLY!\n');

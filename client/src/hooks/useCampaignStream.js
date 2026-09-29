@@ -57,6 +57,7 @@ export function useCampaignStream() {
       .filter(r => generatedEmails?.[r.id]?.body)
       .map(r => ({
         id: r.id,
+        isApproved: r.isApproved,
         email: r.email,
         name: r.name,
         company: r.company,
@@ -103,6 +104,7 @@ export function useCampaignStream() {
     try {
       await streamEmailSending({
         recipients: readyRecipients,
+        sendApproved: true,
         resumeFileId: attachResume ? resumeData.fileId : null,
         smtpProfileId: activeSmtp.id,
         smtpProfile: activeSmtp,
