@@ -18,19 +18,23 @@ import {
 import { uploadRecipientsSheet, fetchOutreachLogs } from '../services/api';
 import RecipientModal from './RecipientModal';
 import AiJdParserPanel from './AiJdParserPanel';
+import JobDescriptionModal from './JobDescriptionModal';
 
 export default function RecipientManager({
   recipients = [],
   onUpdateRecipients,
   onShowToast,
   _generatedEmails = {},
-  config
+  config,
+  jobDescription = '',
+  onChangeJd
 }) {
   const fileInputRef = useRef(null);
   const [activeTab, setActiveTab] = useState('sheet'); // 'sheet' | 'single'
   const [isParsingSheet, setIsParsingSheet] = useState(false);
   const [sheetModalData, setSheetModalData] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isJdModalOpen, setIsJdModalOpen] = useState(false);
 
   // Manual contact form state
   const [singleName, setSingleName] = useState('');
@@ -182,6 +186,8 @@ export default function RecipientManager({
       title: 'Recipients Queued',
       message: `Added ${newItems.length} approved contact(s) to outreach queue.`
     });
+    // Prompt for target job description right when Excel is uploaded
+    setIsJdModalOpen(true);
   };
 
   const handleToggleApproval = (id) => {
@@ -341,6 +347,39 @@ export default function RecipientManager({
                     Each row is validated against RFC standards before adding.
                   </div>
                 </div>
+
+                {recipients.some(r => r.source === 'spreadsheet') && (
+                  <div
+                    style={{
+                      padding: '12px 14px',
+                      background: 'rgba(59, 130, 246, 0.08)',
+                      border: '1px solid rgba(59, 130, 246, 0.25)',
+                      borderRadius: 'var(--radius-md)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 12
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>
+                        {jobDescription?.trim() ? 'Target Job Description Active' : 'Target Job Description Pending'}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        {jobDescription?.trim()
+                          ? `${jobDescription.trim().split(/\s+/).filter(Boolean).length} words configured for spreadsheet outreach`
+                          : 'Provide target requirements to sharpen AI personalization'}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setIsJdModalOpen(true)}
+                    >
+                      {jobDescription?.trim() ? 'Edit JD' : 'Set JD'}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ) : activeTab === 'single' ? (
@@ -868,6 +907,15 @@ export default function RecipientManager({
         onClose={() => setIsModalOpen(false)}
         sheetData={sheetModalData}
         onConfirmSelection={handleConfirmSheetSelection}
+      />
+
+      {/* Target Job Description Dialog for Excel Recipients */}
+      <JobDescriptionModal
+        isOpen={isJdModalOpen}
+        onClose={() => setIsJdModalOpen(false)}
+        jobDescription={jobDescription}
+        onSaveJd={onChangeJd}
+        onShowToast={onShowToast}
       />
     </div>
   );

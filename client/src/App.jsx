@@ -39,6 +39,7 @@ export default function App() {
     resumeReady,
     jdReady,
     allRecipientsTailored,
+    hasSpreadsheetRecipients,
     recipientsCount,
     emailReady
   } = useWizardState(1);
@@ -227,8 +228,10 @@ export default function App() {
           onSelectStep={goToStep}
           resumeReady={resumeReady}
           recipientsCount={recipientsCount}
+          recipients={recipients}
           jdReady={jdReady}
           emailReady={emailReady}
+          hasSpreadsheetRecipients={hasSpreadsheetRecipients}
         />
 
         <div className="wizard-container">
@@ -268,6 +271,8 @@ export default function App() {
                     onShowToast={addToast}
                     generatedEmails={generatedEmails}
                     config={config}
+                    jobDescription={jobDescription}
+                    onChangeJd={setJobDescription}
                   />
                   <div className="wizard-nav-footer">
                     <button
@@ -279,23 +284,31 @@ export default function App() {
                       Back to Profile
                     </button>
                     <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
-                      {allRecipientsTailored && (
+                      {hasSpreadsheetRecipients && (
                         <button
                           type="button"
                           className="btn btn-secondary"
                           onClick={() => goToStep(3)}
-                          title="Configure an optional shared fallback job description or pitch"
+                          title="Configure or edit target job description"
                         >
-                          Target Role (Optional)
+                          Target Role
                         </button>
                       )}
                       <button
                         type="button"
                         className="btn btn-primary"
-                        onClick={() => goToStep(allRecipientsTailored ? 4 : 3)}
+                        onClick={() => {
+                          if (hasSpreadsheetRecipients && !jobDescription?.trim()) {
+                            goToStep(3);
+                          } else {
+                            goToStep(4);
+                          }
+                        }}
                         disabled={recipientsCount === 0}
                       >
-                        {allRecipientsTailored ? 'Continue to AI Drafts' : 'Continue to Target Role'}
+                        {hasSpreadsheetRecipients && !jobDescription?.trim()
+                          ? 'Continue to Target Role'
+                          : 'Continue to AI Drafts'}
                         <ChevronRight size={16} />
                       </button>
                     </div>
@@ -310,6 +323,7 @@ export default function App() {
                     onChangeJd={setJobDescription}
                     onShowToast={addToast}
                     allRecipientsTailored={allRecipientsTailored}
+                    hasSpreadsheetRecipients={hasSpreadsheetRecipients}
                   />
                   <div className="wizard-nav-footer">
                     <button
@@ -353,10 +367,10 @@ export default function App() {
                     <button
                       type="button"
                       className="btn btn-secondary"
-                      onClick={() => goToStep(allRecipientsTailored && !jobDescription?.trim() ? 2 : 3)}
+                      onClick={() => goToStep(hasSpreadsheetRecipients ? 3 : 2)}
                     >
                       <ChevronLeft size={16} />
-                      {allRecipientsTailored && !jobDescription?.trim() ? 'Back to Recipients' : 'Back to Target Role'}
+                      {hasSpreadsheetRecipients ? 'Back to Target Role' : 'Back to Recipients'}
                     </button>
                     <div />
                   </div>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Check, AlertTriangle } from 'lucide-react';
-import { WIZARD_STEPS } from '../constants/wizardSteps';
+import { getVisibleWizardSteps } from '../constants/wizardSteps';
 
 export default function StepIndicator({
   currentStep = 1,
@@ -14,7 +14,8 @@ export default function StepIndicator({
   jobDescription = '',
   emailReady = false,
   generatedEmails = {},
-  stepStates
+  stepStates,
+  hasSpreadsheetRecipients
 }) {
   // Normalize state for gating predicates
   const activeRecipients = Array.isArray(recipients) && recipients.length > 0
@@ -30,9 +31,19 @@ export default function StepIndicator({
       : generatedEmails
   };
 
+  // Determine if Excel / spreadsheet was uploaded
+  // Show Target Role ONLY when excel is uploaded
+  const isExcelUploaded = hasSpreadsheetRecipients !== undefined
+    ? Boolean(hasSpreadsheetRecipients)
+    : (Array.isArray(recipients) && recipients.length > 0
+        ? (recipients.some(r => r.source === 'spreadsheet') || !recipients.some(r => r.source === 'manual' || r.source === 'ai_parse'))
+        : true);
+
+  const visibleSteps = getVisibleWizardSteps(isExcelUploaded);
+
   return (
     <nav className="step-bar" aria-label="Workflow Steps">
-      {WIZARD_STEPS.map((step, idx) => {
+      {visibleSteps.map((step, idx) => {
         const isActive = currentStep === step.id;
         const isUnlocked = step.isUnlocked(currentState);
         const isDone = stepStates?.[step.id]?.completed ?? step.isCompleted(currentState);
@@ -81,7 +92,7 @@ export default function StepIndicator({
                 {step.optional && <span className="step-optional-badge">Optional</span>}
               </div>
             </button>
-            {idx < WIZARD_STEPS.length - 1 && (
+            {idx < visibleSteps.length - 1 && (
               <div className={`step-separator ${isDone ? 'completed' : ''}`} />
             )}
           </React.Fragment>

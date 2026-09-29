@@ -95,3 +95,12 @@ export function getStepLockReason(stepId, state) {
   const step = WIZARD_STEPS.find(s => s.id === stepId);
   return step ? step.getLockReason(state) : null;
 }
+
+export function getVisibleWizardSteps(hasSpreadsheetRecipients) {
+  if (hasSpreadsheetRecipients) {
+    return WIZARD_STEPS.map((s, idx) => ({ ...s, stepNumber: idx + 1 }));
+  }
+  return WIZARD_STEPS
+    .filter(s => s.id !== 3)
+    .map((s, idx) => ({ ...s, stepNumber: idx + 1 }));
+}

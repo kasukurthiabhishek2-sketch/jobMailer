@@ -57,9 +57,14 @@ export default function JobDescriptionInput({
   jobDescription,
   onChangeJd,
   onShowToast,
-  allRecipientsTailored = false
+  allRecipientsTailored = false,
+  hasSpreadsheetRecipients = false
 }) {
-  const [activeMode, setActiveMode] = useState(jobDescription ? 'tailored' : 'general');
+  const [activeMode, setActiveMode] = useState(
+    hasSpreadsheetRecipients ? 'tailored' : (jobDescription ? 'tailored' : 'general')
+  );
+
+  const effectiveMode = hasSpreadsheetRecipients ? 'tailored' : activeMode;
 
   // Word and character count
   const charCount = jobDescription ? jobDescription.length : 0;
@@ -131,11 +136,13 @@ export default function JobDescriptionInput({
       <div className="step-hero-header">
         <h2 className="step-hero-title">Target Role</h2>
         <p className="step-hero-subtitle">
-          Target a specific job opening or choose a direct executive value pitch.
+          {hasSpreadsheetRecipients
+            ? 'Paste the job description or role requirements to tailor outreach for your imported contacts.'
+            : 'Target a specific job opening or choose a direct executive value pitch.'}
         </p>
       </div>
 
-      {allRecipientsTailored && (
+      {allRecipientsTailored && !hasSpreadsheetRecipients && (
         <div
           style={{
             padding: '12px 16px',
@@ -159,69 +166,71 @@ export default function JobDescriptionInput({
         </div>
       )}
 
-      {/* Mode Toggle Pills */}
-      <div
-        style={{
-          display: 'flex',
-          background: 'var(--bg-surface-elevated)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 'var(--radius-md)',
-          padding: 4,
-          gap: 6,
-          marginBottom: 16
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => handleSwitchMode('tailored')}
+      {/* Mode Toggle Pills (Hidden when excel is uploaded - no need for two sections) */}
+      {!hasSpreadsheetRecipients && (
+        <div
           style={{
-            flex: 1,
-            padding: '8px 12px',
-            fontSize: 13,
-            fontWeight: 600,
-            borderRadius: 'var(--radius-sm)',
-            border: 'none',
-            cursor: 'pointer',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            background: 'var(--bg-surface-elevated)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-md)',
+            padding: 4,
             gap: 6,
-            background: activeMode === 'tailored' ? 'var(--accent-primary)' : 'transparent',
-            color: activeMode === 'tailored' ? '#fff' : 'var(--text-secondary)',
-            transition: 'all var(--transition-fast)'
+            marginBottom: 16
           }}
         >
-          <FileText size={15} />
-          Specific Role (JD)
-        </button>
+          <button
+            type="button"
+            onClick={() => handleSwitchMode('tailored')}
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              fontSize: 13,
+              fontWeight: 600,
+              borderRadius: 'var(--radius-sm)',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              background: effectiveMode === 'tailored' ? 'var(--accent-primary)' : 'transparent',
+              color: effectiveMode === 'tailored' ? '#fff' : 'var(--text-secondary)',
+              transition: 'all var(--transition-fast)'
+            }}
+          >
+            <FileText size={15} />
+            Specific Role (JD)
+          </button>
 
-        <button
-          type="button"
-          onClick={() => handleSwitchMode('general')}
-          style={{
-            flex: 1,
-            padding: '8px 12px',
-            fontSize: 13,
-            fontWeight: 600,
-            borderRadius: 'var(--radius-sm)',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-            background: activeMode === 'general' ? 'var(--accent-primary)' : 'transparent',
-            color: activeMode === 'general' ? '#fff' : 'var(--text-secondary)',
-            transition: 'all var(--transition-fast)'
-          }}
-        >
-          <Sparkles size={15} />
-          Direct Value Pitch
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => handleSwitchMode('general')}
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              fontSize: 13,
+              fontWeight: 600,
+              borderRadius: 'var(--radius-sm)',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              background: effectiveMode === 'general' ? 'var(--accent-primary)' : 'transparent',
+              color: effectiveMode === 'general' ? '#fff' : 'var(--text-secondary)',
+              transition: 'all var(--transition-fast)'
+            }}
+          >
+            <Sparkles size={15} />
+            Direct Value Pitch
+          </button>
+        </div>
+      )}
 
       {/* Sample JDs Quick Chips (Tailored Mode) */}
-      {activeMode === 'tailored' && (
+      {effectiveMode === 'tailored' && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Presets:</span>
@@ -252,7 +261,7 @@ export default function JobDescriptionInput({
       )}
 
       {/* Mode Context Banner for General Mode */}
-      {activeMode === 'general' && (
+      {!hasSpreadsheetRecipients && effectiveMode === 'general' && (
         <div
           style={{
             background: 'var(--bg-surface-elevated)',

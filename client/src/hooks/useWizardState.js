@@ -98,6 +98,11 @@ export function useWizardState(initialStep = 1) {
     resetWizard,
     // Computed / derived properties
     resumeReady: Boolean(resumeData),
+    hasSpreadsheetRecipients: Boolean(
+      recipients &&
+      recipients.length > 0 &&
+      recipients.some(r => r.source === 'spreadsheet')
+    ),
     allRecipientsTailored: Boolean(
       recipients &&
       recipients.length > 0 &&
