@@ -19,7 +19,10 @@ export async function authFetch(url, options = {}) {
     // Non-blocking fallback if Firebase is still initializing or unauthenticated
   }
 
-  const headers = { ...(options.headers || {}) };
+  const headers = {
+    'ngrok-skip-browser-warning': '1',
+    ...(options.headers || {})
+  };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
