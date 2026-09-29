@@ -137,6 +137,18 @@
       "source_location": "L69"
     },
     {
+      "id": "client_src_hooks_usecampaignstream_usecampaignstream",
+      "label": "useCampaignStream()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "api.js",
+      "file_type": "code",
+      "norm_label": "usecampaignstream()",
+      "source_file": "client/src/hooks/useCampaignStream.js",
+      "source_location": "L12"
+    },
+    {
       "id": "client_src_lib_firebase_getidtoken",
       "label": "getIdToken()",
       "_callable": true,
@@ -245,6 +257,18 @@
       "source_location": "L366"
     },
     {
+      "id": "client_src_services_api_deleteephemeralresume",
+      "label": "deleteEphemeralResume()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "api.js",
+      "file_type": "code",
+      "norm_label": "deleteephemeralresume()",
+      "source_file": "client/src/services/api.js",
+      "source_location": "L448"
+    },
+    {
       "id": "client_src_services_api_deletesmtpprofile",
       "label": "deleteSmtpProfile()",
       "_callable": true,
@@ -291,18 +315,6 @@
       "norm_label": "fetchoutreachlogs()",
       "source_file": "client/src/services/api.js",
       "source_location": "L349"
-    },
-    {
-      "id": "client_src_services_api_generatecoldemail",
-      "label": "generateColdEmail()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "api.js",
-      "file_type": "code",
-      "norm_label": "generatecoldemail()",
-      "source_file": "client/src/services/api.js",
-      "source_location": "L185"
     },
     {
       "id": "client_src_services_api_getcurrentcopilotflow",
@@ -365,6 +377,18 @@
       "source_location": "L69"
     },
     {
+      "id": "client_src_services_api_saveoutreachlogs",
+      "label": "saveOutreachLogs()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "api.js",
+      "file_type": "code",
+      "norm_label": "saveoutreachlogs()",
+      "source_file": "client/src/services/api.js",
+      "source_location": "L388"
+    },
+    {
       "id": "client_src_services_api_savepreferences",
       "label": "savePreferences()",
       "_callable": true,
@@ -423,6 +447,18 @@
       "norm_label": "startcopilotauth()",
       "source_file": "client/src/services/api.js",
       "source_location": "L404"
+    },
+    {
+      "id": "client_src_services_api_streamemailsending",
+      "label": "streamEmailSending()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "api.js",
+      "file_type": "code",
+      "norm_label": "streamemailsending()",
+      "source_file": "client/src/services/api.js",
+      "source_location": "L263"
     },
     {
       "id": "client_src_services_api_testaiconnection",
@@ -989,18 +1025,6 @@
       "source_location": "L78"
     },
     {
-      "id": "client_src_hooks_usecampaignstream_usecampaignstream",
-      "label": "useCampaignStream()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "App.jsx",
-      "file_type": "code",
-      "norm_label": "usecampaignstream()",
-      "source_file": "client/src/hooks/useCampaignStream.js",
-      "source_location": "L12"
-    },
-    {
       "id": "client_src_hooks_usewizardstate_usewizardstate",
       "label": "useWizardState()",
       "_callable": true,
@@ -1047,18 +1071,6 @@
       "norm_label": "watchauthstate()",
       "source_file": "client/src/lib/firebase.js",
       "source_location": "L40"
-    },
-    {
-      "id": "client_src_lib_sanitizedraft_sanitizedraft",
-      "label": "sanitizeDraft()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "App.jsx",
-      "file_type": "code",
-      "norm_label": "sanitizedraft()",
-      "source_file": "client/src/lib/sanitizeDraft.js",
-      "source_location": "L13"
     },
     {
       "id": "client_src_lib_settings_deletesettings",
@@ -1169,40 +1181,16 @@
       "source_location": "L222"
     },
     {
-      "id": "client_src_services_api_deleteephemeralresume",
-      "label": "deleteEphemeralResume()",
+      "id": "client_src_services_api_generatecoldemail",
+      "label": "generateColdEmail()",
       "_callable": true,
       "_origin": "ast",
       "community": 2,
       "community_name": "App.jsx",
       "file_type": "code",
-      "norm_label": "deleteephemeralresume()",
+      "norm_label": "generatecoldemail()",
       "source_file": "client/src/services/api.js",
-      "source_location": "L448"
-    },
-    {
-      "id": "client_src_services_api_saveoutreachlogs",
-      "label": "saveOutreachLogs()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "App.jsx",
-      "file_type": "code",
-      "norm_label": "saveoutreachlogs()",
-      "source_file": "client/src/services/api.js",
-      "source_location": "L388"
-    },
-    {
-      "id": "client_src_services_api_streamemailsending",
-      "label": "streamEmailSending()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "App.jsx",
-      "file_type": "code",
-      "norm_label": "streamemailsending()",
-      "source_file": "client/src/services/api.js",
-      "source_location": "L263"
+      "source_location": "L185"
     },
     {
       "id": "client_src_services_api_uploadresume",
@@ -1407,6 +1395,18 @@
       "norm_label": "runtests()",
       "source_file": "server/test_model_listing.js",
       "source_location": "L4"
+    },
+    {
+      "id": "server_services_copilotservice_callcopilotchat",
+      "label": "callCopilotChat()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 25,
+      "community_name": "copilotService.js",
+      "file_type": "code",
+      "norm_label": "callcopilotchat()",
+      "source_file": "server/services/copilotService.js",
+      "source_location": "L166"
     },
     {
       "id": "server_services_copilotservice_checkdevicestatus",
@@ -1815,18 +1815,6 @@
       "norm_label": "runtests()",
       "source_file": "server/test_ephemeral_uploads.js",
       "source_location": "L18"
-    },
-    {
-      "id": "server_services_copilotservice_callcopilotchat",
-      "label": "callCopilotChat()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 30,
-      "community_name": "callCopilotChat",
-      "file_type": "code",
-      "norm_label": "callcopilotchat()",
-      "source_file": "server/services/copilotService.js",
-      "source_location": "L166"
     },
     {
       "id": "server_services_aiservice_callgemini",
@@ -2249,6 +2237,18 @@
       "source_location": "L67"
     },
     {
+      "id": "client_src_lib_sanitizedraft_sanitizedraft",
+      "label": "sanitizeDraft()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 76,
+      "community_name": "sanitizeDraft.test.js",
+      "file_type": "code",
+      "norm_label": "sanitizedraft()",
+      "source_file": "client/src/lib/sanitizeDraft.js",
+      "source_location": "L13"
+    },
+    {
       "id": "server_index_isoriginallowed",
       "label": "isOriginAllowed()",
       "_callable": true,
@@ -2331,17 +2331,6 @@
       "norm_label": "stripundefined()",
       "source_file": "server/test_firebase_migration.js",
       "source_location": "L177"
-    },
-    {
-      "id": "auth",
-      "label": "firebase/auth",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "api.js",
-      "confidence": "EXTRACTED",
-      "file_type": "code",
-      "norm_label": "firebase/auth",
-      "source_file": "firebase/auth"
     },
     {
       "id": "client_src_components_settings_aiproviderstab",
@@ -2430,6 +2419,17 @@
       "norm_label": "guides",
       "source_file": "client/src/components/SmtpGuideModal.jsx",
       "source_location": "L4"
+    },
+    {
+      "id": "client_src_hooks_usecampaignstream",
+      "label": "useCampaignStream.js",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "api.js",
+      "file_type": "code",
+      "norm_label": "usecampaignstream.js",
+      "source_file": "client/src/hooks/useCampaignStream.js",
+      "source_location": "L1"
     },
     {
       "id": "client_src_lib_firebase",
@@ -4470,17 +4470,6 @@
       "source_location": "L12"
     },
     {
-      "id": "client_src_hooks_usecampaignstream",
-      "label": "useCampaignStream.js",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "App.jsx",
-      "file_type": "code",
-      "norm_label": "usecampaignstream.js",
-      "source_file": "client/src/hooks/useCampaignStream.js",
-      "source_location": "L1"
-    },
-    {
       "id": "client_src_hooks_usewizardstate",
       "label": "useWizardState.js",
       "_origin": "ast",
@@ -4489,17 +4478,6 @@
       "file_type": "code",
       "norm_label": "usewizardstate.js",
       "source_file": "client/src/hooks/useWizardState.js",
-      "source_location": "L1"
-    },
-    {
-      "id": "client_src_lib_sanitizedraft",
-      "label": "sanitizeDraft.js",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "App.jsx",
-      "file_type": "code",
-      "norm_label": "sanitizedraft.js",
-      "source_file": "client/src/lib/sanitizeDraft.js",
       "source_location": "L1"
     },
     {
@@ -4679,17 +4657,6 @@
       "source_location": "L1"
     },
     {
-      "id": "client_src_tests_sanitizedraft_test",
-      "label": "sanitizeDraft.test.js",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "App.jsx",
-      "file_type": "code",
-      "norm_label": "sanitizedraft.test.js",
-      "source_file": "client/src/__tests__/sanitizeDraft.test.js",
-      "source_location": "L1"
-    },
-    {
       "id": "client_src_tests_settings_test",
       "label": "settings.test.js",
       "_origin": "ast",
@@ -4812,28 +4779,16 @@
       "source_location": "L71"
     },
     {
-      "id": "docs_backlog_tick_cyc3_08_decompose_app_jsx_usewizardstate_usecampaignstream",
-      "label": "TICK-CYC3-08: Decompose `App.jsx` (`useWizardState`, `useCampaignStream`)",
+      "id": "docs_backlog_tick_cyc3_02_concurrent_batch_generation_in_emailpreview_jsx",
+      "label": "TICK-CYC3-02: Concurrent Batch Generation in `EmailPreview.jsx`",
       "_origin": "ast",
       "community": 2,
       "community_name": "App.jsx",
       "file_type": "document",
       "node_kind": "heading",
-      "norm_label": "tick-cyc3-08: decompose `app.jsx` (`usewizardstate`, `usecampaignstream`)",
+      "norm_label": "tick-cyc3-02: concurrent batch generation in `emailpreview.jsx`",
       "source_file": "docs/BACKLOG.md",
-      "source_location": "L82"
-    },
-    {
-      "id": "docs_backlog_tick_cyc3_13_ephemeral_resume_deletion_endpoint_ui_action",
-      "label": "TICK-CYC3-13: Ephemeral Resume Deletion Endpoint & UI Action",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "App.jsx",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "tick-cyc3-13: ephemeral resume deletion endpoint & ui action",
-      "source_file": "docs/BACKLOG.md",
-      "source_location": "L113"
+      "source_location": "L52"
     },
     {
       "id": "docs_rating_history_cycle_2_backlog_recommendations",
@@ -5387,66 +5342,6 @@
       "source_location": "L1"
     },
     {
-      "id": "docs_agent_reports_security_audit_cycle1",
-      "label": "security-audit-cycle1.md",
-      "_origin": "ast",
-      "community": 25,
-      "community_name": "copilotService.js",
-      "file_type": "document",
-      "node_kind": "page",
-      "norm_label": "security-audit-cycle1.md",
-      "source_file": "docs/agent-reports/security-audit-cycle1.md",
-      "source_location": "L1"
-    },
-    {
-      "id": "docs_agent_reports_security_audit_cycle1_application_security_audit_report_cycle_1",
-      "label": "Application Security Audit Report \u2014 Cycle 1",
-      "_origin": "ast",
-      "community": 25,
-      "community_name": "copilotService.js",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "application security audit report \u2014 cycle 1",
-      "source_file": "docs/agent-reports/security-audit-cycle1.md",
-      "source_location": "L1"
-    },
-    {
-      "id": "docs_agent_reports_security_audit_cycle1_detailed_audit_findings",
-      "label": "Detailed Audit Findings",
-      "_origin": "ast",
-      "community": 25,
-      "community_name": "copilotService.js",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "detailed audit findings",
-      "source_file": "docs/agent-reports/security-audit-cycle1.md",
-      "source_location": "L16"
-    },
-    {
-      "id": "docs_agent_reports_security_audit_cycle1_executive_summary",
-      "label": "Executive Summary",
-      "_origin": "ast",
-      "community": 25,
-      "community_name": "copilotService.js",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "executive summary",
-      "source_file": "docs/agent-reports/security-audit-cycle1.md",
-      "source_location": "L9"
-    },
-    {
-      "id": "docs_agent_reports_security_audit_cycle1_sec_02_cryptographic_bypass_plaintext_fallback_in_decrypt",
-      "label": "SEC-02: Cryptographic Bypass & Plaintext Fallback in `decrypt()`",
-      "_origin": "ast",
-      "community": 25,
-      "community_name": "copilotService.js",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "sec-02: cryptographic bypass & plaintext fallback in `decrypt()`",
-      "source_file": "docs/agent-reports/security-audit-cycle1.md",
-      "source_location": "L32"
-    },
-    {
       "id": "docs_agent_reports_security_audit_cycle1_sec_03_incomplete_danger_zone_data_purge_leaves_pii_resumes_on_disk_stale_token_cache",
       "label": "SEC-03: Incomplete Danger-Zone Data Purge Leaves PII Resumes on Disk & Stale Token Cache",
       "_origin": "ast",
@@ -5457,54 +5352,6 @@
       "norm_label": "sec-03: incomplete danger-zone data purge leaves pii resumes on disk & stale token cache",
       "source_file": "docs/agent-reports/security-audit-cycle1.md",
       "source_location": "L48"
-    },
-    {
-      "id": "docs_agent_reports_security_audit_cycle1_sec_04_smtp_tls_certificate_verification_disabled_rejectunauthorized_false",
-      "label": "SEC-04: SMTP TLS Certificate Verification Disabled (`rejectUnauthorized: false`)",
-      "_origin": "ast",
-      "community": 25,
-      "community_name": "copilotService.js",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "sec-04: smtp tls certificate verification disabled (`rejectunauthorized: false`)",
-      "source_file": "docs/agent-reports/security-audit-cycle1.md",
-      "source_location": "L60"
-    },
-    {
-      "id": "docs_agent_reports_security_audit_cycle1_sec_05_missing_rate_limiting_on_public_express_routes",
-      "label": "SEC-05: Missing Rate Limiting on Public Express Routes",
-      "_origin": "ast",
-      "community": 25,
-      "community_name": "copilotService.js",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "sec-05: missing rate limiting on public express routes",
-      "source_file": "docs/agent-reports/security-audit-cycle1.md",
-      "source_location": "L78"
-    },
-    {
-      "id": "docs_agent_reports_security_audit_cycle1_sec_06_high_severity_vulnerabilities_in_direct_dependencies_xlsx_nodemailer",
-      "label": "SEC-06: High Severity Vulnerabilities in Direct Dependencies (`xlsx` & `nodemailer`)",
-      "_origin": "ast",
-      "community": 25,
-      "community_name": "copilotService.js",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "sec-06: high severity vulnerabilities in direct dependencies (`xlsx` & `nodemailer`)",
-      "source_file": "docs/agent-reports/security-audit-cycle1.md",
-      "source_location": "L88"
-    },
-    {
-      "id": "docs_agent_reports_security_audit_cycle1_sec_07_key_masking_discloses_66_of_short_keys",
-      "label": "SEC-07: Key Masking Discloses 66% of Short Keys",
-      "_origin": "ast",
-      "community": 25,
-      "community_name": "copilotService.js",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "sec-07: key masking discloses 66% of short keys",
-      "source_file": "docs/agent-reports/security-audit-cycle1.md",
-      "source_location": "L100"
     },
     {
       "id": "docs_agent_reports_cycle_3_pain_points",
@@ -5807,18 +5654,6 @@
       "source_location": "L47"
     },
     {
-      "id": "docs_backlog_tick_cyc3_02_concurrent_batch_generation_in_emailpreview_jsx",
-      "label": "TICK-CYC3-02: Concurrent Batch Generation in `EmailPreview.jsx`",
-      "_origin": "ast",
-      "community": 27,
-      "community_name": "Detailed Cycle 3 Shipped Ticket Specifications",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "tick-cyc3-02: concurrent batch generation in `emailpreview.jsx`",
-      "source_file": "docs/BACKLOG.md",
-      "source_location": "L52"
-    },
-    {
       "id": "docs_backlog_tick_cyc3_03_surface_hallucination_guardrail_in_emailpreview_jsx",
       "label": "TICK-CYC3-03: Surface Hallucination Guardrail in `EmailPreview.jsx`",
       "_origin": "ast",
@@ -5853,6 +5688,18 @@
       "norm_label": "tick-cyc3-07: centralize canonical `wizard_steps` source of truth",
       "source_file": "docs/BACKLOG.md",
       "source_location": "L77"
+    },
+    {
+      "id": "docs_backlog_tick_cyc3_08_decompose_app_jsx_usewizardstate_usecampaignstream",
+      "label": "TICK-CYC3-08: Decompose `App.jsx` (`useWizardState`, `useCampaignStream`)",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "Detailed Cycle 3 Shipped Ticket Specifications",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "tick-cyc3-08: decompose `app.jsx` (`usewizardstate`, `usecampaignstream`)",
+      "source_file": "docs/BACKLOG.md",
+      "source_location": "L82"
     },
     {
       "id": "docs_backlog_tick_cyc3_09_modular_decomposition_of_settingsmodal_jsx_5_tabs",
@@ -5901,6 +5748,18 @@
       "norm_label": "tick-cyc3-12: daily provider quota budget tracker & warning system",
       "source_file": "docs/BACKLOG.md",
       "source_location": "L108"
+    },
+    {
+      "id": "docs_backlog_tick_cyc3_13_ephemeral_resume_deletion_endpoint_ui_action",
+      "label": "TICK-CYC3-13: Ephemeral Resume Deletion Endpoint & UI Action",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "Detailed Cycle 3 Shipped Ticket Specifications",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "tick-cyc3-13: ephemeral resume deletion endpoint & ui action",
+      "source_file": "docs/BACKLOG.md",
+      "source_location": "L113"
     },
     {
       "id": "docs_backlog_tick_cyc3_14_firebase_auth_timeout_graceful_fallback_local_mode_toggle",
@@ -6143,6 +6002,18 @@
       "norm_label": "{ encrypt, decrypt, maskapikey, maskpassword }",
       "source_file": "server/test_crypto.js",
       "source_location": "L2"
+    },
+    {
+      "id": "docs_agent_reports_review_cycle1_1_guardrails_architecture_invariants_checklist",
+      "label": "1. Guardrails & Architecture Invariants Checklist",
+      "_origin": "ast",
+      "community": 29,
+      "community_name": "runServerE2eSuite",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "1. guardrails & architecture invariants checklist",
+      "source_file": "docs/agent-reports/review-cycle1.md",
+      "source_location": "L10"
     },
     {
       "id": "server_services_sheetparser",
@@ -6608,11 +6479,23 @@
       "source_location": "L457"
     },
     {
+      "id": "docs_agent_reports_review_cycle1",
+      "label": "review-cycle1.md",
+      "_origin": "ast",
+      "community": 30,
+      "community_name": "2. Detailed Ticket-by-Ticket Diff Review",
+      "file_type": "document",
+      "node_kind": "page",
+      "norm_label": "review-cycle1.md",
+      "source_file": "docs/agent-reports/review-cycle1.md",
+      "source_location": "L1"
+    },
+    {
       "id": "docs_agent_reports_review_cycle1_2_detailed_ticket_by_ticket_diff_review",
       "label": "2. Detailed Ticket-by-Ticket Diff Review",
       "_origin": "ast",
       "community": 30,
-      "community_name": "callCopilotChat",
+      "community_name": "2. Detailed Ticket-by-Ticket Diff Review",
       "file_type": "document",
       "node_kind": "heading",
       "norm_label": "2. detailed ticket-by-ticket diff review",
@@ -6620,11 +6503,35 @@
       "source_location": "L23"
     },
     {
+      "id": "docs_agent_reports_review_cycle1_3_findings_recommendations_non_blocking_nits",
+      "label": "3. Findings & Recommendations (Non-blocking Nits)",
+      "_origin": "ast",
+      "community": 30,
+      "community_name": "2. Detailed Ticket-by-Ticket Diff Review",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "3. findings & recommendations (non-blocking nits)",
+      "source_file": "docs/agent-reports/review-cycle1.md",
+      "source_location": "L72"
+    },
+    {
+      "id": "docs_agent_reports_review_cycle1_code_review_report_cycle_1_integration",
+      "label": "Code Review Report: Cycle 1 Integration",
+      "_origin": "ast",
+      "community": 30,
+      "community_name": "2. Detailed Ticket-by-Ticket Diff Review",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "code review report: cycle 1 integration",
+      "source_file": "docs/agent-reports/review-cycle1.md",
+      "source_location": "L1"
+    },
+    {
       "id": "docs_agent_reports_review_cycle1_tick_01_copilot_symbol_fix_resilient_dispatch",
       "label": "TICK-01: Copilot Symbol Fix & Resilient Dispatch",
       "_origin": "ast",
       "community": 30,
-      "community_name": "callCopilotChat",
+      "community_name": "2. Detailed Ticket-by-Ticket Diff Review",
       "file_type": "document",
       "node_kind": "heading",
       "norm_label": "tick-01: copilot symbol fix & resilient dispatch",
@@ -6636,7 +6543,7 @@
       "label": "TICK-02 / TICK-08 / TICK-11: SMTP Resilience, Jitter & Strict TLS",
       "_origin": "ast",
       "community": 30,
-      "community_name": "callCopilotChat",
+      "community_name": "2. Detailed Ticket-by-Ticket Diff Review",
       "file_type": "document",
       "node_kind": "heading",
       "norm_label": "tick-02 / tick-08 / tick-11: smtp resilience, jitter & strict tls",
@@ -6648,7 +6555,7 @@
       "label": "TICK-03: Subsystem Automated Test Suites",
       "_origin": "ast",
       "community": 30,
-      "community_name": "callCopilotChat",
+      "community_name": "2. Detailed Ticket-by-Ticket Diff Review",
       "file_type": "document",
       "node_kind": "heading",
       "norm_label": "tick-03: subsystem automated test suites",
@@ -6660,7 +6567,7 @@
       "label": "TICK-04 / TICK-14: Cryptographic Fail-Closed & Short-Key Masking",
       "_origin": "ast",
       "community": 30,
-      "community_name": "callCopilotChat",
+      "community_name": "2. Detailed Ticket-by-Ticket Diff Review",
       "file_type": "document",
       "node_kind": "heading",
       "norm_label": "tick-04 / tick-14: cryptographic fail-closed & short-key masking",
@@ -6672,7 +6579,7 @@
       "label": "TICK-05: Danger-Zone Resume & Cache Purge",
       "_origin": "ast",
       "community": 30,
-      "community_name": "callCopilotChat",
+      "community_name": "2. Detailed Ticket-by-Ticket Diff Review",
       "file_type": "document",
       "node_kind": "heading",
       "norm_label": "tick-05: danger-zone resume & cache purge",
@@ -6684,7 +6591,7 @@
       "label": "TICK-06: 4-Worker Concurrent Batch Generation",
       "_origin": "ast",
       "community": 30,
-      "community_name": "callCopilotChat",
+      "community_name": "2. Detailed Ticket-by-Ticket Diff Review",
       "file_type": "document",
       "node_kind": "heading",
       "norm_label": "tick-06: 4-worker concurrent batch generation",
@@ -6696,7 +6603,7 @@
       "label": "TICK-07: Recipient Modal Windowed Pagination",
       "_origin": "ast",
       "community": 30,
-      "community_name": "callCopilotChat",
+      "community_name": "2. Detailed Ticket-by-Ticket Diff Review",
       "file_type": "document",
       "node_kind": "heading",
       "norm_label": "tick-07: recipient modal windowed pagination",
@@ -6708,7 +6615,7 @@
       "label": "TICK-09: Cross-Session Recipient Deduplication",
       "_origin": "ast",
       "community": 30,
-      "community_name": "callCopilotChat",
+      "community_name": "2. Detailed Ticket-by-Ticket Diff Review",
       "file_type": "document",
       "node_kind": "heading",
       "norm_label": "tick-09: cross-session recipient deduplication",
@@ -6716,16 +6623,16 @@
       "source_location": "L55"
     },
     {
-      "id": "docs_agent_reports_security_audit_cycle1_sec_01_runtime_bug_undefined_symbol_in_copilot_ai_dispatch",
-      "label": "SEC-01: Runtime Bug & Undefined Symbol in Copilot AI Dispatch",
+      "id": "docs_agent_reports_review_cycle1_tick_10_verifiable_claim_grounding_guardrail",
+      "label": "TICK-10: Verifiable Claim Grounding Guardrail",
       "_origin": "ast",
       "community": 30,
-      "community_name": "callCopilotChat",
+      "community_name": "2. Detailed Ticket-by-Ticket Diff Review",
       "file_type": "document",
       "node_kind": "heading",
-      "norm_label": "sec-01: runtime bug & undefined symbol in copilot ai dispatch",
-      "source_file": "docs/agent-reports/security-audit-cycle1.md",
-      "source_location": "L18"
+      "norm_label": "tick-10: verifiable claim grounding guardrail",
+      "source_file": "docs/agent-reports/review-cycle1.md",
+      "source_location": "L60"
     },
     {
       "id": "docs_agent_reports_cycle_3_research",
@@ -7590,6 +7497,18 @@
       "norm_label": "uniform interface",
       "source_file": "ARCHITECTURE.md",
       "source_location": "L392"
+    },
+    {
+      "id": "architecture_verifiable_fact_grounding_guardrail_auditdraftclaims",
+      "label": "Verifiable Fact-Grounding Guardrail (`auditDraftClaims`)",
+      "_origin": "ast",
+      "community": 39,
+      "community_name": "3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`)",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "verifiable fact-grounding guardrail (`auditdraftclaims`)",
+      "source_file": "ARCHITECTURE.md",
+      "source_location": "L433"
     },
     {
       "id": "client_package",
@@ -9422,18 +9341,6 @@
       "source_location": "L2"
     },
     {
-      "id": "architecture_verifiable_fact_grounding_guardrail_auditdraftclaims",
-      "label": "Verifiable Fact-Grounding Guardrail (`auditDraftClaims`)",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "auditDraftClaims",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "verifiable fact-grounding guardrail (`auditdraftclaims`)",
-      "source_file": "ARCHITECTURE.md",
-      "source_location": "L433"
-    },
-    {
       "id": "docs_agent_reports_impl_ai_guardrail_cycle1",
       "label": "impl-ai-guardrail-cycle1.md",
       "_origin": "ast",
@@ -9480,18 +9387,6 @@
       "norm_label": "implementation report: tick-10 (ai hallucination guardrail)",
       "source_file": "docs/agent-reports/impl-ai-guardrail-cycle1.md",
       "source_location": "L1"
-    },
-    {
-      "id": "docs_agent_reports_review_cycle1_tick_10_verifiable_claim_grounding_guardrail",
-      "label": "TICK-10: Verifiable Claim Grounding Guardrail",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "auditDraftClaims",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "tick-10: verifiable claim grounding guardrail",
-      "source_file": "docs/agent-reports/review-cycle1.md",
-      "source_location": "L60"
     },
     {
       "id": "docs_agent_reports_phase1_pain_points_cycle1",
@@ -10384,6 +10279,126 @@
       "source_location": "L18"
     },
     {
+      "id": "docs_agent_reports_security_audit_cycle1",
+      "label": "security-audit-cycle1.md",
+      "_origin": "ast",
+      "community": 60,
+      "community_name": "Detailed Audit Findings",
+      "file_type": "document",
+      "node_kind": "page",
+      "norm_label": "security-audit-cycle1.md",
+      "source_file": "docs/agent-reports/security-audit-cycle1.md",
+      "source_location": "L1"
+    },
+    {
+      "id": "docs_agent_reports_security_audit_cycle1_application_security_audit_report_cycle_1",
+      "label": "Application Security Audit Report \u2014 Cycle 1",
+      "_origin": "ast",
+      "community": 60,
+      "community_name": "Detailed Audit Findings",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "application security audit report \u2014 cycle 1",
+      "source_file": "docs/agent-reports/security-audit-cycle1.md",
+      "source_location": "L1"
+    },
+    {
+      "id": "docs_agent_reports_security_audit_cycle1_detailed_audit_findings",
+      "label": "Detailed Audit Findings",
+      "_origin": "ast",
+      "community": 60,
+      "community_name": "Detailed Audit Findings",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "detailed audit findings",
+      "source_file": "docs/agent-reports/security-audit-cycle1.md",
+      "source_location": "L16"
+    },
+    {
+      "id": "docs_agent_reports_security_audit_cycle1_executive_summary",
+      "label": "Executive Summary",
+      "_origin": "ast",
+      "community": 60,
+      "community_name": "Detailed Audit Findings",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "executive summary",
+      "source_file": "docs/agent-reports/security-audit-cycle1.md",
+      "source_location": "L9"
+    },
+    {
+      "id": "docs_agent_reports_security_audit_cycle1_sec_01_runtime_bug_undefined_symbol_in_copilot_ai_dispatch",
+      "label": "SEC-01: Runtime Bug & Undefined Symbol in Copilot AI Dispatch",
+      "_origin": "ast",
+      "community": 60,
+      "community_name": "Detailed Audit Findings",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "sec-01: runtime bug & undefined symbol in copilot ai dispatch",
+      "source_file": "docs/agent-reports/security-audit-cycle1.md",
+      "source_location": "L18"
+    },
+    {
+      "id": "docs_agent_reports_security_audit_cycle1_sec_02_cryptographic_bypass_plaintext_fallback_in_decrypt",
+      "label": "SEC-02: Cryptographic Bypass & Plaintext Fallback in `decrypt()`",
+      "_origin": "ast",
+      "community": 60,
+      "community_name": "Detailed Audit Findings",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "sec-02: cryptographic bypass & plaintext fallback in `decrypt()`",
+      "source_file": "docs/agent-reports/security-audit-cycle1.md",
+      "source_location": "L32"
+    },
+    {
+      "id": "docs_agent_reports_security_audit_cycle1_sec_04_smtp_tls_certificate_verification_disabled_rejectunauthorized_false",
+      "label": "SEC-04: SMTP TLS Certificate Verification Disabled (`rejectUnauthorized: false`)",
+      "_origin": "ast",
+      "community": 60,
+      "community_name": "Detailed Audit Findings",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "sec-04: smtp tls certificate verification disabled (`rejectunauthorized: false`)",
+      "source_file": "docs/agent-reports/security-audit-cycle1.md",
+      "source_location": "L60"
+    },
+    {
+      "id": "docs_agent_reports_security_audit_cycle1_sec_05_missing_rate_limiting_on_public_express_routes",
+      "label": "SEC-05: Missing Rate Limiting on Public Express Routes",
+      "_origin": "ast",
+      "community": 60,
+      "community_name": "Detailed Audit Findings",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "sec-05: missing rate limiting on public express routes",
+      "source_file": "docs/agent-reports/security-audit-cycle1.md",
+      "source_location": "L78"
+    },
+    {
+      "id": "docs_agent_reports_security_audit_cycle1_sec_06_high_severity_vulnerabilities_in_direct_dependencies_xlsx_nodemailer",
+      "label": "SEC-06: High Severity Vulnerabilities in Direct Dependencies (`xlsx` & `nodemailer`)",
+      "_origin": "ast",
+      "community": 60,
+      "community_name": "Detailed Audit Findings",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "sec-06: high severity vulnerabilities in direct dependencies (`xlsx` & `nodemailer`)",
+      "source_file": "docs/agent-reports/security-audit-cycle1.md",
+      "source_location": "L88"
+    },
+    {
+      "id": "docs_agent_reports_security_audit_cycle1_sec_07_key_masking_discloses_66_of_short_keys",
+      "label": "SEC-07: Key Masking Discloses 66% of Short Keys",
+      "_origin": "ast",
+      "community": 60,
+      "community_name": "Detailed Audit Findings",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "sec-07: key masking discloses 66% of short keys",
+      "source_file": "docs/agent-reports/security-audit-cycle1.md",
+      "source_location": "L100"
+    },
+    {
       "id": "claude_agents_ai_integration_engineer",
       "label": "ai-integration-engineer.md",
       "_origin": "ast",
@@ -10688,6 +10703,66 @@
       "source_location": "L1"
     },
     {
+      "id": "docs_agent_reports_impl_subsystem_tests_cycle1",
+      "label": "impl-subsystem-tests-cycle1.md",
+      "_origin": "ast",
+      "community": 73,
+      "community_name": "getPublicConfig",
+      "file_type": "document",
+      "node_kind": "page",
+      "norm_label": "impl-subsystem-tests-cycle1.md",
+      "source_file": "docs/agent-reports/impl-subsystem-tests-cycle1.md",
+      "source_location": "L1"
+    },
+    {
+      "id": "docs_agent_reports_impl_subsystem_tests_cycle1_1_objective_scope",
+      "label": "1. Objective & Scope",
+      "_origin": "ast",
+      "community": 73,
+      "community_name": "getPublicConfig",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "1. objective & scope",
+      "source_file": "docs/agent-reports/impl-subsystem-tests-cycle1.md",
+      "source_location": "L10"
+    },
+    {
+      "id": "docs_agent_reports_impl_subsystem_tests_cycle1_2_implementation_details",
+      "label": "2. Implementation Details",
+      "_origin": "ast",
+      "community": 73,
+      "community_name": "getPublicConfig",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "2. implementation details",
+      "source_file": "docs/agent-reports/impl-subsystem-tests-cycle1.md",
+      "source_location": "L18"
+    },
+    {
+      "id": "docs_agent_reports_impl_subsystem_tests_cycle1_3_verification_guardrail_adherence",
+      "label": "3. Verification & Guardrail Adherence",
+      "_origin": "ast",
+      "community": 73,
+      "community_name": "getPublicConfig",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "3. verification & guardrail adherence",
+      "source_file": "docs/agent-reports/impl-subsystem-tests-cycle1.md",
+      "source_location": "L39"
+    },
+    {
+      "id": "docs_agent_reports_impl_subsystem_tests_cycle1_implementation_report_tick_03_comprehensive_subsystem_tests",
+      "label": "Implementation Report: TICK-03 Comprehensive Subsystem Tests",
+      "_origin": "ast",
+      "community": 73,
+      "community_name": "getPublicConfig",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "implementation report: tick-03 comprehensive subsystem tests",
+      "source_file": "docs/agent-reports/impl-subsystem-tests-cycle1.md",
+      "source_location": "L1"
+    },
+    {
       "id": "architecture_3_4_security_cryptographic_storage_crypto_js_storageservice_js",
       "label": "3.4 Security & Cryptographic Storage (`crypto.js`, `storageService.js`)",
       "_origin": "ast",
@@ -10820,63 +10895,25 @@
       "source_location": "L61"
     },
     {
-      "id": "docs_agent_reports_impl_subsystem_tests_cycle1",
-      "label": "impl-subsystem-tests-cycle1.md",
+      "id": "client_src_lib_sanitizedraft",
+      "label": "sanitizeDraft.js",
       "_origin": "ast",
       "community": 76,
-      "community_name": "Implementation Report: TICK-03 Comprehensive Subsystem Tests",
-      "file_type": "document",
-      "node_kind": "page",
-      "norm_label": "impl-subsystem-tests-cycle1.md",
-      "source_file": "docs/agent-reports/impl-subsystem-tests-cycle1.md",
+      "community_name": "sanitizeDraft.test.js",
+      "file_type": "code",
+      "norm_label": "sanitizedraft.js",
+      "source_file": "client/src/lib/sanitizeDraft.js",
       "source_location": "L1"
     },
     {
-      "id": "docs_agent_reports_impl_subsystem_tests_cycle1_1_objective_scope",
-      "label": "1. Objective & Scope",
+      "id": "client_src_tests_sanitizedraft_test",
+      "label": "sanitizeDraft.test.js",
       "_origin": "ast",
       "community": 76,
-      "community_name": "Implementation Report: TICK-03 Comprehensive Subsystem Tests",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "1. objective & scope",
-      "source_file": "docs/agent-reports/impl-subsystem-tests-cycle1.md",
-      "source_location": "L10"
-    },
-    {
-      "id": "docs_agent_reports_impl_subsystem_tests_cycle1_2_implementation_details",
-      "label": "2. Implementation Details",
-      "_origin": "ast",
-      "community": 76,
-      "community_name": "Implementation Report: TICK-03 Comprehensive Subsystem Tests",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "2. implementation details",
-      "source_file": "docs/agent-reports/impl-subsystem-tests-cycle1.md",
-      "source_location": "L18"
-    },
-    {
-      "id": "docs_agent_reports_impl_subsystem_tests_cycle1_3_verification_guardrail_adherence",
-      "label": "3. Verification & Guardrail Adherence",
-      "_origin": "ast",
-      "community": 76,
-      "community_name": "Implementation Report: TICK-03 Comprehensive Subsystem Tests",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "3. verification & guardrail adherence",
-      "source_file": "docs/agent-reports/impl-subsystem-tests-cycle1.md",
-      "source_location": "L39"
-    },
-    {
-      "id": "docs_agent_reports_impl_subsystem_tests_cycle1_implementation_report_tick_03_comprehensive_subsystem_tests",
-      "label": "Implementation Report: TICK-03 Comprehensive Subsystem Tests",
-      "_origin": "ast",
-      "community": 76,
-      "community_name": "Implementation Report: TICK-03 Comprehensive Subsystem Tests",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "implementation report: tick-03 comprehensive subsystem tests",
-      "source_file": "docs/agent-reports/impl-subsystem-tests-cycle1.md",
+      "community_name": "sanitizeDraft.test.js",
+      "file_type": "code",
+      "norm_label": "sanitizedraft.test.js",
+      "source_file": "client/src/__tests__/sanitizeDraft.test.js",
       "source_location": "L1"
     },
     {
@@ -11110,54 +11147,6 @@
       "norm_label": "rfc-1918",
       "source_file": "server/test_security_guardrails.js",
       "source_location": "L33"
-    },
-    {
-      "id": "docs_agent_reports_review_cycle1",
-      "label": "review-cycle1.md",
-      "_origin": "ast",
-      "community": 80,
-      "community_name": "Code Review Report: Cycle 1 Integration",
-      "file_type": "document",
-      "node_kind": "page",
-      "norm_label": "review-cycle1.md",
-      "source_file": "docs/agent-reports/review-cycle1.md",
-      "source_location": "L1"
-    },
-    {
-      "id": "docs_agent_reports_review_cycle1_1_guardrails_architecture_invariants_checklist",
-      "label": "1. Guardrails & Architecture Invariants Checklist",
-      "_origin": "ast",
-      "community": 80,
-      "community_name": "Code Review Report: Cycle 1 Integration",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "1. guardrails & architecture invariants checklist",
-      "source_file": "docs/agent-reports/review-cycle1.md",
-      "source_location": "L10"
-    },
-    {
-      "id": "docs_agent_reports_review_cycle1_3_findings_recommendations_non_blocking_nits",
-      "label": "3. Findings & Recommendations (Non-blocking Nits)",
-      "_origin": "ast",
-      "community": 80,
-      "community_name": "Code Review Report: Cycle 1 Integration",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "3. findings & recommendations (non-blocking nits)",
-      "source_file": "docs/agent-reports/review-cycle1.md",
-      "source_location": "L72"
-    },
-    {
-      "id": "docs_agent_reports_review_cycle1_code_review_report_cycle_1_integration",
-      "label": "Code Review Report: Cycle 1 Integration",
-      "_origin": "ast",
-      "community": 80,
-      "community_name": "Code Review Report: Cycle 1 Integration",
-      "file_type": "document",
-      "node_kind": "heading",
-      "norm_label": "code review report: cycle 1 integration",
-      "source_file": "docs/agent-reports/review-cycle1.md",
-      "source_location": "L1"
     },
     {
       "id": "agents_skills_graphify_references_github_and_merge",
@@ -29735,15 +29724,6 @@
     },
     {
       "source": "client_src_services_api",
-      "target": "auth",
-      "relation": "dynamic_import",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "client/src/services/api.js"
-    },
-    {
-      "source": "client_src_services_api",
       "target": "client_src_lib_logsservice",
       "relation": "dynamic_import",
       "_origin": "ast",
@@ -31429,5 +31409,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "0653cbddc094ef05da5b6353ef099797e75241a6"
+  "built_at_commit": "30671c439b5f06463ca1f211739d1f1c547bec88"
 }

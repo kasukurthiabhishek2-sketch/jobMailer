@@ -6,12 +6,12 @@
 - Unclassified: 7 file(s) not represented in the graph (top: (none) 3, .rules 2, .css 1)
 
 ## Summary
-- 990 nodes · 1717 edges · 85 communities (68 shown, 17 thin omitted)
+- 989 nodes · 1716 edges · 85 communities (67 shown, 18 thin omitted)
 - Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 136 edges (avg confidence: 0.91)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `0653cbdd`
+- Built from commit: `30671c43`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -46,7 +46,7 @@
 - Detailed Cycle 3 Shipped Ticket Specifications
 - aiService.js
 - runServerE2eSuite
-- callCopilotChat
+- 2. Detailed Ticket-by-Ticket Diff Review
 - Detailed Architectural Evaluations
 - callOpenAiCompatible
 - test_e2e_suite.js
@@ -76,14 +76,14 @@
 - Implementation Report: TICK-09 (Cross-Session Deduplication)
 - Implementation Report: TICK-07 (Recipient Modal Pagination)
 - Implementation Report: TICK-02 / TICK-08 / TICK-11 (SMTP Resilience, Strict TLS & Delay Jitter)
+- Detailed Audit Findings
 - getPublicConfig
 - decrypt
 - graphify reference: query, path, explain
-- Implementation Report: TICK-03 Comprehensive Subsystem Tests
+- sanitizeDraft.test.js
 - graphify reference: add a URL and watch a folder
 - graphify reference: commit hook and native CLAUDE.md integration
 - graphify reference: incremental update and cluster-only
-- Code Review Report: Cycle 1 Integration
 - graphify reference: GitHub clone and cross-repo merge
 - graphify reference: transcribe video and audio
 - rules/graphify.md
@@ -96,32 +96,32 @@
 3. `Detailed Cycle 3 Shipped Ticket Specifications` - 25 edges
 4. `cleanJsonOutput()` - 22 edges
 5. `App()` - 20 edges
-6. `lucide-react` - 19 edges
-7. `vitest` - 19 edges
-8. `parseRecipientSheet()` - 19 edges
+6. `parseRecipientSheet()` - 19 edges
+7. `lucide-react` - 19 edges
+8. `vitest` - 19 edges
 9. `AiProvidersTab()` - 18 edges
-10. `auditDraftClaims()` - 17 edges
+10. `classifySmtpError()` - 17 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `TICK-CYC3-01: Hardware-Bound Local Storage Architecture (Option 1)` --references--> `stripSecrets()`  [INFERRED]
-  docs/BACKLOG.md → client/src/lib/settings.js
-- `4-Worker Concurrent Batch Generation Pipeline` --references--> `batchGenerateColdEmails()`  [INFERRED]
-  ARCHITECTURE.md → client/src/services/api.js
-- `TICK-CYC3-02: Concurrent Batch Generation in `EmailPreview.jsx`` --references--> `batchGenerateColdEmails()`  [INFERRED]
-  docs/BACKLOG.md → client/src/services/api.js
 - `Parsing & Markdown Sanitization (`cleanJsonOutput`)` --references--> `cleanJsonOutput()`  [INFERRED]
   ARCHITECTURE.md → server/services/aiService.js
-- `PERF-03: Redundant Resume Text Slicing & Reprocessing` --references--> `buildPrompts()`  [INFERRED]
-  docs/agent-reports/perf-audit-cycle1.md → server/services/aiService.js
+- `Verifiable Fact-Grounding Guardrail (`auditDraftClaims`)` --references--> `auditDraftClaims()`  [INFERRED]
+  ARCHITECTURE.md → server/services/aiService.js
+- `4-Worker Concurrent Batch Generation Pipeline` --references--> `batchGenerateColdEmails()`  [INFERRED]
+  ARCHITECTURE.md → client/src/services/api.js
+- `3.5 SMTP Delivery & Anti-Spam Throttler (`smtpService.js`, SSE Stream)` --references--> `classifySmtpError()`  [INFERRED]
+  ARCHITECTURE.md → server/services/smtpService.js
+- `How to Add a New AI Provider` --references--> `callOpenAiCompatible()`  [INFERRED]
+  ARCHITECTURE.md → server/services/aiService.js
 
 ## Import Cycles
 - 2-file cycle: `server/services/aiService.js -> server/services/copilotService.js -> server/services/aiService.js`
 
-## Communities (85 total, 17 thin omitted)
+## Communities (85 total, 18 thin omitted)
 
 ### Community 0 - "api.js"
 Cohesion: 0.09
-Nodes (47): AiProvidersTab(), formatTimeAgo(), FRIENDLY_MODEL_NAMES, friendlyModelName(), getProviderSavedKeys(), ModelSelect(), PROVIDER_CONFIG, PROVIDER_DEFAULT_MODELS (+39 more)
+Nodes (50): AiProvidersTab(), formatTimeAgo(), FRIENDLY_MODEL_NAMES, friendlyModelName(), getProviderSavedKeys(), ModelSelect(), PROVIDER_CONFIG, PROVIDER_DEFAULT_MODELS (+42 more)
 
 ### Community 1 - "test_graphify_integration.js"
 Cohesion: 0.10
@@ -129,7 +129,7 @@ Nodes (20): agentsMd, assert, claudeMd, { execSync, spawnSync }, expectedSymbols
 
 ### Community 2 - "App.jsx"
 Cohesion: 0.06
-Nodes (63): App(), AuthGate(), EmailPreview(), SPAM_TRIGGER_WORDS, TONE_OPTIONS, ErrorBoundary, Header(), JobDescriptionInput() (+55 more)
+Nodes (58): App(), AuthGate(), EmailPreview(), SPAM_TRIGGER_WORDS, TONE_OPTIONS, ErrorBoundary, Header(), JobDescriptionInput() (+50 more)
 
 ### Community 3 - "test_sheet_parser_full.js"
 Cohesion: 0.06
@@ -140,8 +140,8 @@ Cohesion: 0.07
 Nodes (28): dependencies, firebase, lucide-react, react, react-dom, devDependencies, jsdom, oxlint (+20 more)
 
 ### Community 5 - "auditDraftClaims"
-Cohesion: 0.15
-Nodes (16): Verifiable Fact-Grounding Guardrail (`auditDraftClaims`), 1. Summary of Changes, 2. Test Execution, Implementation Report: TICK-10 (AI Hallucination Guardrail), TICK-10: Verifiable Claim Grounding Guardrail, worker(), auditDraftClaims(), buildPrompts() (+8 more)
+Cohesion: 0.17
+Nodes (14): 1. Summary of Changes, 2. Test Execution, Implementation Report: TICK-10 (AI Hallucination Guardrail), worker(), auditDraftClaims(), buildPrompts(), generateColdEmail(), assert (+6 more)
 
 ### Community 6 - "index.js"
 Cohesion: 0.08
@@ -220,28 +220,28 @@ Cohesion: 0.16
 Nodes (14): listProviderModels(), testAiConnection(), assert, runTests(), { testAiConnection, listProviderModels }, assert, copilotService, fs (+6 more)
 
 ### Community 25 - "copilotService.js"
-Cohesion: 0.08
-Nodes (24): 1. Summary of Changes, 2. Test Execution, Implementation Report: TICK-01 (Copilot AI Dispatch Bug), 1. Summary of Changes, 2. Test Execution, Implementation Report: TICK-05 (Complete Danger-Zone Purge), Application Security Audit Report — Cycle 1, Detailed Audit Findings (+16 more)
+Cohesion: 0.12
+Nodes (17): 1. Summary of Changes, 2. Test Execution, Implementation Report: TICK-01 (Copilot AI Dispatch Bug), 1. Summary of Changes, 2. Test Execution, Implementation Report: TICK-05 (Complete Danger-Zone Purge), SEC-03: Incomplete Danger-Zone Data Purge Leaves PII Resumes on Disk & Stale Token Cache, callCopilotChat() (+9 more)
 
 ### Community 26 - "Screen-by-Screen Findings Grouped by Wizard Step"
 Cohesion: 0.09
 Nodes (22): Pain-Point Audit: 14-Screen End-to-End Walkthrough (Cycle 3), Screen 10: Dispatch Progress & SSE Live Stream (`SendProgressModal.jsx`), Screen 11: Active Send Step View (`SendStep.jsx`), Screen 12: SMTP Accounts Management (`SettingsModal.jsx` / `SmtpAccountsTab.jsx`), Screen 13: Delivery & Audit Logs (`SettingsModal.jsx` / `AuditLogsTab.jsx`), Screen 14: Danger Zone (`SettingsModal.jsx` / `DangerZoneTab.jsx`), Screen 1: Resume Upload & Parsing View (`ResumeUpload.jsx`), Screen 2: AI Provider Configuration & Testing (`SettingsModal.jsx` / `AiProvidersTab.jsx`) (+14 more)
 
 ### Community 27 - "Detailed Cycle 3 Shipped Ticket Specifications"
-Cohesion: 0.10
-Nodes (21): Detailed Cycle 3 Shipped Ticket Specifications, TICK-CYC3-01: Hardware-Bound Local Storage Architecture (Option 1), TICK-CYC3-02: Concurrent Batch Generation in `EmailPreview.jsx`, TICK-CYC3-03: Surface Hallucination Guardrail in `EmailPreview.jsx`, TICK-CYC3-04: Step Numbering Alignment (5-Step Canonical Wizard), TICK-CYC3-07: Centralize Canonical `WIZARD_STEPS` Source of Truth, TICK-CYC3-09: Modular Decomposition of `SettingsModal.jsx` (5 Tabs), TICK-CYC3-10: Accessible Step Progression Bar & ARIA Navigation (+13 more)
+Cohesion: 0.09
+Nodes (22): Detailed Cycle 3 Shipped Ticket Specifications, TICK-CYC3-01: Hardware-Bound Local Storage Architecture (Option 1), TICK-CYC3-03: Surface Hallucination Guardrail in `EmailPreview.jsx`, TICK-CYC3-04: Step Numbering Alignment (5-Step Canonical Wizard), TICK-CYC3-07: Centralize Canonical `WIZARD_STEPS` Source of Truth, TICK-CYC3-08: Decompose `App.jsx` (`useWizardState`, `useCampaignStream`), TICK-CYC3-09: Modular Decomposition of `SettingsModal.jsx` (5 Tabs), TICK-CYC3-10: Accessible Step Progression Bar & ARIA Navigation (+14 more)
 
 ### Community 28 - "aiService.js"
 Cohesion: 0.25
 Nodes (12): RFC-8259, cleanJsonOutput(), copilotService, extractFieldsViaRegex(), extractPlainTextFallback(), RFC-1918, normalizeControlCharacters(), sanitizeParsedEmail() (+4 more)
 
 ### Community 29 - "runServerE2eSuite"
-Cohesion: 0.36
-Nodes (8): assert, { encrypt, decrypt, maskApiKey, maskPassword }, runTests(), runE2ePipelineTests(), runServerE2eSuite(), encrypt(), maskApiKey(), maskPassword()
+Cohesion: 0.31
+Nodes (9): 1. Guardrails & Architecture Invariants Checklist, assert, { encrypt, decrypt, maskApiKey, maskPassword }, runTests(), runE2ePipelineTests(), runServerE2eSuite(), encrypt(), maskApiKey() (+1 more)
 
-### Community 30 - "callCopilotChat"
-Cohesion: 0.18
-Nodes (11): 2. Detailed Ticket-by-Ticket Diff Review, TICK-01: Copilot Symbol Fix & Resilient Dispatch, TICK-02 / TICK-08 / TICK-11: SMTP Resilience, Jitter & Strict TLS, TICK-03: Subsystem Automated Test Suites, TICK-04 / TICK-14: Cryptographic Fail-Closed & Short-Key Masking, TICK-05: Danger-Zone Resume & Cache Purge, TICK-06: 4-Worker Concurrent Batch Generation, TICK-07: Recipient Modal Windowed Pagination (+3 more)
+### Community 30 - "2. Detailed Ticket-by-Ticket Diff Review"
+Cohesion: 0.15
+Nodes (12): 2. Detailed Ticket-by-Ticket Diff Review, 3. Findings & Recommendations (Non-blocking Nits), Code Review Report: Cycle 1 Integration, TICK-01: Copilot Symbol Fix & Resilient Dispatch, TICK-02 / TICK-08 / TICK-11: SMTP Resilience, Jitter & Strict TLS, TICK-03: Subsystem Automated Test Suites, TICK-04 / TICK-14: Cryptographic Fail-Closed & Short-Key Masking, TICK-05: Danger-Zone Resume & Cache Purge (+4 more)
 
 ### Community 31 - "Detailed Architectural Evaluations"
 Cohesion: 0.17
@@ -276,8 +276,8 @@ Cohesion: 0.22
 Nodes (7): ref_crypto, crypto, DATA_DIR, fs, KEY_FILE, MASTER_KEY, path
 
 ### Community 39 - "3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`)"
-Cohesion: 0.29
-Nodes (7): 3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`), 4-Worker Concurrent Batch Generation Pipeline, Enforced JSON Contract, Intelligent Key Prefix Mismatch Detection, Parsing & Markdown Sanitization (`cleanJsonOutput`), Provider Implementations, Uniform Interface
+Cohesion: 0.25
+Nodes (8): 3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`), 4-Worker Concurrent Batch Generation Pipeline, Enforced JSON Contract, Intelligent Key Prefix Mismatch Detection, Parsing & Markdown Sanitization (`cleanJsonOutput`), Provider Implementations, Uniform Interface, Verifiable Fact-Grounding Guardrail (`auditDraftClaims`)
 
 ### Community 40 - "Prioritized Deliverability Findings"
 Cohesion: 0.25
@@ -359,9 +359,13 @@ Nodes (3): 1. Summary of Changes, 2. Test Execution, Implementation Report: TICK
 Cohesion: 0.50
 Nodes (3): 1. Summary of Changes, 2. Test Execution, Implementation Report: TICK-02 / TICK-08 / TICK-11 (SMTP Resilience, Strict TLS & Delay Jitter)
 
+### Community 60 - "Detailed Audit Findings"
+Cohesion: 0.20
+Nodes (9): Application Security Audit Report — Cycle 1, Detailed Audit Findings, Executive Summary, SEC-01: Runtime Bug & Undefined Symbol in Copilot AI Dispatch, SEC-02: Cryptographic Bypass & Plaintext Fallback in `decrypt()`, SEC-04: SMTP TLS Certificate Verification Disabled (`rejectUnauthorized: false`), SEC-05: Missing Rate Limiting on Public Express Routes, SEC-06: High Severity Vulnerabilities in Direct Dependencies (`xlsx` & `nodemailer`) (+1 more)
+
 ### Community 73 - "getPublicConfig"
-Cohesion: 0.56
-Nodes (9): deleteSmtpProfile(), getPublicConfig(), readConfigFile(), saveConfigFile(), saveSmtpProfile(), setActiveAiProvider(), setDefaultSmtpProfile(), updateAiProvider() (+1 more)
+Cohesion: 0.27
+Nodes (13): 1. Objective & Scope, 2. Implementation Details, 3. Verification & Guardrail Adherence, Implementation Report: TICK-03 Comprehensive Subsystem Tests, deleteSmtpProfile(), getPublicConfig(), readConfigFile(), saveConfigFile() (+5 more)
 
 ### Community 74 - "decrypt"
 Cohesion: 0.33
@@ -370,10 +374,6 @@ Nodes (6): 3.4 Security & Cryptographic Storage (`crypto.js`, `storageService.js
 ### Community 75 - "graphify reference: query, path, explain"
 Cohesion: 0.33
 Nodes (5): For /graphify explain, For /graphify path, graphify reference: query, path, explain, Step 0 — Constrained query expansion (REQUIRED before traversal), Step 1 — Traversal
-
-### Community 76 - "Implementation Report: TICK-03 Comprehensive Subsystem Tests"
-Cohesion: 0.40
-Nodes (4): 1. Objective & Scope, 2. Implementation Details, 3. Verification & Guardrail Adherence, Implementation Report: TICK-03 Comprehensive Subsystem Tests
 
 ### Community 77 - "graphify reference: add a URL and watch a folder"
 Cohesion: 0.50
@@ -387,14 +387,10 @@ Nodes (3): For git commit hook, For native CLAUDE.md integration, graphify refer
 Cohesion: 0.50
 Nodes (3): For --cluster-only, For --update (incremental re-extraction), graphify reference: incremental update and cluster-only
 
-### Community 80 - "Code Review Report: Cycle 1 Integration"
-Cohesion: 0.50
-Nodes (3): 1. Guardrails & Architecture Invariants Checklist, 3. Findings & Recommendations (Non-blocking Nits), Code Review Report: Cycle 1 Integration
-
 ## Knowledge Gaps
-- **495 isolated node(s):** `$schema`, `plugins`, `react/rules-of-hooks`, `react/only-export-components`, `name` (+490 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 572 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **17 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **495 isolated node(s):** `graphify`, `Usage`, `What graphify is for`, `Step 0 - GitHub repos and multi-path merge (only if a URL or several paths)`, `Step 1 - Ensure graphify is installed` (+490 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 571 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **18 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
@@ -403,13 +399,13 @@ _Questions this graph is uniquely positioned to answer:_
   _High betweenness centrality (0.067) - this node is a cross-community bridge._
 - **Why does `3. Subsystem Deep Dives` connect `JDMail — Comprehensive Architecture Map & Technical Specification` to `decrypt`, `test_sheet_parser_full.js`, `3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`)`?**
   _High betweenness centrality (0.038) - this node is a cross-community bridge._
-- **Why does `auditDraftClaims()` connect `auditDraftClaims` to `test_e2e_suite.js`, `App.jsx`, `Full End-of-Cycle QA Report: Cycle 1`, `Dimension Scorecard`, `test_e2e_pipeline.js`, `aiService.js`, `runServerE2eSuite`?**
+- **Why does `auditDraftClaims()` connect `auditDraftClaims` to `test_e2e_suite.js`, `App.jsx`, `Full End-of-Cycle QA Report: Cycle 1`, `Dimension Scorecard`, `test_e2e_pipeline.js`, `3.1 Multi-Provider AI Studio (`aiService.js`, `copilotService.js`)`, `aiService.js`, `runServerE2eSuite`, `2. Detailed Ticket-by-Ticket Diff Review`?**
   _High betweenness centrality (0.036) - this node is a cross-community bridge._
-- **What connects `$schema`, `plugins`, `react/rules-of-hooks` to the rest of the system?**
+- **What connects `graphify`, `Usage`, `What graphify is for` to the rest of the system?**
   _495 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `api.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.08956228956228957 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08711433756805807 - nodes in this community are weakly interconnected._
 - **Should `test_graphify_integration.js` be split into smaller, more focused modules?**
   _Cohesion score 0.09523809523809523 - nodes in this community are weakly interconnected._
 - **Should `App.jsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.05867082035306334 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06464646464646465 - nodes in this community are weakly interconnected._
