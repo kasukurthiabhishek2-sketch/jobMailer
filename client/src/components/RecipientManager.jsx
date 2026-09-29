@@ -125,6 +125,7 @@ export default function RecipientManager({
       company: singleCompany.trim(),
       role: singleRole.trim(),
       jobDescription: singleJd.trim(),
+      source: 'manual',
       isValidEmail: true,
       isSelected: true,
       isApproved: true,
@@ -170,6 +171,7 @@ export default function RecipientManager({
       .map(r => ({
         ...r,
         jobDescription: r.jobDescription || '',
+        source: 'spreadsheet',
         isApproved: true,
         status: r.status || 'pending'
       }));
@@ -492,6 +494,7 @@ export default function RecipientManager({
                   company,
                   role,
                   jobDescription,
+                  source: 'ai_parse',
                   isValidEmail: true,
                   isSelected: true,
                   isApproved: true,

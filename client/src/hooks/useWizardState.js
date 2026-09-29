@@ -98,7 +98,29 @@ export function useWizardState(initialStep = 1) {
     resetWizard,
     // Computed / derived properties
     resumeReady: Boolean(resumeData),
-    jdReady: Boolean(jobDescription && jobDescription.trim()),
+    allRecipientsTailored: Boolean(
+      recipients &&
+      recipients.length > 0 &&
+      recipients.every(r => (
+        r.source === 'manual' ||
+        r.source === 'ai_parse' ||
+        (r.jobDescription && r.jobDescription.trim()) ||
+        (r.role && r.role.trim()) ||
+        r.id?.startsWith('rec_ai_')
+      ))
+    ),
+    jdReady: Boolean(
+      (jobDescription && jobDescription.trim()) ||
+      (recipients &&
+       recipients.length > 0 &&
+       recipients.every(r => (
+         r.source === 'manual' ||
+         r.source === 'ai_parse' ||
+         (r.jobDescription && r.jobDescription.trim()) ||
+         (r.role && r.role.trim()) ||
+         r.id?.startsWith('rec_ai_')
+       )))
+    ),
     recipientsCount: recipients.length,
     emailReady: Object.keys(generatedEmails).length > 0,
     readyRecipients: recipients.filter(r => generatedEmails[r.id]?.body),

@@ -56,7 +56,8 @@ Requirements:
 export default function JobDescriptionInput({
   jobDescription,
   onChangeJd,
-  onShowToast
+  onShowToast,
+  allRecipientsTailored = false
 }) {
   const [activeMode, setActiveMode] = useState(jobDescription ? 'tailored' : 'general');
 
@@ -133,6 +134,30 @@ export default function JobDescriptionInput({
           Target a specific job opening or choose a direct executive value pitch.
         </p>
       </div>
+
+      {allRecipientsTailored && (
+        <div
+          style={{
+            padding: '12px 16px',
+            background: 'rgba(59, 130, 246, 0.08)',
+            border: '1px solid rgba(59, 130, 246, 0.25)',
+            borderRadius: 'var(--radius-md)',
+            marginBottom: 16,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            fontSize: 13,
+            color: 'var(--text-secondary)'
+          }}
+        >
+          <Sparkles size={18} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
+          <div>
+            <strong style={{ color: 'var(--text-primary)' }}>Tailored Roles Active:</strong>{' '}
+            Your recipients were added with individual role requirements from AI Parse JD / manual entry.
+            Cold emails will be tailored using each contact's specific role. Anything entered here will only act as an optional shared fallback.
+          </div>
+        </div>
+      )}
 
       {/* Mode Toggle Pills */}
       <div

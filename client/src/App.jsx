@@ -38,6 +38,7 @@ export default function App() {
     resetWizard,
     resumeReady,
     jdReady,
+    allRecipientsTailored,
     recipientsCount,
     emailReady
   } = useWizardState(1);
@@ -277,14 +278,27 @@ export default function App() {
                       <ChevronLeft size={16} />
                       Back to Profile
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={() => goToStep(3)}
-                    >
-                      Continue to Target Role
-                      <ChevronRight size={16} />
-                    </button>
+                    <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+                      {allRecipientsTailored && (
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => goToStep(3)}
+                          title="Configure an optional shared fallback job description or pitch"
+                        >
+                          Target Role (Optional)
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => goToStep(allRecipientsTailored ? 4 : 3)}
+                        disabled={recipientsCount === 0}
+                      >
+                        {allRecipientsTailored ? 'Continue to AI Drafts' : 'Continue to Target Role'}
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -295,6 +309,7 @@ export default function App() {
                     jobDescription={jobDescription}
                     onChangeJd={setJobDescription}
                     onShowToast={addToast}
+                    allRecipientsTailored={allRecipientsTailored}
                   />
                   <div className="wizard-nav-footer">
                     <button
@@ -338,10 +353,10 @@ export default function App() {
                     <button
                       type="button"
                       className="btn btn-secondary"
-                      onClick={() => goToStep(3)}
+                      onClick={() => goToStep(allRecipientsTailored && !jobDescription?.trim() ? 2 : 3)}
                     >
                       <ChevronLeft size={16} />
-                      Back to Target Role
+                      {allRecipientsTailored && !jobDescription?.trim() ? 'Back to Recipients' : 'Back to Target Role'}
                     </button>
                     <div />
                   </div>

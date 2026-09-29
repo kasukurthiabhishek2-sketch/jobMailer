@@ -67,6 +67,45 @@ describe('WIZARD_STEPS Canonical Configuration', () => {
     expect(step4.isCompleted(campaignDone)).toBe(true);
   });
 
+  it('verifies Step 3 isCompleted predicate for tailored recipients or global JD', () => {
+    const step3 = getStepById(3);
+
+    // Empty state - not completed
+    expect(step3.isCompleted({})).toBe(false);
+
+    // Global job description provided - completed
+    expect(step3.isCompleted({ jobDescription: 'Seeking backend developer' })).toBe(true);
+
+    // Spreadsheet recipients without JDs or roles - not completed
+    expect(step3.isCompleted({
+      jobDescription: '',
+      recipients: [{ id: 'r1', email: 'recruiter@company.com', source: 'spreadsheet', jobDescription: '' }]
+    })).toBe(false);
+
+    // Recipients added via AI Parse JD - completed without needing Step 3
+    expect(step3.isCompleted({
+      jobDescription: '',
+      recipients: [{
+        id: 'rec_ai_123',
+        email: 'recruiter@birlasoft.com',
+        source: 'ai_parse',
+        role: 'Backend Developer',
+        jobDescription: 'Skills: Java, Rest API'
+      }]
+    })).toBe(true);
+
+    // Recipients added via Add Manually with role - completed without needing Step 3
+    expect(step3.isCompleted({
+      jobDescription: '',
+      recipients: [{
+        id: 'rec_single_123',
+        email: 'jessica@stripe.com',
+        source: 'manual',
+        role: 'Technical Recruiter'
+      }]
+    })).toBe(true);
+  });
+
   it('getStepById returns fallback for unknown step', () => {
     expect(getStepById(99).id).toBe(1);
     expect(getStepNumber(3)).toBe(3);

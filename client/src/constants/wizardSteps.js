@@ -41,7 +41,18 @@ export const WIZARD_STEPS = [
     optional: true,
     isUnlocked: (state) => Boolean(state?.resumeData),
     getLockReason: (state) => (!state?.resumeData ? 'Upload candidate resume in Step 1 to unlock' : null),
-    isCompleted: (state) => Boolean(state?.jobDescription && state.jobDescription.trim())
+    isCompleted: (state) => Boolean(
+      (state?.jobDescription && state.jobDescription.trim()) ||
+      (state?.recipients &&
+       state.recipients.length > 0 &&
+       state.recipients.every(r => (
+         r.source === 'manual' ||
+         r.source === 'ai_parse' ||
+         (r.jobDescription && r.jobDescription.trim()) ||
+         (r.role && r.role.trim()) ||
+         r.id?.startsWith('rec_ai_')
+       )))
+    )
   },
   {
     id: 4,
