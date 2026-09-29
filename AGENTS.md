@@ -18,6 +18,9 @@
 
 ## 0.5 Non-negotiable guardrails
 - **Never break existing functionality.** `cd server && npm test` and `cd client && npm run lint` must pass before and after every change.
+- **Stage surgical changes only (`git add -A` / `git add .` strictly prohibited).** Stage only explicit files within your task's scope (`git add <file>`). Never commit dirty working-tree files left by other tasks or branches. Verify with `git diff --cached --stat` before committing.
+- **Never wipe, strip, or invalidate existing user credentials.** User settings, API keys, and SMTP credentials in Firestore or local encrypted storage must remain functional and backward-compatible. Destructive migrations or wiping user credentials silently is strictly forbidden.
+- **Regression-verify real workflows before declaring done.** Ensure existing user accounts (e.g. SMTP connection testing, AI provider keys) remain functional after any settings or route modifications.
 - Native `fetch()` only for AI providers — no OpenAI/Google SDKs.
 - Secrets (`apiKey`, SMTP `password`) AES-256-GCM encrypted at rest, **never** returned unmasked from `/api/*`.
 - Two-stage human-in-the-loop send gate (`isApproved` + explicit "Send Approved Emails") never bypassed.
@@ -81,3 +84,9 @@
 
 ## 9. Done means
 Acceptance checks pass (quote command + result) | diff only within scope | `graphify update .` | vault deltas + log + checkpoint | `av index && av lint` clean | committed as `T-xxxx: <what/why>` | `av done T-xxxx --status review` | one-line report.
+
+## graphify
+- When codebase or architecture questions arise, run `graphify query "<question>"` when `graphify-out/graph.json` exists.
+- Run `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts.
+- After modifying code files, run `graphify update .` to keep the AST knowledge graph synchronized.
+

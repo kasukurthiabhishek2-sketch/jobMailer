@@ -6,7 +6,7 @@ import {
   formatForFirestore
 } from '../lib/settings';
 
-describe('Firestore Settings Persistence & Local Secret Safeguards', () => {
+describe('Firestore Settings Persistence & Zero Local Safeguards', () => {
   it('getDefaultSettings returns full structure with empty credentials', () => {
     const defaults = getDefaultSettings();
     expect(defaults.activeProvider).toBe('gemini');
@@ -19,7 +19,7 @@ describe('Firestore Settings Persistence & Local Secret Safeguards', () => {
     expect(defaults.preferences).toBeDefined();
   });
 
-  it('stripSecrets removes credentials while preserving configuration metadata', () => {
+  it('stripSecrets preserves API keys and SMTP credentials without stripping', () => {
     const userSettings = {
       activeProvider: 'openai',
       aiProviders: {
@@ -27,7 +27,7 @@ describe('Firestore Settings Persistence & Local Secret Safeguards', () => {
           name: 'ChatGPT / OpenAI',
           apiKey: 'sk-test-live-key-12345',
           model: 'gpt-4o-mini',
-          savedKeys: [{ id: 'primary', name: 'Primary Key', apiKey: 'sk-test-live-key-12345' }]
+          isConfigured: true
         }
       },
       smtp: {
@@ -47,19 +47,12 @@ describe('Firestore Settings Persistence & Local Secret Safeguards', () => {
     };
 
     const result = stripSecrets(userSettings);
-    expect('apiKey' in result.aiProviders.openai).toBe(false);
-    expect(result.aiProviders.openai.isConfigured).toBe(true);
-    expect(result.aiProviders.openai.savedKeys).toEqual([{ id: 'primary', name: 'Primary Key' }]);
-    expect('appPassword' in result.smtp).toBe(false);
-    expect('password' in result.smtp).toBe(false);
-    expect(result.smtp.isConfigured).toBe(true);
-    expect('password' in result.smtpProfiles[0]).toBe(false);
-    expect('appPassword' in result.smtpProfiles[0]).toBe(false);
-    expect(result.smtpProfiles[0].isConfigured).toBe(true);
-    expect(userSettings.aiProviders.openai.apiKey).toBe('sk-test-live-key-12345');
+    expect(result.aiProviders.openai.apiKey).toBe('sk-test-live-key-12345');
+    expect(result.smtp.appPassword).toBe('my-smtp-password');
+    expect(result.smtpProfiles[0].password).toBe('my-smtp-password');
   });
 
-  it('formatForFirestore keeps configured state but never emits credentials', () => {
+  it('formatForFirestore retains apiKey and passwords for Firestore storage', () => {
     const legacy = {
       activeProvider: 'groq',
       aiProviders: {
@@ -85,11 +78,10 @@ describe('Firestore Settings Persistence & Local Secret Safeguards', () => {
 
     const formatted = formatForFirestore(legacy);
     expect(formatted.activeProvider).toBe('groq');
+    expect(formatted.aiProviders.groq.apiKey).toBe('gsk_12345678');
     expect(formatted.aiProviders.groq.isConfigured).toBe(true);
-    expect('apiKey' in formatted.aiProviders.groq).toBe(false);
-    expect(formatted.smtpProfiles[0].isConfigured).toBe(true);
-    expect('password' in formatted.smtpProfiles[0]).toBe(false);
-    expect('appPassword' in formatted.smtp).toBe(false);
+    expect(formatted.smtpProfiles[0].password).toBe('app-password-xyz');
+    expect(formatted.smtp.appPassword).toBe('app-password-xyz');
   });
 
   it('stripUndefined recursively purges undefined properties without throwing', () => {

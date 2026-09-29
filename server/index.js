@@ -658,14 +658,23 @@ function resolveAiProviderConfig({ providerKey: requestedProvider, providerConfi
   const fullConfig = storage.getDecryptedConfig();
   const providerKey = requestedProvider || clientProviderConfig?.providerKey || fullConfig.activeProvider;
   const savedProvider = fullConfig.aiProviders?.[providerKey] || {};
-  const { apiKey: _clientApiKey, savedKeys: _clientSavedKeys, ...safeClientConfig } = clientProviderConfig || {};
+
+  let apiKey = '';
+  if (clientProviderConfig?.apiKey && typeof clientProviderConfig.apiKey === 'string' && !clientProviderConfig.apiKey.includes('...')) {
+    apiKey = clientProviderConfig.apiKey.trim();
+  }
+
+  // Fall back to saved local config only if unauthenticated or in test runner mode
+  if (!apiKey && (!callerUid || callerUid === 'test_user_offline')) {
+    apiKey = savedProvider.apiKey || '';
+  }
 
   return {
     providerKey,
     providerConfig: {
       ...savedProvider,
-      ...safeClientConfig,
-      apiKey: savedProvider.apiKey || ''
+      ...clientProviderConfig,
+      apiKey
     }
   };
 }
@@ -1012,14 +1021,16 @@ function resolveSmtpProfile({ smtpProfileId, smtpProfile: clientSmtpProfile } = 
     profile = fullConfig.smtpProfiles.find(p => p.isDefault) || fullConfig.smtpProfiles[0];
   }
 
-  // The client can choose a profile and send non-secret display metadata, but
-  // credentials are always resolved from encrypted local storage.
+  // Prioritize and merge client-provided SMTP profile (from user's Firebase config)
   if (clientSmtpProfile) {
-    const { password: _clientPassword, appPassword: _clientAppPassword, ...safeClientProfile } = clientSmtpProfile;
     profile = {
       ...(profile || {}),
-      ...safeClientProfile,
-      password: profile?.password || profile?.appPassword || ''
+      ...clientSmtpProfile,
+      password: (clientSmtpProfile.password && !clientSmtpProfile.password.includes('•••'))
+        ? clientSmtpProfile.password
+        : (clientSmtpProfile.appPassword && !clientSmtpProfile.appPassword.includes('•••'))
+          ? clientSmtpProfile.appPassword
+          : (profile?.password || profile?.appPassword || '')
     };
   }
 

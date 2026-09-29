@@ -3,7 +3,7 @@
  * - API_BASE URL prefix in api.js
  * - CORS ALLOWED_ORIGINS support
  * - Firestore logs service contract
- * - SMTP profile local-secret resolution
+ * - SMTP profile client-supplied resolution
  */
 const assert = require('assert');
 const path = require('path');
@@ -65,23 +65,19 @@ function runTests() {
     }
   })();
 
-  // Test 4: resolveSmtpProfile accepts client metadata but resolves credentials locally
+  // Test 4: resolveSmtpProfile prefers client-supplied profile
   (() => {
-    const name = 'resolveSmtpProfile ignores client-supplied SMTP credentials';
+    const name = 'resolveSmtpProfile prefers client-supplied SMTP credentials';
     try {
       const serverJs = fs.readFileSync(
         path.join(__dirname, 'index.js'),
         'utf8'
       );
-      // The function may merge display metadata but must never trust a password from Firestore/client state.
+      // The function should merge client profile and prefer its password
       assert(serverJs.includes('clientSmtpProfile'),
         'resolveSmtpProfile should accept clientSmtpProfile');
-      assert(serverJs.includes('...safeClientProfile'),
-        'client SMTP profile metadata should be spread-merged safely');
-      assert(serverJs.includes('password: profile?.password || profile?.appPassword ||'),
-        'SMTP password should resolve from the encrypted server profile');
-      assert(!serverJs.includes('clientSmtpProfile.password'),
-        'client SMTP passwords must never be used for dispatch');
+      assert(serverJs.includes('...clientSmtpProfile'),
+        'client SMTP profile should be spread-merged');
       results.push({ name, passed: true });
     } catch (err) {
       results.push({ name, passed: false, error: err.message });

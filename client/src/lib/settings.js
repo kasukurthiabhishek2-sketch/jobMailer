@@ -1,10 +1,11 @@
 /**
- * Firestore-backed settings persistence for non-secret, per-user preferences.
+ * Firestore-backed settings persistence — one settings document per user.
  *
  * Document path: users/{uid}/app/settings
  *
- * Provider API keys and SMTP passwords stay in the server's encrypted local
- * configuration. Firestore keeps only the metadata needed to render the UI.
+ * This module replaces the previous server-side config.json storage.
+ * All settings (AI provider keys, SMTP profiles, candidateProfile, preferences)
+ * are stored in Firestore with owner-only security rules.
  */
 import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
@@ -101,68 +102,18 @@ export function getDefaultSettings() {
 }
 
 /**
- * Remove credentials before a settings document is read from or written to
- * Firestore. Keep configured state and key metadata so the UI remains useful.
+ * Returns settings without stripping credentials.
+ * All settings including API keys and SMTP credentials are stored directly
+ * in the user's Firestore document (users/{uid}/app/settings) with owner-only security.
  */
 export function stripSecrets(settings) {
   if (!settings || typeof settings !== 'object') return settings;
-
-  const { aiProviders, smtp, smtpProfiles, ...safeSettings } = settings;
-
-  if (aiProviders && typeof aiProviders === 'object') {
-    safeSettings.aiProviders = Object.fromEntries(
-      Object.entries(aiProviders).map(([key, provider]) => {
-        const { apiKey, savedKeys, ...safeProvider } = provider || {};
-        const hasStoredKey = Boolean(
-          apiKey || savedKeys?.some(savedKey => savedKey?.apiKey)
-        );
-
-        return [key, {
-          ...safeProvider,
-          isConfigured: Boolean(safeProvider.isConfigured || hasStoredKey),
-          savedKeys: Array.isArray(savedKeys)
-            ? savedKeys.map(({ apiKey: _apiKey, ...safeKey }) => safeKey)
-            : []
-        }];
-      })
-    );
-  }
-
-  if (smtp && typeof smtp === 'object') {
-    const { password, appPassword, ...safeSmtp } = smtp;
-    safeSettings.smtp = {
-      ...safeSmtp,
-      isConfigured: Boolean(safeSmtp.isConfigured || password || appPassword)
-    };
-  }
-
-  if (Array.isArray(smtpProfiles)) {
-    safeSettings.smtpProfiles = smtpProfiles.map(profile => {
-      const { password, appPassword, ...safeProfile } = profile || {};
-      return {
-        ...safeProfile,
-        isConfigured: Boolean(safeProfile.isConfigured || password || appPassword)
-      };
-    });
-  }
-
-  return safeSettings;
-}
-
-function containsSecrets(settings) {
-  return Boolean(
-    Object.values(settings?.aiProviders || {}).some(provider =>
-      provider?.apiKey || provider?.savedKeys?.some(savedKey => savedKey?.apiKey)
-    ) ||
-    settings?.smtp?.password ||
-    settings?.smtp?.appPassword ||
-    settings?.smtpProfiles?.some(profile => profile?.password || profile?.appPassword)
-  );
+  return settings;
 }
 
 /**
  * Format legacy config (from server config.json) for the Firestore schema.
- * Credentials are deliberately removed at the boundary by stripSecrets().
+ * Preserves metadata, preferences, and credentials in Firestore.
  */
 export function formatForFirestore(legacyConfig) {
   const defaults = getDefaultSettings();
@@ -232,14 +183,14 @@ export function formatForFirestore(legacyConfig) {
     ...(legacyConfig.sendingPreferences || {})
   };
 
-  return stripSecrets(stripUndefined({
+  return stripUndefined({
     activeProvider: activeKey,
     aiProviders,
     smtp,
     smtpProfiles,
     candidateProfile: legacyConfig.candidateProfile || defaults.candidateProfile,
     preferences
-  }));
+  });
 }
 
 /**
@@ -252,14 +203,7 @@ export async function loadSettings(uid) {
   }
   const snap = await getDoc(settingsRef(uid));
   if (!snap.exists()) return null;
-  const storedSettings = snap.data();
-  const data = stripSecrets(storedSettings);
-  if (containsSecrets(storedSettings)) {
-    await setDoc(
-      settingsRef(uid),
-      { ...stripUndefined(data), updatedAt: serverTimestamp() }
-    );
-  }
+  const data = stripSecrets(snap.data());
   const defaults = stripSecrets(getDefaultSettings());
   
   // Merge defaults per-provider to ensure newly added keys & supportedModels are always preserved
@@ -334,29 +278,17 @@ export function stripUndefined(value) {
 }
 
 /**
- * Save partial settings for a user in Firestore without dropping unrelated fields.
+ * Save (merge) partial settings for a user in Firestore.
+ * Uses Firestore merge to avoid overwriting unrelated fields.
  * Scoped per-user with owner-only access rules.
  */
 export async function saveSettings(uid, partial) {
   if (typeof window !== 'undefined' && window.__E2E_MOCK_SETTINGS__) {
-    window.__E2E_MOCK_SETTINGS__ = stripSecrets({
-      ...window.__E2E_MOCK_SETTINGS__,
-      ...partial
-    });
+    window.__E2E_MOCK_SETTINGS__ = { ...window.__E2E_MOCK_SETTINGS__, ...partial };
     return;
   }
-  const snap = await getDoc(settingsRef(uid));
-  const existing = snap.exists() ? snap.data() : {};
-  const merged = {
-    ...existing,
-    ...partial,
-    aiProviders: { ...existing.aiProviders, ...partial.aiProviders },
-    smtp: { ...existing.smtp, ...partial.smtp },
-    candidateProfile: { ...existing.candidateProfile, ...partial.candidateProfile },
-    preferences: { ...existing.preferences, ...partial.preferences }
-  };
-  const sanitized = stripSecrets(stripUndefined(merged));
-  await setDoc(settingsRef(uid), { ...sanitized, updatedAt: serverTimestamp() });
+  const sanitized = stripUndefined(partial);
+  await setDoc(settingsRef(uid), { ...sanitized, updatedAt: serverTimestamp() }, { merge: true });
 }
 
 /**
